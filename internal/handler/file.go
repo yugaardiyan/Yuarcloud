@@ -36,11 +36,6 @@ func NewFileHandler(db *gorm.DB, storage storage.StorageBackend, authService *au
 // handler at construction. Holding an int64 here meant an admin's save moved the
 // number in the panel while the upload path kept enforcing whatever the process
 // booted with.
-
-// The ceilings are read from storage on every check rather than copied into the
-// handler at construction. Holding an int64 here meant an admin's save moved the
-// number in the panel while the upload path kept enforcing whatever the process
-// booted with.
 func (h *FileHandler) maxFileSize() int64 { return h.storage.GetLimits().MaxFileSize() }
 
 func (h *FileHandler) maxChunkSize() int64 { return h.storage.GetLimits().MaxChunkSize() }
@@ -62,27 +57,7 @@ func (h *FileHandler) maxChunkSize() int64 { return h.storage.GetLimits().MaxChu
 // added without also being covered. The value now lives in the storage package,
 // which has to filter on it too when listing: this file once carried its own
 // copy while the storage layer decided independently with a much broader rule.
-
-// internalPrefix marks everything the server owns. Names carrying it are not
-// addressable by a client, whatever they contain.
-//
-// Two directories live under the storage root and neither is a user's data: the
-// trash, and — in the container layout, where temp_dir sits beside the user's
-// files — the chunk scratch directory holding half-written uploads keyed by
-// upload id. The trash had a guard, written per-handler, and the chunk
-// directory had none. A caller could name a path under it, and while a
-// half-written chunk has no row so nothing would be served, the directory was
-// one step from being reachable, and the guarantee depended on that staying
-// true. The container config puts it at /srv/.yuarcloud-chunks, directly beside
-// user data, precisely so the same volume serves both.
-//
-// One prefix, checked centrally, means the next internal directory cannot be
-// added without also being covered. The value now lives in the storage package,
-// which has to filter on it too when listing: this file once carried its own
-// copy while the storage layer decided independently with a much broader rule.
 const internalPrefix = storage.InternalPrefix
-
-// reservedName reports whether a single path element is server-owned.
 
 func (h *FileHandler) ListFiles(c *gin.Context) {
 	sc := reqScope(c)

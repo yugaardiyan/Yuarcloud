@@ -17,15 +17,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// Rename, move and copy: three operations that differ mainly in where the
-// result lands and how the subtree is rewritten, and that share
-// resolveDestination and availableName to decide on that.
+// Rename, move and copy: three operations that differ mainly in where the result
+// lands and how the subtree is rewritten, and that share resolveDestination and
+// availableName to decide on that.
 //
-// Grouped because the rules holding them together are shared — one
-// destination, never overwriting what is already there, and the whole subtree
-// following along.
+// Grouped because the rules holding them together are shared — one destination,
+// never overwriting what is already there, and the whole subtree following
+// along.
 
-// RenameFile changes an item's name within its current folder.
 func (h *FileHandler) RenameFile(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	fileID, err := uuid.Parse(c.Param("id"))
@@ -248,10 +247,6 @@ func (h *FileHandler) MoveFile(c *gin.Context) {
 // resolveDestination turns the request into a validated destination folder
 // path and parent id. Accepts either target_parent_id or target_path.
 // It writes the error response itself and reports ok=false on failure.
-
-// resolveDestination turns the request into a validated destination folder
-// path and parent id. Accepts either target_parent_id or target_path.
-// It writes the error response itself and reports ok=false on failure.
 func (h *FileHandler) resolveDestination(c *gin.Context, userID uuid.UUID, parentID *uuid.UUID, parentPath string) (string, *uuid.UUID, bool) {
 	sc := reqScope(c)
 
@@ -463,10 +458,6 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 // reparentCopiedSubtree fixes parent_id across a freshly copied subtree by
 // matching each cloned row's path to its parent path. Scoped to the copy's new
 // root, since that is the only thing being rebuilt.
-
-// reparentCopiedSubtree fixes parent_id across a freshly copied subtree by
-// matching each cloned row's path to its parent path. Scoped to the copy's new
-// root, since that is the only thing being rebuilt.
 func (h *FileHandler) reparentCopiedSubtree(userID uuid.UUID, dstRoot string) {
 	var clones []model.File
 	whereSubtree(h.db.Where("user_id = ?", userID), "path", dstRoot).Find(&clones)
@@ -489,9 +480,6 @@ func (h *FileHandler) reparentCopiedSubtree(userID uuid.UUID, dstRoot string) {
 		h.db.Model(&model.File{}).Where("id = ?", cl.ID).Update("parent_id", parentID)
 	}
 }
-
-// availableName returns name, or "name (2)" / "name (3)" ... when something with
-// that name already exists in dir.
 
 // availableName returns name, or "name (2)" / "name (3)" ... when something with
 // that name already exists in dir.

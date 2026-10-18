@@ -22,9 +22,9 @@ import (
 // is one request that finishes or fails. This one spans many, can be paused and
 // resumed, can be abandoned and cleaned up later, and carries state that has to
 // survive between them — which is why the session is re-read under its lock
-// rather than trusted from whatever the caller held.
+// rather than trusted from whatever the caller happened to hold.
 
-// InitChunkedUpload opens a session and reserves the target name.
+// Chunked upload endpoints
 func (h *FileHandler) InitChunkedUpload(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
@@ -369,14 +369,6 @@ func (h *FileHandler) CancelUpload(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "upload cancelled"})
 }
-
-// writeUploadReadError answers a failed multipart read.
-//
-// The two cases are genuinely different and were conflated: the body hitting
-// its limit is the client's file being too large, which is 413 and worth
-// saying so, while a malformed body is a 400. Reporting the first as the
-// second told a caller uploading a legitimate 40GB file over a 10GB ceiling
-// that they had "not provided a file", with nothing to act on.
 
 // writeUploadReadError answers a failed multipart read.
 //
