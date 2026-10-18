@@ -2984,7 +2984,14 @@ input.input[type='number'] {
   min-width: 0;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  /* The card's own corner, not --radius-lg. The menu's box edges already land
+     on the card's exactly, but the top-right corners are arcs of a radius, and
+     a 12px arc inside a 16px one cannot coincide with it: measured row by row
+     off the rendered pixels, the menu's corner stood up to 3.5px proud of the
+     card's for the first 16px of height, which read as the popup not quite
+     lining up even though every box measurement said 0.0. Same radius, same
+     centre, same curve. */
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   padding: 4px;
   z-index: 400;
