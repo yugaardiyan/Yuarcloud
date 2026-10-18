@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, BarChart3, Plus, Edit2, Trash2, X,
-  HardDrive, Share2, Folder, AlertCircle, Copy
+  HardDrive, Share2, Folder, AlertCircle, Copy, ScrollText
 } from 'lucide-react'
 import { adminApi, fileApi, apiError } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
+import AuditTab from './AuditTab'
 import StorageMeter from '../components/StorageMeter'
 import ConfirmModal from '../components/ConfirmModal'
 import { formatBytes, copyText } from '../utils/helpers'
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'chunked', label: 'Chunked Upload', icon: HardDrive },
   { id: 'stats', label: 'Statistics', icon: BarChart3 },
   { id: 'shares', label: 'Share Links', icon: Share2 },
+  { id: 'audit', label: 'Audit Log', icon: ScrollText },
 ]
 
 const CLEANUP_OPTIONS = [
@@ -271,6 +273,7 @@ function Admin() {
       {activeTab === 'chunked' && <ChunkedConfigTab config={chunkedConfig} />}
       {activeTab === 'stats' && <StatsTab stats={stats} />}
       {activeTab === 'shares' && <SharesTab shares={shares} sharesError={sharesError} onReload={loadShares} />}
+      {activeTab === 'audit' && <AuditTab />}
 
       {/* Delete is soft: the account goes, the files stay on disk and lose their
           owner. Say so here rather than letting someone assume the storage was

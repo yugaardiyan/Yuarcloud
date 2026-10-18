@@ -180,25 +180,55 @@ func (s *AdminService) UpdateSetting(ctx context.Context, key, value, descriptio
 	return s.db.WithContext(ctx).Save(&setting).Error
 }
 
-func (s *AdminService) GetAuditLogs(ctx context.Context, page, pageSize int, action, userID string) ([]*model.AuditLog, int64, error) {
-	var logs []*model.AuditLog
+// AuditLogEntry is one row of the admin audit listing: the stored record plus
+// the name of the account it belongs to.
+//
+// A separate type rather than a field on model.AuditLog, because a `gorm:"-"`
+// tag is not a way to add a computed column — "-" takes the field out of the
+// schema entirely, and GORM will not scan into it. The column comes from a
+// LEFT JOIN, so it has to be a real field of whatever is being scanned into.
+//
+// Embedding is anonymous, so encoding/json flattens the stored fields and adds
+// username alongside them. The response therefore gains a key and changes
+// nothing else: user_id is still there.
+type AuditLogEntry struct {
+	model.AuditLog
+	// Tagged, because the field sits on the outer struct and without a tag
+	// encoding/json would publish it as "Username" while the frontend asked
+	// for "username" — a mismatch that shows up as an empty column rather than
+	// as an error.
+	Username string `json:"username"`
+}
+
+func (s *AdminService) GetAuditLogs(ctx context.Context, page, pageSize int, action, userID string) ([]*AuditLogEntry, int64, error) {
+	var logs []*AuditLogEntry
 	var total int64
 
 	query := s.db.WithContext(ctx).Model(&model.AuditLog{})
 
 	if action != "" {
-		query = query.Where("action = ?", action)
+		query = query.Where("audit_logs.action = ?", action)
 	}
 	if userID != "" {
-		query = query.Where("user_id = ?", userID)
+		query = query.Where("audit_logs.user_id = ?", userID)
 	}
 
+	// Counted before the join is attached. A COUNT over a joined pair counts
+	// rows, and an event whose account is missing would quietly change the
+	// total the UI paginates against.
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&logs).Error; err != nil {
+	if err := query.
+		Select("audit_logs.*, users.username AS username").
+		// LEFT rather than INNER: an event recorded against an account that has
+		// since been deleted is exactly the one an admin is looking for, and an
+		// inner join drops precisely those. A soft-deleted user keeps its row, so
+		// their name still resolves rather than coming back empty.
+		Joins("LEFT JOIN users ON users.id = audit_logs.user_id").
+		Offset(offset).Limit(pageSize).Order("audit_logs.created_at DESC").Find(&logs).Error; err != nil {
 		return nil, 0, err
 	}
 
