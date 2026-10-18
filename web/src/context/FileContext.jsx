@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from './AuthContext'
 import { fileApi, apiError } from '../utils/api'
 import { uploadFilesSequentially } from '../utils/upload'
 import { createSpeedTracker, etaFromRate } from '../utils/uploadSpeed'
@@ -185,9 +186,28 @@ export function FileProvider({ children }) {
   // trash paid for a second request whose result was discarded, and the state
   // it filled was the thing that looked frozen. Removed rather than refreshed:
   // there is nothing to refresh into.
+  const { refreshUser } = useAuth()
+
   const refresh = useCallback(async () => {
     await load()
   }, [load])
+
+  // Re-reads the account alongside the listing.
+  //
+  // The status bar's "N used" comes from user.used_bytes, which AuthContext reads
+  // once at login. The server keeps that counter correct -- uploads, folder
+  // copies, the share upload and every trash operation all adjust it -- but the
+  // copy sitting in the client was written at sign-in and nothing touched it
+  // again. So uploading four megabytes left the bar reading "12 B used" until
+  // the page was reloaded, which made the figure look like a bug in the quota
+  // check when it was only a stale field.
+  //
+  // Both requests go together rather than one after the other: they are
+  // independent, and the bar and the listing should settle in the same tick so
+  // the two halves of the status line never disagree mid-update.
+  const reloadUsage = useCallback(async () => {
+    await Promise.all([load(), refreshUser()])
+  }, [load, refreshUser])
 
   // The URL is the source of truth. Every scope switch and folder change navigates,
   // and this effect turns whatever route is on screen into the load it calls for.
@@ -522,7 +542,7 @@ export function FileProvider({ children }) {
       toast.error(apiError(failure.error, `Failed to upload ${failure.file.name}`))
     }
 
-    await refresh()
+    await reloadUsage()
 
     // Finished rows stay. They used to be swept away four seconds later, which
     // meant the tray emptied itself exactly when someone uploading a folder of
@@ -530,7 +550,7 @@ export function FileProvider({ children }) {
     // landed with nobody left to see them land. Drive keeps them: the panel is
     // the receipt, and the dismiss button is how it is closed.
     return { results, failures }
-  }, [view, refresh])
+  }, [view, reloadUsage])
 
   const clearUploads = useCallback(() => setUploads([]), [])
 
@@ -552,12 +572,12 @@ export function FileProvider({ children }) {
           : `Moved ${list.length} item${list.length > 1 ? 's' : ''} to trash`
       )
       setSelected(new Set())
-      await refresh()
+      await reloadUsage()
     } catch (err) {
       toast.error(apiError(err, 'Failed to delete'))
       throw err
     }
-  }, [view.scope, refresh])
+  }, [view.scope, reloadUsage])
 
   const restoreItems = useCallback(async (ids) => {
     const list = Array.from(ids || [])
@@ -566,22 +586,22 @@ export function FileProvider({ children }) {
       for (const id of list) await fileApi.restore(id)
       toast.success(`Restored ${list.length} item${list.length > 1 ? 's' : ''}`)
       setSelected(new Set())
-      await refresh()
+      await reloadUsage()
     } catch (err) {
       toast.error(apiError(err, 'Failed to restore'))
       throw err
     }
-  }, [refresh])
+  }, [reloadUsage])
 
   const emptyTrash = useCallback(async () => {
     try {
       const response = await fileApi.emptyTrash()
       toast.success(`Emptied trash (${response.data.removed} rows)`)
-      await refresh()
+      await reloadUsage()
     } catch (err) {
       toast.error(apiError(err, 'Failed to empty trash'))
     }
-  }, [refresh])
+  }, [reloadUsage])
 
   const renameItem = useCallback(async (id, name) => {
     const trimmed = (name || '').trim()
@@ -589,12 +609,12 @@ export function FileProvider({ children }) {
     try {
       await fileApi.rename(id, trimmed)
       toast.success('Renamed')
-      await refresh()
+      await reloadUsage()
     } catch (err) {
       toast.error(apiError(err, 'Failed to rename'))
       throw err
     }
-  }, [refresh])
+  }, [reloadUsage])
 
   const moveItems = useCallback(async (ids, destination) => {
     const list = Array.from(ids || [])
@@ -603,12 +623,12 @@ export function FileProvider({ children }) {
       for (const id of list) await fileApi.move(id, destination)
       toast.success(`Moved ${list.length} item${list.length > 1 ? 's' : ''}`)
       setSelected(new Set())
-      await refresh()
+      await reloadUsage()
     } catch (err) {
       toast.error(apiError(err, 'Failed to move'))
       throw err
     }
-  }, [refresh])
+  }, [reloadUsage])
 
   const copyItems = useCallback(async (ids, destination) => {
     const list = Array.from(ids || [])
@@ -616,12 +636,12 @@ export function FileProvider({ children }) {
     try {
       for (const id of list) await fileApi.copy(id, destination)
       toast.success(`Copied ${list.length} item${list.length > 1 ? 's' : ''}`)
-      await refresh()
+      await reloadUsage()
     } catch (err) {
       toast.error(apiError(err, 'Failed to copy'))
       throw err
     }
-  }, [refresh])
+  }, [reloadUsage])
 
 
   // ---------------------------------------------------------------- clipboard

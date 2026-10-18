@@ -66,11 +66,16 @@ export function AuthProvider({ children }) {
 
   // Re-reads the session from the server.
   //
-  // Needed after a password change: the change bumped the account's token
-  // version, so the access token already in localStorage is refused from that
-  // moment on. Without re-reading, the success screen would be immediately
+  // Two callers. After a password change, which bumps the account's token
+  // version so the access token already in localStorage is refused from that
+  // moment on: without re-reading, the success screen would be immediately
   // followed by 401s and a redirect to /login — the user's own correct action
   // appearing to have signed them out.
+  //
+  // And after a change to stored files. used_bytes is a counter the server
+  // maintains on the user row, and the status bar renders the copy this context
+  // holds, so without a re-read it went stale on the first upload and stayed
+  // wrong until the page was reloaded.
   const refreshUser = useCallback(async () => {
     try {
       const response = await authApi.me()
