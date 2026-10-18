@@ -112,8 +112,22 @@ The `image:` line in `docker-compose.zimaos.yml` already points there. Change it
 if you forked — the workflow publishes whatever repository it runs in.
 
 It is `latest` because the ZimaOS importer is a paste box, not a version picker.
-If you would rather pin, use the release tag — `ghcr.io/yugaardiyan/yuarcloud:v1.2`
-at the time of writing — and each `v*` tag keeps its own copy.
+If you would rather pin, use the newest release tag —
+`ghcr.io/yugaardiyan/yuarcloud:v1.0` at the time of writing — and each `v*` tag
+keeps its own copy.
+
+Check what a tag actually holds before pinning to it:
+
+```bash
+curl -s "https://ghcr.io/token?scope=repository:yugaardiyan/yuarcloud:pull&service=ghcr.io" \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])" > /tmp/tok
+curl -s -H "Authorization: Bearer $(cat /tmp/tok)" \
+  https://ghcr.io/v2/yugaardiyan/yuarcloud/tags/list
+```
+
+A higher number is not a newer build. `v1.2` was published before the repository
+was emptied and redeployed; it predates the chunked-upload data-loss fix and the
+bundle work. `v1.0` is the tag that carries the current code.
 
 #### Publishing your own
 

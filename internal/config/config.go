@@ -167,6 +167,20 @@ func Load(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
+// setDefaults lists EVERY key in Config.
+//
+// The completeness is the point, not the values. viper's AutomaticEnv reads the
+// environment at Get time, but Unmarshal walks the key set viper already knows —
+// the config file it read, plus these defaults. A key in neither never reaches
+// Unmarshal, so its env var is silently discarded no matter what is exported.
+//
+// Eight keys were missing here, and the one that mattered was auth.jwt_secret.
+// With no config file at all, or a hand-written one that omits the line, an
+// operator who exported YUAR_AUTH_JWT_SECRET and followed the error message got
+// "auth.jwt_secret is missing" back — while the variable sat in the environment
+// doing nothing, with no warning. It only worked because both shipped config
+// files happen to carry the key. A zero value here is exactly what an absent key
+// unmarshalled to anyway, so this costs nothing and makes the override work.
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 3103)
@@ -178,6 +192,12 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("database.type", "sqlite")
 	v.SetDefault("database.sqlite.path", "./data/yuarcloud.db")
+	v.SetDefault("database.postgres.host", "")
+	v.SetDefault("database.postgres.port", 0)
+	v.SetDefault("database.postgres.user", "")
+	v.SetDefault("database.postgres.password", "")
+	v.SetDefault("database.postgres.dbname", "")
+	v.SetDefault("database.postgres.sslmode", "")
 
 	v.SetDefault("storage.type", "local")
 	v.SetDefault("storage.local.root", "./data/files")
@@ -186,6 +206,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("storage.chunked.temp_dir", "./data/tmp/chunks")
 	v.SetDefault("storage.chunked.cleanup_interval", "1h")
 
+	v.SetDefault("auth.jwt_secret", "")
 	v.SetDefault("auth.token_ttl", "24h")
 	v.SetDefault("auth.refresh_ttl", "168h")
 	v.SetDefault("auth.bcrypt_cost", 12)
@@ -198,10 +219,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("share.max_expiry_days", 365)
 	v.SetDefault("share.require_password", false)
 	v.SetDefault("share.max_views", 0)
+	v.SetDefault("share.base_url", "")
 
+	// logging.format and logging.output were here and had no field to land in:
+	// LoggingConfig carries only `level`. A default for a key nothing reads is
+	// a key someone later reads in the config file and believes is in effect.
 	v.SetDefault("logging.level", "info")
-	v.SetDefault("logging.format", "json")
-	v.SetDefault("logging.output", "stdout")
 
 	v.SetDefault("rate_limit.enabled", true)
 	v.SetDefault("rate_limit.requests_per_minute", 120)
