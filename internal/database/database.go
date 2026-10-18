@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -126,6 +127,65 @@ func enableWAL(db *gorm.DB) {
 		return
 	}
 	log.Println("SQLite journal mode: WAL")
+}
+
+// AuditRetention is how long an audit row is kept.
+//
+// Deliberately not a button in the panel. An audit row is often the only record
+// that an action happened at all — access logs are duplicated by whatever
+// fronts them, debug logs are disposable, this is not — and deleting it is not
+// itself recorded anywhere, because the target is empty by the time you would
+// write it. A time window gets the same space back without ever putting an
+// unrecoverable deletion in front of an administrator. Google Workspace,
+// Microsoft Purview and AWS CloudTrail all work this way and none of them
+// expose a delete button.
+//
+// 180 days matches Google's default. At the measured cost of an audit row —
+// roughly 500 bytes on disk and 0.05 ms to write — a year of a single active
+// account is about 20 MB, so this reclaims nothing anybody would notice while
+// keeping every row an administrator could plausibly still be asked about.
+const AuditRetention = 180 * 24 * time.Hour
+
+// PruneAuditLogs deletes rows older than the retention window and reports how
+// many went. Nothing is returned in place of them: a tombstone is still a row,
+// and the point of a window is that the table stops growing, not that it
+// grows more slowly.
+//
+// Range deletion on created_at, which is indexed, so the cost is proportional
+// to what is removed rather than to the size of the table.
+func PruneAuditLogs(db *gorm.DB, retain time.Duration) (int64, error) {
+	if db == nil || retain <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().Add(-retain)
+	res := db.Exec("DELETE FROM audit_logs WHERE created_at < ?", cutoff)
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.RowsAffected, nil
+}
+
+// StartAuditRetention prunes once immediately and then once a day.
+//
+// The immediate run is what makes a server that was off for a month come back
+// already trimmed, rather than carrying the backlog for a day. The daily tick
+// is only there so an install left running for a year does the same.
+func StartAuditRetention(db *gorm.DB, retain time.Duration) {
+	prune := func() {
+		n, err := PruneAuditLogs(db, retain)
+		switch {
+		case err != nil:
+			log.Printf("Note: could not prune the audit log: %v", err)
+		case n > 0:
+			log.Printf("Pruned %d audit event(s) older than %d days", n, int(retain.Hours()/24))
+		}
+	}
+	prune()
+	go func() {
+		for range time.NewTicker(24 * time.Hour).C {
+			prune()
+		}
+	}()
 }
 
 // Shutdown checkpoints and closes the database.

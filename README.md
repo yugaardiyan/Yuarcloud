@@ -6,6 +6,7 @@ browser.
 - Chunked upload with resume — large files survive a dropped connection
 - Share links with password, expiry date and a view limit
 - Per-user accounts, quota, and roles
+- Audit log of who did what, kept 180 days
 - Dark mode
 
 ## First sign-in

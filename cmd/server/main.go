@@ -58,6 +58,12 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Drop audit rows past the retention window, now and once a day. Started
+	// here rather than inside Init so the goroutine belongs to main's lifetime
+	// alongside the chunk sweeper, rather than to a constructor whose caller
+	// may never have wanted a background job.
+	database.StartAuditRetention(db, database.AuditRetention)
+
 	// Initialize storage backend
 	store, err := storage.NewLocalStorage(cfg)
 	if err != nil {
