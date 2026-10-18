@@ -1,0 +1,6 @@
+Aturan nama dan path yang berlaku di mana-mana: apa yang boleh disebut, apa
+yang ditolak, dan bagaimana nama mentah dari klien menjadi path yang aman.
+
+Semuanyasatu tempat karena penyebarannya adalah masalahnya. Setiap handler
+yang menulis pemeriksaan sendiri berarti dua endpoint bisa memperlakukan input
+yang sama berbeda, dan yang lupa hanya terlihat lewat test yang juga lupa.
