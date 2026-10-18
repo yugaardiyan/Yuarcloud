@@ -1738,16 +1738,18 @@ input.input[type='number'] {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
 
-  /* No border on the two edges that sit on the card's own edges.
-     `border` draws inside the box, so a 1px line there ate 1px of the tray's
-     white: the boxes coincided to the pixel, but the tray's white stopped at
-     y=657.5 while the card's ran to y=658.5. Measured off a screenshot, that
-     1px is the whole of "the bottom line is not quite straight" — and
-     getBoundingClientRect could never have shown it, because it is not in the
-     geometry. Dropping the two sides lets the white run to the same line the
-     card's does, and their 16px corners then coincide as a single arc. */
-  border-bottom: none;
-  border-right: none;
+  /* Full border on all four sides, including the two that sit on the card's
+     own edges.
+
+     These two used to be dropped, on the reasoning that a border paints inside
+     the box and so stopped 1px of white short of the card's edge. That was
+     measuring the wrong thing: the tray lines up with the card, so with the
+     border drawn the 1px band occupies the last pixel before the card's line
+     and its outer edge lands exactly on the card's edge. Dropping the sides
+     did make the white reach further, but it also left the tray with no
+     outline at all along two of its edges, so it stopped reading as a card of
+     the same kind as the toolbar popups and read instead as a panel spilling
+     off the card. Outline first, alignment second. */
 
   /* Matches --radius-xl, the drive card's own radius. At the card's corner the
      two shapes read as one thing, and a tray at a different radius puts a
@@ -1945,12 +1947,13 @@ input.input[type='number'] {
   color: var(--text-primary) !important;
   border: 1px solid var(--border-color) !important;
 
-  /* Same reason as the upload tray's: the bottom and right edges sit on the
-     card's own edges, and a border draws inside the box, so the toast's white
-     stopped 1px short of the card's and the bottom line read as not quite
-     straight. Screenshot-measured, 0.5px on the toast at dpr 2. */
-  border-bottom: none !important;
-  border-right: none !important;
+  /* Full border, including the two edges that sit on the card's own. Same
+     correction as the upload tray's, and for the same reason: with the toast
+     lined up on the card, the 1px band lands on the last pixel before the
+     card's edge, so its outer edge coincides with the card's. The earlier
+     version dropped these two sides to let the white reach 1px further, at
+     the cost of leaving a notification with no outline along the edges the
+     eye is checking for alignment against. */
 
   box-shadow: var(--shadow-md) !important;
   font-size: 12px;
