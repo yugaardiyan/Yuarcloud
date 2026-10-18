@@ -431,6 +431,12 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
+	// After the server stops answering, so nothing can still be mid-transaction.
+	// Under WAL this folds the write-ahead log back into the database file: a
+	// stopped server then leaves one self-contained y.db, which is what makes
+	// "back up /config" true rather than almost true.
+	database.Shutdown(db)
+
 	log.Println("Server exited")
 }
 

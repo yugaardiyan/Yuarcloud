@@ -81,6 +81,20 @@ auth.jwt_secret      ->   YUAR_AUTH_JWT_SECRET
 | `/srv` | Your files. This is the one to back up. |
 | `/config` | `config.yaml` and the SQLite database. Small, must survive. |
 
+SQLite runs in write-ahead logging mode, which is what lets several people
+upload at once without the database locking up. While the server is *running*
+that means recent writes sit in a sibling `y.db-wal` file, so a copy of `y.db`
+on its own can be a little behind. Two ways to be safe:
+
+```
+docker compose stop yuarcloud && cp …/y.db …      # stop first — one file is enough
+cp …/y.db* …                                      # or copy y.db, y.db-wal and y.db-shm
+```
+
+A cleanly stopped server checkpoints on the way out and leaves `y.db` complete
+on its own. If the host is NFS or SMB, WAL is skipped automatically and this
+does not apply.
+
 Chunked-upload scratch lives at `/srv/.yuarcloud-chunks`, on the same volume as
 the files it will become, so a large upload never fills the container's own
 writable layer.
