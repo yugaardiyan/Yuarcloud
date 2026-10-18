@@ -505,5 +505,3 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 	logAudit(h.db, c, userID, "trash", "file", &file.ID, "Moved to trash: "+file.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "moved to trash", "id": fileID})
 }
-
-// subtreeSize totals the bytes of every non-dir row beneath root.

@@ -16,7 +16,15 @@ import (
 	"gorm.io/gorm"
 )
 
-// Chunked upload endpoints
+// Chunked upload: session init, chunk writes, assembly, status and cancel.
+//
+// Separate from the plain upload because the lifecycle differs. A plain upload
+// is one request that finishes or fails. This one spans many, can be paused and
+// resumed, can be abandoned and cleaned up later, and carries state that has to
+// survive between them — which is why the session is re-read under its lock
+// rather than trusted from whatever the caller held.
+
+// InitChunkedUpload opens a session and reserves the target name.
 func (h *FileHandler) InitChunkedUpload(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 

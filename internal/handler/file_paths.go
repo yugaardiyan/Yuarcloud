@@ -1,12 +1,5 @@
 package handler
 
-// Aturan nama dan path yang berlaku di mana-mana: apa yang boleh disebut, apa
-// yang ditolak, dan bagaimana nama mentah dari klien menjadi path yang aman.
-//
-// Semuanyasatu tempat karena penyebarannya adalah masalahnya. Setiap handler
-// yang menulis pemeriksaan sendiri berarti dua endpoint bisa memperlakukan input
-// yang sama berbeda, dan yang lupa hanya terlihat lewat test yang juga lupa.
-
 import (
 	"context"
 	"net/http"
@@ -17,6 +10,13 @@ import (
 	"github.com/yuarcloud/yuarcloud/internal/model"
 	"github.com/yuarcloud/yuarcloud/internal/scope"
 )
+
+// What a name may be, what is refused, and how a raw client string becomes a
+// path that is safe to touch.
+//
+// Together because spreading them is the problem. Each handler writing its own
+// check means two endpoints can treat the same input differently, and the one
+// that forgot is only ever caught by the test that forgot too.
 
 // reservedName reports whether a single path element is server-owned.
 func reservedName(name string) bool {

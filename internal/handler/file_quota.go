@@ -10,6 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// Per-user quota: what is used, what is in flight, and when a request has to
+// be refused.
+//
+// Usage is measured from the subtree rather than kept as a running total. A
+// folder's size changes when a file inside it moves, is trashed or is deleted,
+// and every caller that had to remember to adjust a counter is a caller that
+// eventually does not — the number drifts and only the user notices.
+
 // subtreeSize totals the bytes of every non-dir row beneath root.
 func (h *FileHandler) subtreeSize(userID uuid.UUID, root string) int64 {
 	var total int64

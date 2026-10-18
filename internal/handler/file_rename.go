@@ -17,6 +17,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// Rename, move and copy: three operations that differ mainly in where the
+// result lands and how the subtree is rewritten, and that share
+// resolveDestination and availableName to decide on that.
+//
+// Grouped because the rules holding them together are shared — one
+// destination, never overwriting what is already there, and the whole subtree
+// following along.
+
+// RenameFile changes an item's name within its current folder.
 func (h *FileHandler) RenameFile(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	fileID, err := uuid.Parse(c.Param("id"))
@@ -522,5 +531,3 @@ func (h *FileHandler) availableName(sc scope.Scope, dir, name string) (string, e
 
 	return name, nil
 }
-
-// Chunked upload endpoints
