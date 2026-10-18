@@ -276,7 +276,7 @@ export default function CapsuleToolbar() {
             </button>
 
             {menu === 'create' && (
-              <div className="capsule-menu" style={{ minWidth: 210 }} role="menu">
+              <div className="capsule-menu" role="menu">
                 <button
                   className="capsule-menu-item"
                   role="menuitem"

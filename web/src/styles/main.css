@@ -16,6 +16,25 @@
   --drive-pad-x: 16px;
   --drive-shell-gap: 12px;
 
+  /* Two heights the popup menus need in order to land on the card's top edge,
+     and which were previously written as bare numbers in two places each.
+     They live here so that changing the header height or the card's top margin
+     moves the menus with it, instead of leaving them pinned to a number that
+     no longer describes the layout. Both are read by .capsule-menu below. */
+  --app-header-h: 63.5px;
+  --drive-shell-top: 7px;
+
+  /* One width for every popup menu, so the account menu and the create menu
+     are the same box rather than two sizes that happen to sit side by side.
+
+     Measured from the content rather than guessed: the create menu needs 132px
+     for "Upload folder" plus its icon, gap and padding, and the account menu
+     needs 111px for its longest item. The old 200px floor and the create
+     menu's inline 210 both left roughly 70px of empty space to the right of
+     every row, which is where the menus looked oversized. 160px fits the
+     widest of the two with room to spare. */
+  --capsule-menu-w: 160px;
+
   /* One gap for the whole capsule toolbar. The nav row and the pill are two
      separate flex containers, so each kept its own value and the boundary
      between them came out tighter than every gap inside the row — visible as
@@ -378,7 +397,7 @@ input.input[type='number'] {
 }
 
 .app-header {
-  height: 63.5px;
+  height: var(--app-header-h);
   padding-top: 6.75px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
@@ -1493,7 +1512,7 @@ input.input[type='number'] {
 .drive-shell {
   flex: 1;
   min-height: 0;
-  margin: 7px var(--drive-shell-gap) 2px;
+  margin: var(--drive-shell-top) var(--drive-shell-gap) 2px;
   border-radius: var(--radius-xl);
   background: var(--bg-primary);
   overflow: hidden;
@@ -2940,17 +2959,41 @@ input.input[type='number'] {
   flex-shrink: 0;
 }
 
+/* Anchored to the card, not to the button that opened it.
+
+   The menus used to be absolute with `right: 0` inside .capsule-dropdown, so
+   each one lined up with its own button — which put the create menu 5px inside
+   the card's right edge and the account menu 46px inside it, because the two
+   buttons sit different distances from the end. Neither corner coincided with
+   the card's, so both menus read as a separate box hovering near the card
+   rather than as part of it.
+
+   Fixed positioning against the same tokens the tray and the toast use lands
+   both menus on the card's top-right corner exactly, and keeps them there when
+   the two buttons move — which they do whenever the search field opens and the
+   icons shuffle. This is the arrangement the upload tray has had all along
+   (.upload-tray, `right: var(--drive-shell-gap)`); the menus were the one thing
+   still measuring from their button. */
 .capsule-menu {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  min-width: 200px;
+  position: fixed;
+  /* The card's top edge: the header's height, then the card's own top margin. */
+  top: calc(var(--app-header-h) + var(--drive-shell-top));
+  /* The card's right edge, by the same margin the card uses to inset itself. */
+  right: var(--drive-shell-gap);
+  width: var(--capsule-menu-w);
+  min-width: 0;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
   padding: 4px;
   z-index: 400;
+  /* Scale toward the corner the menu is aligned to. The default origin is the
+     centre, so opening scaled the box inward from both sides and pulled the
+     right edge about 2px off the card for the length of the transition —
+     undoing, briefly, the alignment this rule exists to produce. Anchored here,
+     the corner stays put and only the left edge grows toward it. */
+  transform-origin: top right;
   animation: capsuleMenuIn var(--transition-fast);
 }
 
@@ -3018,6 +3061,12 @@ input.input[type='number'] {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text-primary);
+  /* The box is now a fixed width, so a long display name would push the menu
+     wider than the shared token and the two would stop matching — or overflow
+     past the edge. Clip it, and the full value stays in the title. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- Responsive --------------------------------------------------------- */
