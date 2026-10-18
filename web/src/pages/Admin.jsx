@@ -763,10 +763,20 @@ const ACTION_BTN = {
 /**
  * Every share link on the instance, newest first.
  *
- * Replaces the audit-log table: server events are read from the container log
- * (`docker logs yuarcloud`), so what belongs in the admin UI is the state of
- * the links themselves — who made them, what they point at, and whether they
- * still work.
+ * This tab used to carry a note that it "replaces the audit-log table: server
+ * events are read from the container log". That was false, and it is why the
+ * audit table is not here.
+ *
+ * Events are not read from `docker logs yuarcloud`. They are rows. Every logAudit
+ * call writes to the audit_logs table and adminApi.getAuditLogs fetches them
+ * from GET /api/admin/audit-logs. A throwaway instance wrote seven rows, returned
+ * all seven through that endpoint, still had all seven after a restart, and put
+ * none of them in the application log — the only lines there are gin's access
+ * log for requests to the endpoint itself.
+ *
+ * So the endpoint is live and the data is there; what is missing is a table to
+ * put it in. adminApi.getAuditLogs is already wired and correct. Reinstating the
+ * tab is a frontend change, and it does not require anything on the server.
  */
 function SharesTab({ shares, sharesError, onReload }) {
   const [copied, setCopied] = useState(null)

@@ -482,9 +482,23 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 	})
 }
 
-// GetShares lists every share link on the instance. Replaces the audit-log
-// view in the admin UI: server-side events are read from the container log,
-// so what an operator actually needs to see here is which links are live.
+// GetShares lists every share link on the instance.
+//
+// This used to sit here with a note that it "replaces the audit-log view in the
+// admin UI: server-side events are read from the container log". That was false,
+// and it was load-bearing — it is the stated reason the audit table was removed
+// from the panel.
+//
+// Server-side events are not read from the container log. They are rows: every
+// logAudit call writes to the audit_logs table, and GetAuditLogs serves them
+// back over GET /api/admin/audit-logs. Measured on a throwaway instance: seven
+// rows written, all seven returned by the endpoint, all seven still there after
+// a restart, and zero of them in the application log — the only audit-shaped
+// lines there are gin's access log recording requests to the endpoint itself.
+// The container log carries the request; the table carries the event.
+//
+// The endpoint works. What is missing is a view for it. Restoring that is a
+// frontend change and nothing here needs to move to make it possible.
 func (h *AdminHandler) GetShares(c *gin.Context) {
 	page := 1
 	pageSize := 50
