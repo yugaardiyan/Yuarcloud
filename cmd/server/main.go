@@ -83,9 +83,9 @@ func main() {
 
 	// Seed admin user. An account created from the shipped default gets a flag
 	// that pins it to the password-change endpoint until the credential is
-	// replaced. Nothing else is required to trigger it: "admin"/"admin" is what
-	// the repository, the image and the example config all hand an operator who
-	// then exposes the port.
+	// replaced. Nothing else is required to trigger it: "yuarcloud"/"yuarcloud"
+	// is what the repository, the image and the example config all hand an
+	// operator who then exposes the port.
 	isDefaultPass := cfg.Admin.DefaultPass == defaultShippedAdminPass
 	seeded, err := database.SeedAdmin(db, cfg.Admin.DefaultUser, hashPassword(cfg.Admin.DefaultPass, authService), isDefaultPass)
 	if err != nil {
@@ -437,7 +437,13 @@ func main() {
 // defaultShippedAdminPass is the credential the example config, the repository
 // docs and the container image all publish. Matching it is what marks a seeded
 // account as needing rotation.
-const defaultShippedAdminPass = "admin"
+//
+// It has to stay in step with admin.default_pass in internal/config. When the two
+// disagree, the rotation check silently matches nothing: SeedAdmin still sets the
+// flag for a fresh install, because that branch compares against the configured
+// value, while the sweep for already-existing accounts compares against this
+// constant and would wave a year-old default-password admin straight through.
+const defaultShippedAdminPass = "yuarcloud"
 
 func hashPassword(password string, authService *auth.AuthService) string {
 	hash, _ := authService.HashPassword(password)

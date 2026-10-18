@@ -212,8 +212,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.bcrypt_cost", 12)
 	v.SetDefault("auth.issuer", "yuarcloud")
 
-	v.SetDefault("admin.default_user", "admin")
-	v.SetDefault("admin.default_pass", "admin")
+	v.SetDefault("admin.default_user", "yuarcloud")
+	v.SetDefault("admin.default_pass", "yuarcloud")
 
 	v.SetDefault("share.default_expiry_days", 7)
 	v.SetDefault("share.max_expiry_days", 365)
