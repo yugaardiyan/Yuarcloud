@@ -1158,11 +1158,20 @@ input.input[type='number'] {
 .context-menu {
   position: fixed;
   background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  /* Same outline as the toolbar popups, the upload tray and the toasts: one
+     family of floating card, drawn at one weight. */
+  border: var(--border-edge-w) solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   padding: 3px;
-  min-width: 168px;
+  /* 128px, down from 168px. Measured with the width released, the widest of the
+     three menus this component renders is 126px -- the eight-item file menu, and
+     the multi-select menu, which share their longest label, "Move to trash"; the
+     empty-area menu measures 124px. The old 168px left 42px of dead space to the
+     right of every row, which is what read as an oversized box. 128px clears the
+     widest by 2px, so the menu still holds one width instead of resizing with
+     whatever the longest label happens to be. */
+  min-width: 128px;
   /* Backstop: even if repositioning misjudges, the menu can never run past
      the viewport — it scrolls instead. */
   max-height: calc(100vh - 16px);
