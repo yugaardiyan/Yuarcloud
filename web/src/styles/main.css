@@ -72,6 +72,22 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 
+  /* A drop shadow that falls straight down and does not reach past the sides.
+
+     The tray, the toasts and the toolbar popups sit with their right and bottom
+     edges on the drive card's edges. A box shadow reaches sideways by roughly
+     `blur / 2 - spread`, and the general-purpose shadows above reach about
+     11px that way, which puts a card's visible outline well outside the box the
+     others line up on. Measured off the rendered pixels, the drive card's
+     shadow reached 2px past its own edge and the floating cards' 11.5px, so
+     although all four borders ended on exactly the same pixel, the eye read a
+     staircase: the tray 2px inside the card, the toast 11.5px inside the tray.
+
+     Both layers here carry a spread at least half their blur, which holds the
+     shadow inside the box horizontally. The 1px border is then the outermost
+     mark on these cards, and it lands on the card's line. */
+  --shadow-edge: 0 8px 10px -6px rgba(0, 0, 0, 0.14), 0 3px 6px -4px rgba(0, 0, 0, 0.08);
+
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -1516,7 +1532,12 @@ input.input[type='number'] {
   border-radius: var(--radius-xl);
   background: var(--bg-primary);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  /* Held inside the box horizontally, for the same reason as --shadow-edge: this
+     card is the line the tray, the toasts and the popups are measured against,
+     so its own shadow must not reach past the edge they all land on. The card
+     is white on a 247 background, so it stays legible without the spread that
+     used to carry it 2px outward. */
+  box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.1);
 }
 
 /* The 2px bottom margin is sized for the drive, where a 38px status bar sits
@@ -1756,7 +1777,10 @@ input.input[type='number'] {
      second, competing outline exactly where the eye goes looking for the
      card's edge. */
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
+  /* Not --shadow-xl: that one reaches ~11px past the sides, which put this
+     card's visible outline outside the tray's own border and the drive card's
+     edge behind it. See --shadow-edge. */
+  box-shadow: var(--shadow-edge);
   z-index: 900;
   animation: slideInRight var(--transition-normal);
   overflow: hidden;
@@ -1955,7 +1979,9 @@ input.input[type='number'] {
      the cost of leaving a notification with no outline along the edges the
      eye is checking for alignment against. */
 
-  box-shadow: var(--shadow-md) !important;
+  /* --shadow-edge for the same reason as the tray's: a toast appearing while
+     the tray is up must land on the same line as the tray, not inside it. */
+  box-shadow: var(--shadow-edge) !important;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -2995,7 +3021,7 @@ input.input[type='number'] {
      lining up even though every box measurement said 0.0. Same radius, same
      centre, same curve. */
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-edge);
   padding: 4px;
   z-index: 400;
   /* Scale toward the corner the menu is aligned to. The default origin is the
