@@ -1,0 +1,4020 @@
+/* Yuarcloud — its own visual language.
+ *
+ * Not a skin of anything else. Earlier this file opened by claiming to be
+ * "inspired by Google Drive but simpler", which described where it started and
+ * then stopped being true: the surface became a single framed card, navigation
+ * collapsed into one pill, and the accent work moved onto tints rather than
+ * Google's blue. Rules below explain what the app decided and why, so the next
+ * change is made against the app's own logic instead of against a reference
+ * that is no longer on screen.
+ */
+
+:root {
+  /* Breathing room inside the drive's rounded card, and the gap between that
+     card and the window's left/right edges. The card's top and bottom gaps are
+     set on `.drive-shell` itself — they are not equal on purpose. */
+  --drive-pad-x: 16px;
+  --drive-shell-gap: 12px;
+
+  /* One gap for the whole capsule toolbar. The nav row and the pill are two
+     separate flex containers, so each kept its own value and the boundary
+     between them came out tighter than every gap inside the row — visible as
+     the Account button sitting closer to its neighbour than the nav buttons sit
+     to each other. Declared once so they cannot drift apart again. */
+  --capsule-gap: 5px;
+
+  /* Colors - Clean, modern palette */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f0f9ff;
+  --bg-tertiary: #e0f2fe;
+  --bg-hover: #e0f2fe;
+  --bg-active: #dee2e6;
+  --bg-selected: #e7f1ff;
+  --bg-selected-hover: #d0e4ff;
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #495057;
+  --text-tertiary: #868e96;
+  --text-inverse: #ffffff;
+
+  --border-color: #dee2e6;
+  --border-focus: #4dabf7;
+  --border-selected: #4dabf7;
+
+  --accent-primary: #339af0;
+  --accent-primary-hover: #228be6;
+  --accent-primary-light: #e7f1ff;
+  --accent-success: #40c057;
+  --accent-warning: #fab005;
+  --accent-danger: #fa5252;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  --header-height: 56px;
+}
+
+/* Light theme only — Yuarcloud always renders on a white background
+   with a light blue accent, regardless of the OS dark-mode setting. */
+
+/* Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar — deliberately slim. At 8px the gutter beside the drive card was
+   wide enough to read as a column of its own, right next to a card that was
+   meant to look like one clean surface. Firefox ignores the -webkit- rules
+   below, so it gets the standard properties set to match. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  /* Inset on both sides so what shows is a 4px sliver rather than a 6px bar.
+     Still wide enough to grab — a hairline would be harder to hit than the
+     8px bar it replaces. */
+  border: 1px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+  background-clip: content-box;
+}
+
+/* Selection */
+::selection {
+  background: var(--bg-selected);
+  color: var(--text-primary);
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Utility Classes */
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+
+.rounded { border-radius: var(--radius-md); }
+
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background: var(--accent-danger);
+  color: var(--text-inverse);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #e03131;
+}
+
+.btn-icon {
+  padding: 8px;
+  border-radius: var(--radius-full);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Opt-in pill shape, for the few buttons that should read as capsules next to
+   the rectangular ones. Modals already get this via .modal .btn.
+
+   Named `btn-pill` rather than `capsule` on purpose: `.capsule` is already the
+   header pill container and paints a white background, which silently won over
+   .btn-primary and left the button white-on-white. */
+.btn.btn-pill {
+  border-radius: var(--radius-full);
+  padding: 7px 16px;
+}
+
+.btn.btn-pill.btn-sm {
+  padding: 6px 14px;
+}
+
+/* Dialog buttons are capsules; buttons everywhere else stay rectangular.
+
+   The split is deliberate rather than decorative. A dialog is a temporary
+   surface with two or three actions, and a pill separates them from whatever
+   sits behind the overlay without needing a heavier separator. In the app
+   proper the same shape would be noise: the toolbar is already one capsule,
+   and a second pill inside it reads as a control inside a control.
+
+   The primary action sits on the right of the pair so the button that confirms
+   keeps a fixed position, whichever side of the exchange it falls on. */
+.modal .btn {
+  border-radius: var(--radius-full);
+  padding: 7px 16px;
+}
+
+/* Inputs */
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-light);
+}
+
+/* Capsule variant, matching the pill-shaped fields in the sign-in and
+   user sheets. Declared after .input so the equal specificity resolves here. */
+.input-capsule {
+  border-radius: var(--radius-full);
+}
+
+/*
+ * Normalise the native form controls Safari refuses to round.
+ *
+ * With the default appearance, Safari paints <select> and <input type=number>
+ * through its own widget layer and largely ignores border-radius — the same
+ * markup comes out as a hard-edged box there and a capsule on Chrome. Turning
+ * appearance off makes both engines draw the styled box, at the cost of the
+ * native chevron and spinner, which are re-supplied below.
+ *
+ * Selectors are qualified by class because the plain `select` type selector
+ * loses to .login-input / .input, whose `padding` shorthand would otherwise
+ * reset the right-hand padding and sit the chevron on top of the text.
+ */
+select.login-input,
+select.input,
+input.login-input[type='number'],
+input.input[type='number'] {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+select.login-input,
+select.input {
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23868e96' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 11px;
+}
+
+/* Number fields have no chevron, so they only need the rounded box. */
+input.login-input[type='number'],
+input.input[type='number'] {
+  cursor: text;
+}
+
+/* Safari and Chrome both keep spinners on number inputs unless told not to. */
+input.login-input[type='number']::-webkit-outer-spin-button,
+input.login-input[type='number']::-webkit-inner-spin-button,
+input.input[type='number']::-webkit-outer-spin-button,
+input.input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input.login-input[type='number'],
+input.input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input-error {
+  border-color: var(--accent-danger);
+}
+
+.input-error:focus {
+  box-shadow: 0 0 0 3px rgba(250, 82, 82, 0.2);
+}
+
+/* Cards */
+.card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+
+  /* Space below the drive card, which is what the upload tray sits above.
+
+     Two pages carry a card and differ in what is under it. The drive has a 38px
+     status bar plus the card's own 2px margin; the settings page has no status
+     bar and gives its card a 12px bottom margin instead (see
+     `.settings-page .drive-shell`), so the tray has to clear 12px there and
+     40px here. Using one figure for both put the tray 2px past the card's
+     bottom edge on admin, overhanging the rounded corner it was meant to sit
+     inside.
+
+     The status bar height is separate so the bar can size itself from it, with
+     a fallback so it can never collapse to nothing. */
+  --below-card-h: 12px;
+  --status-bar-h: 38px;
+}
+
+.app.has-status-bar {
+  --below-card-h: 40px;
+}
+
+.app-header {
+  height: 63.5px;
+  padding-top: 6.75px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* That bottom rule used to separate the header from the scope bar below it.
+   The scope bar is gone — the drive's column header butts straight against
+   this one — so the rule is now drawn exactly on the header/body boundary and
+   reads as a leftover divider.
+
+   Both rules below are scoped by the `is-drive` class that Layout puts on the
+   shell from the route. They used to use `:has(.drive-shell)`, which reads
+   better but fails closed: on a browser without `:has()` the rule is dropped
+   with no error, and the header quietly drifts 4px off the card with nothing
+   in the build to say so. A class cannot fail silently. */
+.app.is-drive .app-header {
+  border-bottom: none;
+}
+
+/* Header padding equal to the drive card's side gap, so the brand pill's left
+   edge and the action pill's right edge land exactly on the card's edges — not
+   "close enough", not a hair inside. This was briefly inset by an extra 1px to
+   absorb the pills' shadow bleed; that put the borders a pixel shy of the card
+   and read as crooked, which is a worse trade than letting a very faint shadow
+   spill 1px past the card on both sides — symmetric, and far softer than a
+   visible step in the border itself. */
+.app.is-drive .header-inner {
+  padding: 0 var(--drive-shell-gap);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.app-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+/* Breadcrumb: the folder path as clickable segments,
+   e.g. My Cloud / Documents / Notes. */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.breadcrumb-item {
+  background: transparent;
+  border: none;
+  padding: 3px 7px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.breadcrumb-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.breadcrumb-item:last-child {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.breadcrumb-sep {
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from { 
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from { 
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Dropdown */
+.dropdown {
+  position: relative;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+  animation: fadeIn var(--transition-fast);
+}
+
+.modal {
+  background: var(--bg-primary);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  animation: scaleIn var(--transition-fast);
+}
+
+.modal-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* One close button for every dialog: a plain 28px circle. The bare `✕` used to
+   carry its own padding in each modal, so the same control measured 30×48 in
+   the info sheet, 36×36 in the prompt dialogs and 34×34 in the folder picker —
+   three sizes for one button. `.modal .btn` cannot be leaned on here either:
+   it forces a 7px/16px capsule on anything carrying `.btn`, which is what
+   stretched the info sheet's ✕ into a pill in the first place. */
+/*
+ * The close button, in one place.
+ *
+ * `.icon-close` is the rule; `.modal-close` is the same rule under the name the
+ * dialogs already use. The upload tray's dismiss is not a modal and saying so
+ * would be a lie, but the two had drifted apart — the tray's was built from
+ * `.btn-icon` (8px padding) plus `.btn-sm` (6px 12px), which makes a 39x27
+ * oval rather than a 28x28 circle, and a row of differently shaped X buttons is
+ * the kind of thing the eye finds before it finds anything else.
+ *
+ * Listing both selectors keeps one source of truth without touching the six
+ * dialogs that already say `modal-close`.
+ */
+.icon-close,
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.icon-close:hover,
+.modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* --- File info sheet --------------------------------------------------- */
+/* A properties sheet, not a form. Narrow, no footer, no rules between rows —
+   the values are short and few enough that lines would only add weight. */
+.info-modal {
+  width: 364px;
+  max-width: calc(100vw - 32px);
+}
+
+/* The glyph rides with the title instead of taking a column of its own beside
+   the rows, which is what made the old layout read as a two-pane card. */
+.info-head {
+  gap: 10px;
+  padding: 14px 14px 14px 16px;
+}
+
+/* Scoped to .info-modal on purpose. `.info-glyph` alone is one class, same as
+   `.file-icon`, and `.file-icon` is defined *later* in this file — so the tie
+   went to it and the sheet's glyph stayed 40px no matter what this block said.
+   Same trap as the star badge a few hundred lines down. */
+.info-modal .info-glyph {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.info-modal .info-glyph svg {
+  width: 21px;
+  height: 21px;
+}
+
+.info-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  text-align: left;
+}
+
+/* The close button is `.modal-close`, shared with every other dialog — see
+   that rule for why it is not a `.btn`. */
+
+.info-rows {
+  margin: 0;
+  padding: 10px 16px 14px;
+  font-size: 12px;
+  max-height: 56vh;
+  overflow-y: auto;
+}
+
+.info-row {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.info-row dt {
+  flex: 0 0 72px;
+  color: var(--text-tertiary);
+}
+
+.info-row dd {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.modal-footer {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 16px;
+}
+
+/* The two actions sit side by side and split the bottom edge evenly
+   so the bar reads as one full, Apple-style capsule row. Padding
+   and radius fall through to .modal .btn so every button in every
+   popup uses the same capsule geometry as the full-width
+   "Create new share link" reference. */
+.modal-footer .btn {
+  flex: 1 1 0;
+}
+.modal-footer .btn-primary {
+  font-weight: 600;
+}
+
+/* Compact modal (New folder / Rename) — a single tight column:
+   title, input, actions. No separator lines, no redundant label.
+   Padding comes from .sheet below; only the width and the smaller type
+   live here. */
+.modal.compact { max-width: 330px; }
+.modal.compact .modal-title { font-size: 14px; }
+
+/* --- Dialog shell ------------------------------------------------------- */
+/* Shared geometry for the small, single-purpose dialogs: the user form,
+   New folder, Rename, and the confirmations.
+
+   Two variables drive everything:
+     --sheet-pad   the card margin, identical on all four sides
+     --sheet-gap   the rhythm between title → fields → actions
+
+   That symmetry is the whole point. The header/body/footer stack adds up to
+   exactly pad + content + pad, so the content block sits dead centre and the
+   empty space above, below, left and right all measures the same.
+
+   --sheet-pad is 14px to match the share form's action row, which is the one
+   dialog that draws its own buttons inside the body rather than in a footer.
+   At the previous 20px every other dialog set its buttons back 6px further
+   from the edge than that one, so switching between them visibly shifted the
+   controls. The footer gap likewise matches .modal-footer's 16px. */
+.modal.sheet {
+  --sheet-pad: 14px;
+  --sheet-gap: 12px;
+  border-radius: 28px;
+}
+
+/* Desktop separators are chrome; these read tighter without them. */
+.modal.sheet .modal-header,
+.modal.sheet .modal-body,
+.modal.sheet .modal-footer {
+  border: none;
+}
+
+/* The header is a single line of text, so its box should be exactly the
+   title's height. Letting the 36px close button sit beside it in a flex row
+   inflated the row and pushed the title ~7px further from the top edge than
+   the left and right insets — the exact asymmetry this class exists to
+   remove. Take the button out of flow and float it over the corner instead. */
+.modal.sheet .modal-header {
+  position: relative;
+  display: block;
+  padding: var(--sheet-pad) var(--sheet-pad) 0;
+}
+
+/* Dialog titles are fixed, short strings ("New user", "Rename"), so none of
+   them can reach under the close button at this width.
+
+   No padding override: the base .modal-close already zeroes it, and this
+   rule used to put 8px back — which shrank the 28px circle's content box to
+   12px and squashed the 15px icon with it. The offsets place the 28px circle
+   directly instead: `right` matches the other dialogs' inset, and `top` puts
+   it level with the title rather than 4px high, since the button lost the 8px
+   of padding that used to make it taller. */
+.modal.sheet .modal-close {
+  position: absolute;
+  top: calc(var(--sheet-pad) - 4px);
+  right: var(--sheet-pad);
+}
+
+.modal.sheet .modal-body {
+  padding: var(--sheet-gap) var(--sheet-pad) 0;
+}
+
+.modal.sheet .modal-footer {
+  padding: var(--sheet-gap) var(--sheet-pad) var(--sheet-pad);
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+/* Error line shared by every dialog. Collapsed to nothing while empty so the
+   actions sit exactly one --sheet-gap under the last field, the same as every
+   other gap in the form. An error briefly pushes the row down, which inside a
+   dialog is far less jarring than carrying a permanent blank strip. */
+.sheet-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 0;
+  overflow: hidden;
+  margin: 0;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--accent-danger);
+  text-align: center;
+  transition: height 140ms ease, margin 140ms ease;
+}
+
+.sheet-notice[data-filled='true'] {
+  height: 15px;
+  margin: 6px 0 0;
+}
+
+.sheet-notice svg {
+  flex-shrink: 0;
+}
+
+/* Confirmation dialog — a small, centered card with an icon,
+   a message, and two actions.
+
+   Flat card, no header/body/footer, so a single `padding` governs all four
+   sides. `--sheet-pad` mirrors the value in .sheet above, which is what
+   makes this dialog line up with the form dialogs. */
+.confirm-modal {
+  --sheet-pad: 14px;
+  --sheet-gap: 12px;
+  max-width: 310px;
+  padding: var(--sheet-pad);
+  border-radius: 28px;
+  text-align: center;
+}
+.confirm-icon {
+  width: 30px;
+  height: 30px;
+  margin: 0 auto 6px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+.confirm-modal.danger .confirm-icon {
+  background: #fde8e8;
+  color: var(--accent-danger);
+}
+.confirm-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.confirm-message {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: var(--sheet-gap);
+}
+/* The two actions sit side by side, each taking half the
+   width so they fill the bottom edge of the card. Padding
+   and radius fall through to .modal .btn so they share the
+   same capsule shape as the full-width reference button. */
+.confirm-actions {
+  display: flex;
+  /* Matches .modal-footer's gap so a confirmation's buttons sit the same
+     distance apart as a form's. It was 8px, which read as a tighter, different
+     pairing next to any dialog that used the shared footer. */
+  gap: 16px;
+}
+.confirm-actions .btn {
+  flex: 1;
+}
+
+/* Apple-style compact variant: a single text line plus Cancel / Ok
+   buttons, no icon, no title. Same symmetric padding as the others —
+   the line of text is the content, and it is centred in it. */
+.confirm-modal.simple {
+  max-width: 280px;
+}
+.confirm-modal.simple .confirm-message {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.35;
+}
+.confirm-modal.simple .confirm-actions {
+  margin-top: var(--sheet-gap);
+}
+
+/* Progress Bar */
+.progress {
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+/* File Grid/List */
+.file-grid {
+  display: grid;
+  /* 116px, not 132. Measured: at 132 the tile rendered 153px wide to hold a
+     60px glyph, so the hover highlight was two-thirds empty padding. The floor
+     is what sets the tile width (the columns are 1fr), so lowering it is the
+     only lever that shrinks the box without also shrinking the glyph. */
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 6px;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  position: relative;
+  /* Named properties, not `all`. These items only ever change colour, and
+     `all` dragged every geometric property along with it — padding included,
+     so the card's box eased into its new size on hover instead of being
+     simply that size. */
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+  user-select: none;
+}
+
+.file-item:hover {
+  background: var(--bg-hover);
+}
+
+.file-item.selected {
+  background: var(--bg-selected);
+}
+
+.file-item.selected:hover {
+  background: var(--bg-selected-hover);
+}
+
+/* Selection checkmark — pinned to the top-left corner of the card.
+   Now a direct child of .file-card, so it positions relative to the card itself. */
+.file-card .file-check {
+  position: absolute;
+  top: 0;
+  left: 6px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--bg-primary);
+  transform: scale(0);
+  transform-origin: center;
+  transition: transform 120ms cubic-bezier(0.2, 0, 0.13, 1);
+  z-index: 2;
+}
+
+.file-card.selected .file-check {
+  transform: scale(1);
+}
+
+.file-card .file-check:hover,
+.file-card.selected:hover .file-check {
+  transform: scale(1.15);
+}
+
+/* List view: checkmark inside the icon, top-left corner */
+.file-icon-sm .file-check-sm {
+  position: absolute;
+  top: 0;
+  left: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bg-primary);
+  transform: scale(0);
+  transform-origin: 0 0;
+  transition: transform 120ms cubic-bezier(0.2, 0, 0.13, 1);
+  z-index: 2;
+}
+
+.file-item.selected .file-icon-sm .file-check-sm {
+  transform: scale(1);
+}
+
+.file-item .file-icon-sm .file-check-sm:hover,
+.file-item.selected:hover .file-icon-sm .file-check-sm {
+  transform: scale(1.15);
+}
+
+.file-icon-sm .file-check-sm svg {
+  width: 5px;
+  height: 5px;
+}
+
+/* Folder under the pointer during an in-app move drag. */
+.file-item.is-drop-target {
+  background: var(--bg-selected);
+  box-shadow: inset 0 0 0 2px var(--accent-primary);
+  border-radius: var(--radius-md);
+}
+
+/* The grip while dragging. The card still has a click handler, so the cursor
+   has to say which of the two the pointer is currently promising. */
+.file-item[draggable='true'] {
+  cursor: default;
+}
+
+.file-item[draggable='true']:active {
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .file-item.is-drop-target {
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+  }
+}
+
+/* No tile behind the glyph. The coloured rounded square used to sit in a
+   151x96 box in grid view with a 40px icon floating in the middle of it, so
+   most of that space was padding. The glyph is now the whole thing and the
+   colour comes from `color` alone. */
+.file-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* File-icon sizing. */
+.file-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.file-icon.folder {
+  color: var(--accent-primary);
+}
+
+.file-icon.file {
+  color: var(--text-tertiary);
+}
+
+.file-icon.image {
+  color: #fa5252;
+}
+
+.file-icon.video {
+  color: #1971c2;
+}
+
+.file-icon.audio {
+  color: #1864ab;
+}
+
+.file-icon.archive {
+  color: #e67700;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.file-list .file-item {
+  padding: 8px 12px;
+}
+
+.file-list .file-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.file-list .file-name {
+  font-size: 13px;
+}
+
+.file-list .file-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 3px;
+  min-width: 168px;
+  /* Backstop: even if repositioning misjudges, the menu can never run past
+     the viewport — it scrolls instead. */
+  max-height: calc(100vh - 16px);
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  z-index: 1000;
+  animation: scaleIn var(--transition-fast);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-align: left;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.context-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.context-menu-item.danger {
+  color: var(--accent-danger);
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 3px 6px;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  margin-bottom: 16px;
+
+  /* Centred for its own content, not just centred as a box. The SVG is an
+     inline element, so without this it sits on the text baseline and the whole
+     unit reads a few pixels low against a title that is not. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.empty-state-text {
+  font-size: 13px;
+  max-width: 300px;
+  line-height: 1.6;
+}
+
+/* Loading */
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-tertiary);
+}
+
+/* Breadcrumb */
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  gap: 4px;
+}
+
+.tab {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+/* Tooltip */
+.tooltip {
+  position: relative;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-inverse);
+  background: var(--text-primary);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+  z-index: 100;
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+}
+
+/* Responsive */
+  /* Print */
+@media print {
+  .app-header,
+  .dropdown,
+  .modal-overlay {
+    display: none !important;
+  }
+
+  .app {
+    height: auto;
+  }
+
+  .app-body {
+    overflow: visible;
+  }
+
+  .app-main {
+    overflow: visible;
+  }
+
+  .app-content {
+    padding: 0;
+  }
+}
+/* =========================================================================
+   Components added for the full file browser
+   ========================================================================= */
+
+/* --- Splash / loading -------------------------------------------------- */
+.splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+/* --- Brand / avatar ---------------------------------------------------- */
+/* The blue disc is drawn inside the SVG, so the box is just a sizer. */
+.brand-mark {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logo {
+  display: block;
+  /* flexbox must never squash the disc into an ellipse */
+  flex-shrink: 0;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 50%;
+  user-select: none;
+}
+
+.error-mark {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(250, 82, 82, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Grid cards -------------------------------------------------------- */
+.file-card {
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 6px;
+  border: 1px solid transparent;
+  position: relative;
+}
+
+/* The tile is a 1fr grid column, so a background painted on the card itself
+   spans the whole column — 132px to hold a 56px glyph, which is why it read
+   as a padded box instead of a highlight. Painting the state background on an
+   inset pseudo-element narrows the highlight to roughly what the content
+   occupies. The glyph and label are lifted above it explicitly: an absolutely
+   positioned box paints over static text otherwise. */
+.file-card:hover,
+.file-card.selected,
+.file-card.selected:hover,
+.file-card.is-drop-target {
+  background: transparent;
+  box-shadow: none;
+}
+
+.file-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 6px;
+  z-index: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+  pointer-events: none;
+}
+
+.file-card:hover::before { background: var(--bg-hover); }
+.file-card.selected::before { background: var(--bg-selected); }
+.file-card.selected:hover::before { background: var(--bg-selected-hover); }
+
+.file-card.is-drop-target::before {
+  background: var(--bg-selected);
+  box-shadow: inset 0 0 0 2px var(--accent-primary);
+}
+
+.file-card .file-icon,
+.file-card .file-info {
+  position: relative;
+  z-index: 1;
+}
+
+/* The glyph is the whole tile, so it is the only thing in this band — which
+   means the band is what sizes the tile, and every pixel of slack in it is
+   padding the pointer has to cross before reaching the card's real content.
+   58px against a 56px glyph leaves 1px either side. */
+.file-card .file-icon {
+  width: 100%;
+  height: 58px;
+}
+
+.file-card .file-icon svg,
+.file-card .file-icon > svg {
+  width: 56px;
+  height: 56px;
+}
+
+.file-card .file-name {
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  /* Two lines before the ellipsis. The grid got narrower when its column floor
+     came down from 160px to 132px, which started cutting names in half; a
+     second line buys back most of what was lost without letting a long name
+     take three rows and throw the grid out of alignment. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  /* The base rule pins this to nowrap for the list view. Left in place it
+     wins over line-clamp's wrapping and every name stays on one line. */
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.file-card .file-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+  /* One line, always. Allowed to wrap it added a second line and grew the card
+     mid-row; truncating beats making the tile taller than its neighbours. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Star + selection affordances on the tile */
+.file-icon {
+  position: relative;
+}
+
+/* Icon tints. Colour only — there is no tile behind the glyph any more, so
+   these are the sole thing distinguishing one file type from another. The
+   softer values here are a touch deeper than the old background pairs so the
+   solid shapes still read clearly against white without a coloured plate. */
+.file-icon.folder  { color: var(--accent-primary); }
+.file-icon.image   { color: #e03131; }
+.file-icon.video   { color: #1864ab; }
+.file-icon.audio   { color: #1864ab; }
+.file-icon.pdf     { color: #e03131; }
+.file-icon.sheet   { color: #099268; }
+.file-icon.archive { color: #e67700; }
+/* Word's own blue, so a .docx is recognisable by colour the way it is in a
+   desktop file manager. Kept apart from .sheet (Excel green) and .text. */
+.file-icon.doc     { color: #2b579a; }
+.file-icon.text    { color: #7048e8; }
+.file-icon.code    { color: #4263eb; }
+.file-icon.file    { color: var(--text-tertiary); }
+
+/* --- List rows --------------------------------------------------------- */
+/* The column header joins the toolbar above it as one box in list view: no
+   border between them, no gap above. Both sit on --bg-primary, so the seam
+   that would otherwise read as two stacked bands simply isn't there.
+   The header's own bottom border stays — that is what separates the columns
+   from the rows. */
+/* The column header and the rows below it are one surface: no rule between
+   them. The rows keep their own separators so a long list stays scannable —
+   those are what the eye uses to track across the columns. */
+.file-list-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* The drive's file area, as one rounded card. `overflow: hidden` here is what
+   clips the scroll container to the corners; without it the rows would square
+   themselves off over the radius the moment the list overflows. */
+/* Deliberately asymmetric. The card sat flush against the header and left a
+   12px shelf above the status bar, so it read as floating in the middle of the
+   pane rather than filling it. Air on top, almost none underneath.
+   Margins only — the status bar and everything in it keep their size and
+   position, being a non-shrinking sibling that follows this box.
+
+   7px, not 12: the header is 56px tall but its pills are only 46, leaving 5px
+   of dead air beneath them. A 12px margin measures as 12 to the DOM and 17 to
+   the eye. 7px here is what makes the gap you actually see equal the card's
+   12px side gutters. */
+.drive-shell {
+  flex: 1;
+  min-height: 0;
+  margin: 7px var(--drive-shell-gap) 2px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-primary);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* The 2px bottom margin is sized for the drive, where a 38px status bar sits
+   below the card and supplies the visual weight. The settings page has no status
+   bar, so the same 2px left the card hugging the bottom of the window while its
+   sides sat 12px in — the card looked pinned down rather than framed. Give it the
+   same gap as its sides. */
+.settings-page .drive-shell {
+  margin-bottom: var(--drive-shell-gap);
+}
+
+.drive-content {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+  outline: none;
+  padding: var(--drive-pad-x);
+  background: var(--bg-primary);
+}
+
+/* The settings page reuses this card, so its scroll container has to fill it the
+   same way. .app-content carries `flex: 1` for the unwrapped case, which does
+   nothing here — .drive-shell is not a flex container — so without an explicit
+   height it would size to its content and get clipped by the shell's overflow
+   instead of scrolling, taking the longer tabs past the card's bottom edge. */
+.drive-shell > .app-content {
+  height: 100%;
+  flex: none;
+}
+
+/* List mode drops the pane's padding so the header reaches the card's edges. */
+.drive-content.is-list {
+  padding: 0;
+}
+
+.sort-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.sort-header:hover {
+  color: var(--text-primary);
+}
+
+/* The label has to sit where its values sit. `.sort-header` is a flex row, so
+   the `text-align: right` that `.file-col-size` / `.file-col-date` hand down
+   never reaches it — flex items ignore it. The label and its arrow packed to
+   the left edge of the column while every value beneath was flush right, which
+   is what made SIZE and MODIFIED read as crooked even though the column boxes
+   themselves lined up perfectly. */
+.sort-header.file-col-size,
+.sort-header.file-col-date {
+  /* row-reverse + flex-start, not row + flex-end. Both park the group against
+     the right edge, but row-reverse puts the *label* last so the LABEL lands on
+     that edge — which is what the eye compares against the values. With plain
+     flex-end the arrow took that spot and the label sat an icon-width to the
+     left of its own numbers, which still read as crooked. */
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.file-row {
+  padding: 7px 12px;
+  border-radius: 0;
+  /* No rule between rows. The rows are 49px tall, which is enough separation
+     on its own — and with the header's rule already gone, a line under every
+     row turned the list into a stack of boxes instead of one surface. The row
+     hover and selected fills carry the boundaries now. */
+  border-bottom: none;
+}
+
+.file-row .file-name {
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-icon-sm {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.file-icon-sm svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* The name takes whatever the row has left, so Size and Modified always end at
+   the right edge and the two columns stay anchored to the card's far side.
+
+   There used to be a max-width here, switched off above a breakpoint so a wide
+   monitor would spread the columns out. It could not work: the empty space
+   between the name and the figures is `row width − name − columns`, and the name
+   can never exceed the space available to it, so that gap only ever grows as the
+   window widens — it can never shrink back to zero. Reaching "flush right" from
+   "packed left" therefore has to pass through one exact width, and every version
+   of this that tried it teleported the columns there.
+
+   With no cap the row is one continuous function of the window width: the name
+   grows as you widen, the figures stay put on the right, and dragging the window
+   moves nothing but the name. Nothing to jump at any width. */
+.file-name.flex-1,
+.file-list-header .flex-1 {
+  flex: 1 1 0;
+  /* Flex items refuse to shrink below their content by default, so a long name
+     would push Size and Modified off the edge instead of ellipsising. The row's
+     own overflow:hidden already handles the text; this is what lets it get there. */
+  min-width: 0;
+}
+
+.file-col-size {
+  flex: 0 0 90px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.file-col-date {
+  flex: 0 0 140px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* --- Status bar -------------------------------------------------------- */
+.status-bar {
+  height: var(--status-bar-h, 38px);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  /* Also outside the card, so it takes the page grey. Its top rule went with
+     that: grey against grey, it only drew a line across the grey gap. The
+     card's own rounded bottom already separates the two. */
+  background: var(--bg-secondary);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* Left half: Back / Forward, then where you are. `min-width: 0` so a long path
+   ellipses instead of shoving the counts off the end of the bar. */
+.status-bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Right half: the item count now sits beside the storage figure rather than at
+   the opposite end of the bar. */
+.status-bar-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+/* .btn-icon carries 8px of padding, which is taller than the bar it now lives
+   in, so the vertical padding comes down. The horizontal padding goes to zero:
+   the button box already sits flush on the card's left edge, so any side
+   padding pushed the arrow itself inboard of that edge and read as a stair. */
+.status-nav-btn {
+  padding: 4px 0;
+  border-radius: var(--radius-sm);
+}
+
+.status-bar-scope {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* --- Upload tray ------------------------------------------------------- */
+.upload-tray {
+  position: fixed;
+
+  /* Tucked into the drive card's bottom-right corner rather than floating
+     against the viewport.
+
+     Both edges land exactly on the card's, so the tray's own rounded corner
+     coincides with the card's rounded corner and the two read as one shape
+     instead of a second box hovering near one. An earlier version held the
+     tray 10px clear of the bottom edge, which left a sliver of card visible
+     under it and made the alignment look like an accident.
+
+     - `right` is the card's own side margin, so the right edge is the card's
+       right edge.
+     - `bottom` is whatever sits below the card on this page — the status bar
+       on the drive, nothing but the card's own margin in settings.
+
+     Both reuse values the card already uses, so nothing here has to be kept in
+     step by hand if the card's margins or the bar's height change. */
+  right: var(--drive-shell-gap);
+  bottom: var(--below-card-h);
+
+  width: 340px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+
+  /* No border on the two edges that sit on the card's own edges.
+     `border` draws inside the box, so a 1px line there ate 1px of the tray's
+     white: the boxes coincided to the pixel, but the tray's white stopped at
+     y=657.5 while the card's ran to y=658.5. Measured off a screenshot, that
+     1px is the whole of "the bottom line is not quite straight" — and
+     getBoundingClientRect could never have shown it, because it is not in the
+     geometry. Dropping the two sides lets the white run to the same line the
+     card's does, and their 16px corners then coincide as a single arc. */
+  border-bottom: none;
+  border-right: none;
+
+  /* Matches --radius-xl, the drive card's own radius. At the card's corner the
+     two shapes read as one thing, and a tray at a different radius puts a
+     second, competing outline exactly where the eye goes looking for the
+     card's edge. */
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  z-index: 900;
+  animation: slideInRight var(--transition-normal);
+  overflow: hidden;
+}
+
+.upload-tray-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.upload-tray-body {
+  overflow-y: auto;
+  padding: 4px 12px 10px;
+}
+
+.upload-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.upload-row + .upload-row {
+  border-top: 1px solid var(--border-color);
+}
+
+.upload-row-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.upload-row-icon.done { color: var(--accent-success); }
+.upload-row-icon.error { color: var(--accent-danger); }
+.upload-row-icon.uploading,
+.upload-row-icon.pending { color: var(--accent-primary); }
+
+.upload-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.upload-row-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  min-width: 0;
+}
+
+.upload-row-size {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.upload-bar {
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 6px 0 4px;
+}
+
+.upload-bar-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-fast);
+}
+
+.upload-bar-fill.done { background: var(--accent-success); }
+.upload-bar-fill.error { background: var(--accent-danger); }
+
+.upload-row-status {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/*
+ * A finished row stays on screen as the receipt, so it has to step back rather
+ * than keep competing for attention. Drive does the same: completed entries dim
+ * and the panel gets quiet, so whatever is still moving is the only thing with
+ * any weight left.
+ *
+ * Dimmed, not hidden. Someone who kicked off thirty uploads needs to be able to
+ * scan down and count what arrived without opening anything.
+ */
+.upload-row.is-done {
+  opacity: 0.62;
+}
+
+.upload-row.is-done:hover {
+  opacity: 1;
+}
+
+.upload-row.is-done .upload-row-status {
+  color: var(--accent-success);
+}
+
+/* The rate and remaining time sit beside the percentage. Kept dimmer than it:
+ * the percentage is the answer to "how far along am I", these are colour
+ * around it and should not compete. */
+.upload-row-detail {
+  color: var(--text-tertiary);
+  opacity: 0.75;
+}
+
+/* --- Toasts ------------------------------------------------------------- */
+/*
+ * Above the status bar, on the right, where the storage figure is — so a
+ * notification lands next to the thing it usually reports on (an upload, a
+ * quota change) instead of across the top of the file grid where it covers the
+ * first row of results.
+ *
+ * `bottom` is `--below-card-h`, the card's bottom edge, which clears the status
+ * bar on the drive and the card's own margin in settings. One number, no
+ * per-page figure.
+ *
+ * This used to add `--upload-tray-h`, lifting the stack above an open tray.
+ * That was correct arithmetic and the wrong picture: the toast stopped being
+ * flush with the card the moment a toast was worth showing, which is most of
+ * the time one is. Two panels in one corner cannot both own the bottom edge,
+ * so the one that is transient takes it and floats over the tray — the tray has
+ * a solid background and its own shadow, so the layering reads. The cost is
+ * that an open tray's dismiss is under the toast for the three seconds the
+ * toast lives, which is the trade the alignment is worth.
+ *
+ * `!important` is unavoidable. react-hot-toast writes `bottom: 1rem` as an
+ * inline style on this container, and inline beats every selector short of an
+ * important one. The alternative was letting the library own the offset, which
+ * would mean hardcoding the status bar's height back into JSX.
+ */
+[data-rht-toaster] {
+  bottom: var(--below-card-h) !important;
+  right: var(--drive-shell-gap) !important;
+  left: auto !important;
+  top: auto !important;
+
+  /* The width is not cosmetic. The library writes `inset: 16px` inline, and
+     overriding left and top to auto leaves a fixed box with no width at all —
+     which shrinks to zero, because every toast inside it is absolutely
+     positioned and contributes nothing to its content width. At zero the pill
+     was squeezed to 117px and wrapped a one-line message over four lines. An
+     explicit width is what gives the pill room to be a pill. */
+  width: 360px !important;
+  max-width: calc(100vw - var(--drive-shell-gap) * 2) !important;
+}
+
+/* Each toast sits in a full-width flex row, so push it to the right edge where
+   the container is anchored. */
+[data-rht-toaster] > div {
+  justify-content: flex-end;
+}
+
+/*
+ * The notification is a rounded card, not a capsule.
+ *
+ * It sits flush against the drive card's bottom-right corner, so it shares the
+ * exact curve of the card above it, the upload tray beside it, and — at the
+ * viewport edge — the browser's own window rounding. Same radius, same corner
+ * position, one continuous outline; a pill there drew its own semicircle across
+ * the junction and the three corners stopped agreeing with each other.
+ *
+ * Deliberately --radius-xl and not --radius-full: a capsule's radius is its
+ * own height, so it changes shape every time the message wraps to a second
+ * line.
+ */
+.toast-card {
+  border-radius: var(--radius-xl) !important;
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+
+  /* Same reason as the upload tray's: the bottom and right edges sit on the
+     card's own edges, and a border draws inside the box, so the toast's white
+     stopped 1px short of the card's and the bottom line read as not quite
+     straight. Screenshot-measured, 0.5px on the toast at dpr 2. */
+  border-bottom: none !important;
+  border-right: none !important;
+
+  box-shadow: var(--shadow-md) !important;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+
+  /* Tighter than the 10px/16px it started at: 45px tall for one line of text
+     next to a 20px icon is a lot of card for a notification that is gone in
+     three seconds. This lands it at 39px without the icon or the text losing
+     the room they need. */
+  padding: 7px 13px 7px 11px !important;
+  max-width: 100%;
+
+  /* Enters from the right, matching where it is anchored. The library already
+     ships a `slideInRight` but picks a vertical slide for bottom-right, and it
+     picks it in an inline animation. Overriding the name here rather than on
+     the positioned wrapper keeps the library's own stacking and collapse
+     transitions intact — that wrapper's animation is what moves toasts past
+     each other, and replacing it left them jumping over each other. */
+  animation-name: toast-in-right !important;
+  animation-duration: 200ms !important;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.toast-card > span:last-child {
+  margin: 0;
+}
+
+/* Error reads as error from the icon alone; no need to shout it in colour. */
+.toast-card[data-toast='error'] {
+  border-color: color-mix(in srgb, var(--accent-danger) 35%, var(--border-color));
+}
+
+@keyframes toast-in-right {
+  from {
+    opacity: 0;
+    /* 12px, not more. The stack is anchored 12px from the viewport's right
+       edge, so this is the largest slide that starts entirely on screen —
+       anything larger begins with the notification clipped by the window
+       before it has finished animating in. */
+    transform: translateX(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* --- Shared page ------------------------------------------------------- */
+.centered-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-secondary);
+}
+
+/* A public share page is a single small surface, so it takes the same
+   generous corner radius as the sign-in card and capsule actions to match. */
+.share-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 36px;
+  border-radius: 28px;
+}
+
+.share-card .btn {
+  border-radius: var(--radius-full);
+  padding: 11px 18px;
+}
+
+/* The ghost action reads as a square without a fill, so give it the same
+   capsule a hairline and a hover tint to match its siblings. */
+.share-card .btn-ghost,
+.share-file-card .btn-ghost {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.share-card .btn-ghost:hover:not(:disabled),
+.share-file-card .btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
+}
+
+.share-file-card {
+  border-radius: 28px;
+}
+
+.share-file-card .btn {
+  border-radius: var(--radius-full);
+  padding: 11px 18px;
+}
+
+.share-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+/* --- Admin: a row of related settings ----------------------------------- */
+/* Three controls stacked full-width spent 600px of row on every one of them to
+   display "10". They belong on one line, and the prose that explained them
+   belongs in one note under that line rather than a paragraph before each
+   field. `minmax(0, 1fr)` rather than `1fr` so a long option in the select
+   cannot force the column wider and push the row into overflow. */
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.settings-note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+/* One column is the phone threshold the rest of the app already uses; below
+   it, three 190px columns would wrap every label onto two lines. */
+@media (max-width: 560px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Login --------------------------------------------------------------- */
+/* Compact sign-in card: mark + two-tone wordmark, two fields, one capsule
+   action. Deliberately label-free — the placeholders carry the meaning. */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-secondary);
+}
+
+/* Card + message form one centred unit. */
+.login-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 356px;
+}
+
+/* Uniform 20px on all four sides: the top edge to the logo now matches the
+   bottom edge to the Login button, so the card reads as evenly padded. */
+.login-card {
+  width: 100%;
+  padding: 20px;
+  border-radius: 26px;
+  box-shadow: var(--shadow-md);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 22px;
+}
+
+.login-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.login-brand-name {
+  display: flex;
+  align-items: baseline;
+  font-weight: 700;
+  font-size: 25px;
+  letter-spacing: -0.6px;
+  white-space: nowrap;
+}
+
+.login-brand-lead {
+  color: var(--text-primary);
+}
+
+.login-brand-tail {
+  color: var(--logo-blue, #038dff);
+}
+
+/* Right padding leaves room for the reveal button. */
+.login-input-pad {
+  padding-right: 40px;
+}
+
+.login-reveal {
+  position: absolute;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.login-reveal:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.login-reveal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login-field {
+  margin-bottom: 10px;
+}
+
+/* Last field drops its own margin: the notice below already opens the gap, so
+   stacking both would double the space before the button. */
+.login-field:last-of-type {
+  margin-bottom: 0;
+}
+
+.login-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 13px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.login-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 14px 0 40px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-light);
+}
+
+.login-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  margin-top: 10px;
+  padding: 0 16px;
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-inverse);
+  background: #1a1a2e;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.login-btn:hover:not(:disabled) {
+  background: #2a2a45;
+}
+
+.login-btn:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Sits between the fields and the button with a reserved line, so a failed
+   sign-in never nudges anything. Empty when nothing to report. */
+/* --- User dialog --------------------------------------------------------- */
+/* Same capsule language as the sign-in card: one column of pills, no labels,
+   placeholders carrying the meaning. Used for both create and edit. */
+
+.user-modal {
+  width: 100%;
+  max-width: 380px;
+}
+
+/* The shared pill has a 40px left pad reserved for an icon; dialogs use
+   plain inputs, so drop it back to a normal inset. */
+.login-input-plain {
+  padding-left: 16px;
+}
+
+.user-field {
+  margin-bottom: 8px;
+}
+
+.user-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* The root-folder row is the last one; the footer closes right under it. */
+.user-field:last-of-type {
+  margin-bottom: 0;
+}
+
+/* --- Users list (compact table, mobile-friendly) -------------------------- */
+.users-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.users-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.users-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.users-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/*
+ * Fixed layout, no min-width.
+ *
+ * The three columns are all short, so the table fits a phone without a
+ * horizontal scrollbar — which is what made it hostile before: `min-width`
+ * forced sideways scrolling on every narrow screen to reveal two numbers and
+ * two buttons that were already visible. Fixed layout lets the name column
+ * take the slack and the two narrow columns keep their size, so the detail
+ * text ellipsises instead of pushing the row wider.
+ */
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+/* Wide enough for the worst realistic pair, "999.9 MB /999.9 GB" at this
+   size. Narrower than that and the figure clipped mid-number — "481.6 MB
+   /51…" — which is worse than a slightly wider column: an admin cannot tell
+   whether the quota is 512 MB or 51 GB. The name column has the slack to
+   give, and it degrades gracefully. */
+.users-table th:nth-child(2),
+.users-table td:nth-child(2) {
+  width: 124px;
+}
+
+/*
+ * Sized to the two buttons, not guessed. `.btn-icon` carries 8px padding and
+ * `.btn-sm` 6px 12px, so a default icon button is ~37px wide and two of them
+ * with a gap came to ~78px inside a 68px column — the edit and delete buttons
+ * sat on top of the storage figure. The padding is overridden under
+ * .user-actions below, so this width has to match what that actually renders.
+ */
+.users-table th:nth-child(3),
+.users-table td:nth-child(3) {
+  width: 62px;
+}
+
+.users-table th {
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+}
+
+.users-table th:last-child,
+.users-table td:last-child {
+  text-align: right;
+}
+
+.users-table td {
+  padding: 6px 10px;
+  border-top: 1px solid var(--border-color);
+  vertical-align: top;
+}
+
+.users-table tr:first-child td {
+  border-top: none;
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/*
+ * The text stack beside the avatar has to be allowed to shrink below its
+ * content width. A flex child defaults to min-width:auto, which makes it
+ * refuse to shrink and pushes the row wider than its column — the ellipsis on
+ * .user-name never engages and the table overflows instead.
+ */
+.user-cell > div:last-child {
+  min-width: 0;
+}
+
+.user-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-primary-light);
+  color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-home {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-role-text {
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.user-role-text.admin {
+  color: #7048e8;
+}
+
+.user-role-text.user {
+  color: var(--text-secondary);
+}
+
+.user-storage {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  /* A figure like "1.2 GB /100 GB" is wider than the column, and nowrap
+     without a clip let it run under the action buttons. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+
+/* Compact square buttons, and they stay square: `.btn-sm`'s 6px 12px would
+   otherwise widen each one to ~37px and push the pair past its column. */
+.user-actions .btn {
+  padding: 5px;
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 639px) {
+  .users-table th,
+  .users-table td {
+    padding: 6px 8px;
+  }
+
+  .users-table th:nth-child(2),
+  .users-table td:nth-child(2) {
+    width: 92px;
+  }
+
+  .users-table th:nth-child(3),
+  .users-table td:nth-child(3) {
+    width: 56px;
+  }
+
+  /* The storage column cannot be both narrow and whole on a phone. Wrapping
+     the figure onto a second line costs one row-height; clipping it would
+     cost the number itself. */
+  .user-storage {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.35;
+  }
+
+  .user-cell {
+    gap: 7px;
+  }
+
+  .user-avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+
+  .user-role-text {
+    margin-left: 4px;
+  }
+
+  /* The icon stays on the line; the path beside it ellipsises. The earlier
+     column rule here put the folder glyph above its own text, which read as
+     a stray mark rather than a label. */
+  .user-home {
+    margin-top: 1px;
+  }
+
+  .user-home span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Lives under the card, not inside it. The fixed height reserves its line even
+   when empty, so the card above never moves when an error shows. */
+.login-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 15px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--accent-danger);
+  text-align: center;
+}
+
+.login-notice svg {
+  flex-shrink: 0;
+}
+
+/* --- Animations used above --------------------------------------------- */
+.animate-pulse {
+  animation: softPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes softPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(0.96); }
+}
+
+/* --- Responsive -------------------------------------------------------- */
+@media (max-width: 768px) {
+  /* The "New" button lost its text label entirely, so there is nothing left to
+     hide at this width. The rule that used to do it was for a label the toolbar
+     no longer renders. */
+
+  .status-bar {
+    font-size: 11px;
+    padding: 0 12px;
+  }
+}
+
+/* The tray spans the card's full width on a phone and nowhere else.
+ *
+ * 560px, and the number is chosen rather than inherited. This was at 768px,
+ * which is an iPad in portrait, so tablets got the phone layout; then at 639px,
+ * which is not a device width at all — it is the number the admin table uses so
+ * its columns can reflow, which is a different question.
+ *
+ * What a phone actually measures: 320px at the small end, 430px at the wide
+ * end (an iPhone Pro Max). Nothing in portrait is 639px, or even 560px. So the
+ * range between 430 and 560 holds no phones at all — only narrow windows and
+ * the small tablets (a Kindle Fire is 600px, an iPad mini 744px), and those are
+ * exactly the ones that should keep the corner layout. 560 is also the
+ * threshold this stylesheet already uses for "this is a phone", in four other
+ * blocks.
+ *
+ * Why the tray goes full width at all: at 375px a 340px tray plus the card's
+ * two 12px gutters leaves 11px, and a panel that nearly fills its card reads
+ * as a second card rather than as something sitting in its corner. Above
+ * ~560px there is room for the corner to be a corner.
+ *
+ * What width cannot tell apart: a phone held sideways is 667px and up, and
+ * gets the corner layout. That is the right answer rather than a compromise —
+ * a 667px-wide screen has room for a 340px tray beside it, and stretching one
+ * across a screen that size would look like a mistake. */
+@media (max-width: 560px) {
+  .upload-tray {
+    /* Full width, but on the same edges as the card so the two still line up
+       rather than the tray drifting 0px or 2px proud of it. */
+    left: var(--drive-shell-gap);
+    right: var(--drive-shell-gap);
+    width: auto;
+
+    /* Same reason the base rule drops the bottom and right: the tray now spans
+       the card's full width, so its left edge is on the card's left edge too
+       and a border there would eat 1px of white the wider layouts keep. */
+    border-left: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+  /* Size goes first on a phone. Modified stays because "when did I last touch
+     this" is what someone scanning a list on a small screen is usually after,
+     and it is the one column worth giving up space for; size is available in
+     Get Info and in the preview panel. Hidden rather than narrowed — a 70px
+     column left three of them ("667.4 KB") truncating into each other's
+     ellipsis, which reads as a rendering fault rather than a choice. */
+  .file-col-size {
+    display: none;
+  }
+
+  .file-col-date {
+    flex: 0 0 auto;
+    font-size: 11px;
+  }
+}
+
+/* =========================================================================
+   Header layout: brand | search | new | view toggle | account
+   ========================================================================= */
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 16px;
+}
+
+/* --- Brand ------------------------------------------------------------- */
+/*
+ * The logo + wordmark sit in their own pill so they read as a single brand
+ * badge, mirroring the capsule on the right that holds every action.
+ */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 46px;
+  padding: 5px 6px 5px 5px;
+  margin-right: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.brand:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.brand:active {
+  transform: scale(0.98);
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Two-tone wordmark: "Yuar" in ink, "cloud" in the brand blue. */
+.brand-name {
+  display: flex;
+  align-items: baseline;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.3px;
+  /* The "Y" glyph carries built-in left side bearing, which reads as extra
+     space at these gaps. Pull the word in to compensate. */
+  margin-left: -1px;
+  white-space: nowrap;
+}
+
+.brand-name-lead {
+  color: var(--text-primary);
+}
+
+.brand-name-tail {
+  color: var(--logo-blue, #038dff);
+}
+
+  /* =========================================================================
+   Capsule toolbar
+   One pill holding every primary action. Clicking search expands the pill
+   and the icon row collapses away, so the field appears to fill the capsule.
+   ========================================================================= */
+
+.header-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Mirrors the .brand pill so both ends of the header read as one system. */
+.capsule {
+  display: flex;
+  align-items: center;
+  /* Separates the nav row from Account and Create, which a divider used to do.
+     Shares --capsule-gap with .capsule-row so the whole pill spaces evenly. */
+  gap: var(--capsule-gap);
+  height: 46px;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+  position: relative;
+  max-width: 100%;
+}
+
+/* --- Icon row ----------------------------------------------------------- */
+/*
+ * The row never changes size. Search is an overlay, so opening it must not
+ * reflow the pill — animating width here is what used to make the pill
+ * contract and slice the icons in half mid-transition.
+ */
+.capsule-row {
+  display: flex;
+  align-items: center;
+  /* Wider than the 2px this used to carry: the vertical dividers that used to
+     do the grouping are gone, and at 2px the buttons read as one smudge rather
+     than as separate targets. Same token as .capsule, so the gap is uniform
+     across the whole pill rather than just inside this row. */
+  gap: var(--capsule-gap);
+  white-space: nowrap;
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-normal),
+    visibility 0s;
+}
+
+/* Anything that is not part of the search field steps aside while it is open.
+   The field is an opaque overlay pinned to the pill, so simply covering the
+   account and create controls was not enough: the overlay's rounded right
+   edge and the blue create circle share the exact same arc, and the browser's
+   antialiasing of the two coincident edges let a thin blue crescent of the
+   button show through. Fading them out removes the overlap entirely. */
+.capsule-collapsed {
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+  /* Flip to hidden only after the fade, so the buttons leave the tab order. */
+  visibility: hidden;
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-normal),
+    visibility 0s linear var(--transition-normal);
+}
+
+.capsule-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  /*
+   * Only the press scale animates. Background and colour must swap
+   * instantly: cross-fading them left the outgoing tab looking selected
+   * while the incoming one had not faded in yet — a visible flash on every
+   * scope switch.
+   */
+  transition: transform var(--transition-fast);
+}
+
+.capsule-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.capsule-btn[data-active]:hover {
+  background: color-mix(in srgb, var(--accent-primary-light) 80%, var(--accent-primary));
+  color: var(--accent-primary);
+}
+
+.capsule-btn:active {
+  transform: scale(0.94);
+}
+
+/*
+ * The pill is white now, so a white fill here would be invisible. Tint the
+ * active tab instead and let the colour carry the selection.
+ */
+.capsule-btn[data-active] {
+  background: var(--accent-primary-light);
+  color: var(--accent-primary);
+}
+
+/* The create button is the filled, high-contrast segment on the right. */
+.capsule-btn-primary {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+.capsule-btn-primary:hover {
+  background: var(--accent-primary-hover);
+  color: #fff;
+}
+
+/* The Empty trash button uses the same filled treatment as the
+   create button, but in the danger colour so the destructive
+   intent is clear at a glance. */
+.capsule-btn-danger {
+  background: var(--accent-danger);
+  color: #fff;
+}
+.capsule-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-danger) 85%, #000);
+  color: #fff;
+}
+
+/* Nothing to empty: the button keeps its slot so the pill does not
+   reflow, but drops back to the plain surface colour of an inert
+   segment instead of shouting red at something that cannot be pressed. */
+.capsule-btn-danger:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.capsule-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary-light);
+  color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* --- Search ------------------------------------------------------------- */
+/*
+ * Absolutely positioned so it covers the whole pill without taking part in
+ * layout. Only opacity and transform animate — no width, no reflow, and the
+ * pill keeps its exact size in both states.
+ */
+.capsule-search {
+  position: absolute;
+  inset: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /*
+   * The close button is 26px wide and the search icon only 17px, so equal
+   * edge padding would leave the two glyph centres 4.5px apart. Trim the left
+   * padding by half that difference to centre both optically.
+   */
+  padding: 0 8px 0 3.5px;
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-8px) scale(0.98);
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-normal),
+    visibility 0s linear var(--transition-normal);
+}
+
+.capsule-search.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-normal),
+    visibility 0s;
+}
+
+.capsule-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  padding: 6px 0;
+}
+
+.capsule-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Hide the native clear affordance so only our button shows. */
+.capsule-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.capsule-search-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.capsule-search-clear {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.capsule-search-clear:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* --- Dropdowns ---------------------------------------------------------- */
+.capsule-dropdown {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.capsule-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: 4px;
+  z-index: 400;
+  animation: capsuleMenuIn var(--transition-fast);
+}
+
+@keyframes capsuleMenuIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.capsule-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.capsule-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.capsule-menu-item.danger {
+  color: var(--accent-danger);
+}
+
+.capsule-menu-item.danger:hover {
+  background: rgba(250, 82, 82, 0.1);
+}
+
+.capsule-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+/* Name sits above the items, separated by a thin inset rule — full-bleed
+   looked too heavy for a header this short. */
+.capsule-menu-head {
+  position: relative;
+  padding: 10px 11px 9px;
+  margin-bottom: 4px;
+}
+
+.capsule-menu-head::after {
+  content: '';
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  bottom: 0;
+  height: 1px;
+  background: var(--border-color);
+  opacity: 0.7;
+}
+
+.capsule-menu-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* --- Responsive --------------------------------------------------------- */
+/*
+ * On narrow screens the pill keeps its exact 46px height and its
+ * buttons keep their 36px size, so it never changes shape. Instead
+ * the nav row scrolls sideways — Account and Create stay pinned
+ * outside the scroller, exactly as on desktop. Only the wordmark
+ * tightens, because the full header needs ~439px and most phones
+ * are 375-430px wide.
+ */
+@media (max-width: 560px) {
+  .header-inner { padding: 0 10px; gap: 6px; }
+
+  /* The wordmark keeps its desktop size and spacing — only the
+     gap to the capsule tightens. The padding above already keeps
+     the pill symmetric, so it is not repeated here. */
+  .brand { gap: 2px; margin-right: 4px; }
+
+  /* Let the pill shrink to the available width; the nav row inside
+     it scrolls while the pinned actions keep their size. */
+  .capsule { flex-shrink: 1; min-width: 0; }
+  .capsule-row {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .capsule-row::-webkit-scrollbar { display: none; }
+}
+
+/* Small phones (iPhone SE and similar at 375px). The wordmark keeps
+   its size; only the spacing tightens. The pill stays the same height
+   and shape. */
+@media (max-width: 400px) {
+  .header-inner { padding: 0 8px; gap: 4px; }
+  .brand { gap: 2px; margin-right: 2px; }
+}
+
+/* =========================================================================
+   Statistics: stat cards + storage bar
+   ========================================================================= */
+
+/* One card for the whole tab.
+   The figure is sized to be read, not to fill — it leads because it is the only
+   number that changes what an operator would do, but everything around it is
+   deliberately small so nothing competes with the bar. */
+.storage-meter {
+  padding: 18px 20px;
+}
+
+.storage-meter-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.storage-meter-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin: 0 0 6px;
+}
+
+.storage-meter-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.storage-meter-used {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.6px;
+  line-height: 1.1;
+}
+
+.storage-meter-quota {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+/* The percentage sits opposite the figure because that corner is where a glance
+   lands first, and its colour turns with the threshold — an operator deciding
+   whether to free space should read 94% in amber, not 94% in grey. */
+.storage-meter-pct {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  line-height: 1.1;
+}
+
+.storage-meter-pct-value {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+}
+
+.storage-meter-pct-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.storage-meter-pct.is-warning .storage-meter-pct-value  { color: var(--accent-warning); }
+.storage-meter-pct.is-critical .storage-meter-pct-value { color: var(--accent-danger); }
+
+.storage-meter-bar {
+  height: 6px;
+  background: var(--bg-tertiary);
+}
+
+.storage-meter-bar .progress-bar {
+  min-width: 4px;
+  transition: width 400ms cubic-bezier(0.2, 0, 0.13, 1), background-color var(--transition-fast);
+}
+
+.storage-meter-bar.is-normal .progress-bar   { background: var(--accent-primary); }
+.storage-meter-bar.is-warning .progress-bar  { background: var(--accent-warning); }
+.storage-meter-bar.is-critical .progress-bar { background: var(--accent-danger); }
+
+/* Every remaining count on one quiet line, separated by middots rather than its
+   own row of icons and numbers. No rule above it: the bar is already the
+   separator, and a hairline would split one card into two stacked sections —
+   the exact thing this layout exists to avoid. */
+.storage-meter-detail {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+
+.storage-meter-sep {
+  padding: 0 7px;
+  opacity: 0.55;
+}
+
+@media (max-width: 560px) {
+  .storage-meter-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  /* Corner-aligned stops meaning anything once the two stack, so the percentage
+     goes back to reading as part of the figure. */
+  .storage-meter-pct {
+    align-items: flex-start;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 5px;
+  }
+}
+
+/* =========================================================================
+   Share modal
+   ========================================================================= */
+
+/* Compact share modal — narrower window, tighter header/body, smaller
+   rows and form controls so the whole dialog fits a shorter screen
+   without scrolling for one or two links. */
+.modal.share-modal {
+  max-width: 420px;
+}
+
+/* Password and expiry share a row — they are one short decision, and stacking
+   them made the dialog twice as tall as it needed to be. */
+.share-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+/*
+ * The "No share links yet" placeholder. Deliberately smaller than the generic
+ * .empty-state used elsewhere: this one shares its dialog with the create
+ * form, and the roomier version left the dialog with a large void and pushed
+ * the action button nowhere near the bottom.
+ */
+.share-empty {
+  text-align: center;
+}
+
+/*
+ * Centre the message in the space the action button leaves it, instead of
+ * letting it cling to the top of the panel with the gap all underneath. Only
+ * applies in the placeholder state, where the body is the flex column.
+ */
+.modal.share-modal .modal-body.is-placeholder .share-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  /* Without this the column stretches its children, and the icon — a replaced
+     element with a definite width — refuses to stretch and falls back to the
+     start edge instead. It ended up flush left while the text under it was
+     centred. text-align cannot fix it: the icon is a block-level flex item. */
+  align-items: center;
+  justify-content: center;
+}
+
+.share-empty-icon {
+  color: var(--text-tertiary);
+  opacity: 0.55;
+  margin-bottom: 8px;
+}
+
+.share-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.share-empty-text {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/*
+ * One floor for both states. Sized to the create form, which is the taller of
+ * the two now that the placeholder is compact — so the placeholder rests on it
+ * and the dialog neither resizes nor slides when the form replaces it. The
+ * link list still grows the modal past this, which is a change worth seeing.
+ */
+.modal.share-modal .modal-body {
+  min-height: 230px;
+}
+
+/*
+ * Holding the height steady is not enough on its own: the placeholder's own
+ * content is much shorter than the form's, so its button ended up stranded
+ * mid-panel while the form's sits near the bottom edge. Spreading the two
+ * apart puts the action in the same place in both states.
+ */
+.modal.share-modal .modal-body.is-placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Below this the two columns leave the duration value no room next to its
+   chevron, so go back to stacking. */
+@media (max-width: 460px) {
+  .share-form-row {
+    grid-template-columns: 1fr;
+  }
+}
+.modal.share-modal .modal-header {
+  padding: 12px 14px 10px;
+  border-bottom: none;
+}
+.modal.share-modal .modal-title {
+  font-size: 14px;
+}
+.modal.share-modal .modal-close {
+  padding: 4px;
+}
+.modal.share-modal .modal-body {
+  padding: 6px 14px 14px;
+  max-height: 70vh;
+}
+.modal.share-modal .modal-footer {
+  padding: 10px 14px;
+  border-top: none;
+}
+.modal.share-modal .input,
+.modal.share-modal select.input {
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+/* The shorthand above resets padding-right, which would put the chevron on top
+   of the value. This is more specific, so it wins. */
+.modal.share-modal select.input {
+  padding-right: 28px;
+  background-position: right 10px center;
+}
+.modal.share-modal form > div {
+  margin-bottom: 0;
+}
+.modal.share-modal form {
+  gap: 10px !important;
+  margin-top: 12px !important;
+}
+
+.share-row {
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  transition: border-color var(--transition-fast);
+}
+
+/* A link that cannot be opened any more is dimmed, not just labelled. */
+.share-row.is-danger {
+  border-color: color-mix(in srgb, var(--accent-danger) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-danger) 4%, var(--bg-primary));
+}
+
+.share-row.is-muted {
+  opacity: 0.72;
+}
+
+.share-row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.share-row-link-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.share-row-url {
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-secondary);
+  min-width: 0;
+  flex: 1;
+}
+
+.share-status {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.share-status-ok {
+  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
+  color: var(--accent-success);
+}
+
+.share-status-danger {
+  background: color-mix(in srgb, var(--accent-danger) 14%, transparent);
+  color: var(--accent-danger);
+}
+
+.share-status-muted {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+/* Tiny permission chip sitting next to the status pill on each existing link. */
+.share-perm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--accent-primary-light);
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.share-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.share-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.share-row-meta > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.share-row-meta > span.is-locked {
+  color: var(--accent-primary);
+}
+
+/* Two-option access selector inside the share creation form. */
+.share-perm-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.share-perm-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.share-perm-option:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+}
+
+.share-perm-option.is-active {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-light);
+}
+
+.share-perm-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.share-perm-option > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.share-perm-option > span strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.share-perm-option > span small {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.3;
+}
+
+@media (max-width: 560px) {
+  .share-row-top { flex-wrap: wrap; }
+  .share-row-url { flex-basis: 100%; order: 3; }
+}
+
+/* --- File viewer -------------------------------------------------------- */
+/* A full-bleed surface rather than a dialog: previews own the whole viewport
+   because a spreadsheet or a video has no sensible "compact" size. The shell
+   is a flex column so the header stays put and only the body scrolls. */
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100; /* above .modal-overlay, so a viewer can never be buried */
+  display: flex;
+  background: rgba(12, 14, 20, 0.72);
+  backdrop-filter: blur(6px);
+  animation: fadeIn var(--transition-fast);
+}
+
+.preview-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 14px 20px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.preview-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.preview-title-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-title-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.preview-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.preview-action:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.preview-action-close {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.preview-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* --- Media -------------------------------------------------------------- */
+
+.preview-video {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+  /* Settles back to centre when a drag ends without paging. The image viewer
+     already had this; video snapped, which made an abandoned drag read as a
+     glitch rather than a gesture the viewer declined. */
+  transition: transform 90ms ease-out;
+}
+
+.preview-pdf {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--bg-secondary);
+}
+
+.preview-image-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* Grabbing is only meaningful once zoomed past the viewport; below that the
+     panning is a no-op anyway and a grab cursor would be a lie. */
+  cursor: default;
+  touch-action: none;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  transform-origin: center center;
+  transition: transform 90ms ease-out;
+}
+
+.preview-audio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 40px;
+}
+
+.preview-audio-disc {
+  width: 148px;
+  height: 148px;
+  border-radius: var(--radius-full);
+  background:
+    radial-gradient(circle at 50% 50%, var(--bg-primary) 0 14%, transparent 14%),
+    conic-gradient(from 0deg, #2b3440, #4a5568, #2b3440, #4a5568, #2b3440);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.45);
+}
+
+.preview-audio-name {
+  max-width: 60ch;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-audio-el {
+  width: min(560px, 100%);
+}
+
+/* --- Text --------------------------------------------------------------- */
+
+.preview-text {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.preview-text-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.preview-text-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.preview-text pre {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px 20px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  tab-size: 2;
+  white-space: pre;
+}
+
+/* Long lines need scrolling, not a wall of wrapped text — that is the whole
+   point of the toggle, and the default for code-like content. */
+.preview-text pre.is-wrapped {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* --- Spreadsheet -------------------------------------------------------- */
+
+.preview-sheet {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.preview-sheet-tabs {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 6px 12px 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.preview-sheet-tab {
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.preview-sheet-tab:hover { color: var(--text-primary); }
+
+.preview-sheet-tab.is-active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.preview-sheet-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.preview-sheet table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  /* Tabular figures keep columns of numbers from jittering as you scroll. */
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-sheet td {
+  max-width: 320px;
+  padding: 5px 10px;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-sheet tr.is-header td {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom-color: var(--border-active);
+}
+
+.preview-sheet-foot {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+/* --- Document (docx) ---------------------------------------------------- */
+
+.preview-doc {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-secondary);
+}
+
+.preview-doc-body {
+  max-width: 820px;
+  margin: 32px auto;
+  padding: 48px 56px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.preview-doc-body h1,
+.preview-doc-body h2,
+.preview-doc-body h3,
+.preview-doc-body h4 {
+  margin: 1.4em 0 0.5em;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.preview-doc-body h1 { font-size: 1.6em; }
+.preview-doc-body h2 { font-size: 1.3em; }
+.preview-doc-body h3 { font-size: 1.1em; }
+
+.preview-doc-body p { margin: 0 0 1em; }
+
+.preview-doc-body blockquote {
+  margin: 1em 0;
+  padding: 2px 0 2px 16px;
+  border-left: 3px solid var(--accent-primary-light);
+  color: var(--text-secondary);
+}
+
+.preview-doc-body img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
+
+.preview-doc-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.92em;
+}
+
+.preview-doc-body td,
+.preview-doc-body th {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.preview-doc-notes {
+  max-width: 820px;
+  margin: 0 auto 32px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+/* --- Fallbacks ---------------------------------------------------------- */
+
+.preview-loading,
+.preview-fallback {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+}
+
+.preview-fallback p { max-width: 46ch; line-height: 1.55; }
+
+/* --- Prev / next -------------------------------------------------------- */
+/* These live in the header bar, not floating over the body.
+
+   Overlaid arrows read fine on a photo — there is usually letterboxing to sit
+   in — but a video fills the area edge to edge, so they landed on top of the
+   picture and covered part of the frame. In the header they cannot overlap
+   anything, for any format, and they are always visible instead of only on
+   hover, which also means they work on a touch screen. */
+.preview-pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border-color);
+}
+
+.preview-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.preview-nav:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* At the first and last file the arrow still shows where it would go, but as
+   an inert hint rather than a button that silently does nothing. */
+.preview-nav:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.preview-nav:disabled:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+/* --- Viewer paging ------------------------------------------------------ */
+/* The series counter in the title bar. Dimmed so it reads as context for the
+   arrows rather than as another piece of metadata competing with the name. */
+.preview-title-series {
+  color: var(--text-tertiary);
+  opacity: 0.85;
+}
+
+/* --- Drag to page ------------------------------------------------------- */
+/* Images and video can be dragged sideways to move within their series. The
+   content follows the pointer while it travels so the gesture feels attached
+   to the picture rather than to the window, and dims slightly to read as
+   "letting go of this one, reaching for the next". */
+.preview-image-stage.is-swiping,
+.preview-video-stage.is-swiping {
+  cursor: grabbing;
+}
+
+.preview-image-stage.is-swiping .preview-image,
+.preview-video-stage.is-swiping .preview-video {
+  /* Slight fade so the motion does not feel like the image is being torn. */
+  opacity: 0.82;
+}
+
+/* Zoomed in, the image is larger than the viewport and dragging pans it —
+   paging would be a surprise, so the cursor has to say so. */
+.preview-image-stage.is-zoomed {
+  cursor: grab;
+}
+
+.preview-image-stage.is-zoomed:active {
+  cursor: grabbing;
+}
+
+/* The video fills its stage, so the stage itself is what receives the drag. */
+/* The video fills its stage, so the stage itself is what receives the drag. */
+.preview-video-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: #000;
+  /* The native control bar is interactive; never swallow its clicks. */
+  touch-action: pan-y;
+}
+
+/* --------------------------------------------------------------------------
+   Forced password rotation
+
+   Shown only to an account still on the shipped default credential. The server
+   refuses every other route for it, so this is the whole surface — the styles
+   deliberately borrow the login card rather than inventing a new shell.
+   -------------------------------------------------------------------------- */
+
+.auth-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.auth-hint-warn {
+  color: var(--accent-danger);
+  background: var(--accent-danger-light, rgba(220, 38, 38, 0.08));
+  border: 1px solid var(--accent-danger-light, rgba(220, 38, 38, 0.2));
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 12px;
+}
+
+.auth-hint svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+/* An inline error sits with the field it is about, so the form does not jump
+   and the message is not mistaken for the form's overall status. */
+/* Field-level validation message. `.login-error` was used by the login form
+   and by the rotation screen but had no rule at all, so every one of these
+   rendered as unstyled inline text at the wrong colour and with no spacing —
+   easy to miss, and easy to mistake for a label. */
+.login-error {
+  margin: 6px 2px 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--accent-danger);
+}

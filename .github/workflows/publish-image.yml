@@ -1,0 +1,73 @@
+name: Publish image
+
+# Yuarcloud has no published image, which means the ZimaOS dashboard route is
+# closed: the importer can only reference an image that already exists somewhere,
+# and there was nowhere to pull one from. This puts one on ghcr.io, public and
+# free, so an install needs nothing but a pasted compose file.
+#
+# Multi-arch on purpose. A ZimaOS box is usually x86_64 while the machine
+# publishing this is usually arm64; a single-arch tag would build fine and then
+# fail on the box with "exec format error", which reads like a corrupt image
+# rather than an architecture mismatch.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # Log in to ghcr with the token the runner already has. Publishing needs
+      # `packages: write`; reading the repository needs only `contents: read`.
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # type=ref is what actually works here, and it is doing this job alone.
+          #
+          # This was `type=semver,pattern={{version}}` and it published nothing:
+          # both v1 and v1.1 finished green, and the registry held a single tag,
+          # `latest`. Checked four minutes after the run, so it was not
+          # propagation lag — the semver rule was matching nothing and the step
+          # still reported success. The job log needs authentication to read, so
+          # rather than keep guessing at why, the version tag is now derived from
+          # the git tag itself, which cannot come out empty.
+          #
+          # The semver lines were tried alongside this and removed again: v1.2
+          # published v1.2 and latest, and no 1.2. Whatever the cause, they do
+          # nothing here, and configuration that never fires is worse than none
+          # at all — it reads as a working fallback.
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

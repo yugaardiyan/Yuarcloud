@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Yuarcloud - Modern Self-Hosted Cloud Storage" />
+    <meta name="theme-color" content="#1a1a2e" />
+    <title>Yuarcloud</title>
+
+    <!--
+      Link preview for the app itself. Share routes get their own tags injected
+      server-side, because a crawler reads this file and never runs the app —
+      anything added later by React is already too late to be seen.
+      Relative on purpose: the same built file is served from whatever host
+      someone deployed it to, and an absolute URL frozen at build time would
+      point every preview at the machine that built it.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Yuarcloud" />
+    <meta property="og:title" content="Yuarcloud" />
+    <meta property="og:description" content="Modern self-hosted cloud storage." />
+    <meta property="og:image" content="/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Yuarcloud" />
+    <meta name="twitter:description" content="Modern self-hosted cloud storage." />
+    <meta name="twitter:image" content="/og.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.__yuarErrors = [];
+      window.addEventListener('error', function (e) {
+        window.__yuarErrors.push('ERROR: ' + (e.message || '') + ' @ ' + (e.filename || '') + ':' + (e.lineno || ''));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        window.__yuarErrors.push('REJECTION: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason));
+      });
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

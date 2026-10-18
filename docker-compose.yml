@@ -1,0 +1,56 @@
+# Two volumes, and they are deliberately not the same thing.
+#
+#   /srv    user files — this is what you back up
+#   /config config.yaml + the SQLite database — app state, small, must survive
+#
+# Separate so `docker compose down -v` can wipe state without touching uploads,
+# and so a backup of /config is not a scan through millions of files.
+#
+# Host paths are variables. Swap a named volume for a bind mount by overriding
+# them in .env, e.g. YUAR_SRV=/mnt/nas/yuarcloud — nothing else changes.
+
+services:
+  yuarcloud:
+    build: .
+    container_name: yuarcloud
+    restart: unless-stopped
+    ports:
+      # The container's port is whatever config.docker.yaml sets (3103). The
+      # host side is what you type in the browser, so the default matches to
+      # keep the URL obvious — override with YUAR_PORT if 3103 is taken.
+      - "${YUAR_PORT:-3103}:3103"
+    volumes:
+      - "${YUAR_SRV:-yuarcloud_srv}:/srv"
+      - "${YUAR_CONFIG:-yuarcloud_config}:/config"
+    environment:
+      # Required. The server refuses to start without it: the shipped config
+      # leaves it blank on purpose, because a signing key that ships in a public
+      # repository is a key anyone can use to mint an admin token.
+      - YUAR_AUTH_JWT_SECRET=${YUAR_AUTH_JWT_SECRET:?set YUAR_AUTH_JWT_SECRET in .env — generate one with: openssl rand -base64 48}
+      # Every path and knob below is overridable the same way. Uncomment only
+      # what you need; the image's own defaults are already correct.
+      # - YUAR_STORAGE_LOCAL_ROOT=/srv
+      # - YUAR_DATABASE_SQLITE_PATH=/config/yuarcloud.db
+      # - YUAR_STORAGE_CHUNKED_TEMP_DIR=/srv/.yuarcloud-chunks
+      - TZ=${TZ:-Asia/Jakarta}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3103/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Cloudflare Tunnel
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: yuarcloud-tunnel
+  #   restart: unless-stopped
+  #   command: tunnel run
+  #   depends_on:
+  #     - yuarcloud
+  #   environment:
+  #     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+
+volumes:
+  yuarcloud_srv:
+  yuarcloud_config:

@@ -1,0 +1,106 @@
+# Yuarcloud — configuration baked into the container image.
+#
+# This is the file the image ships and starts from. It differs from
+# config.yaml.example in one way that matters: every path here is ABSOLUTE.
+#
+# Relative paths are resolved against the directory holding the config file, not
+# against the working directory. With the config at /app/configs/config.yaml, a
+# "./data/files" lands in /app/configs/data/files — while the volume is mounted
+# at /app/data. Nothing writes to the volume, and every file and the whole
+# database disappear on `docker compose down`. That is what absolute paths below
+# prevent.
+#
+# Layout, the same two-volume split FileBrowser uses:
+#
+#   /srv    user files. The only thing most people need to back up.
+#   /config config.yaml + the SQLite database. App state, small, must survive.
+#
+# Everything here can still be overridden per install, without rebuilding:
+#
+#   YUAR_STORAGE_LOCAL_ROOT=/somewhere/else
+#   YUAR_DATABASE_SQLITE_PATH=/somewhere/else.db
+#   YUAR_STORAGE_CHUNKED_TEMP_DIR=/somewhere/else
+#   YUAR_AUTH_JWT_SECRET=...
+#   YUAR_SERVER_PORT=...
+
+server:
+  host: "0.0.0.0"
+  port: 3103
+  mode: "release"
+  read_timeout: 30s
+  write_timeout: 30s
+  max_header_bytes: 1048576
+
+database:
+  type: "sqlite"
+  sqlite:
+    path: "/config/yuarcloud.db"
+
+storage:
+  type: "local"
+  local:
+    root: "/srv"
+  chunked:
+    max_chunk_size: 10485760
+    max_file_size: 10737418240
+    # Partial uploads live on the same volume as the files they will become,
+    # so a large upload never eats into the container's own writable layer. The
+    # leading dot is what keeps it out of the browser: LocalStorage.List skips
+    # dot-prefixed entries, the same way .yuarcloud-trash is hidden.
+    temp_dir: "/srv/.yuarcloud-chunks"
+    cleanup_interval: "1h"
+
+auth:
+  # No usable default on purpose. Leaving this empty makes the server refuse to
+  # start rather than sign tokens with a key published in this repository — a
+  # key everyone can read is a key everyone can forge an admin token with.
+  # docker-compose.yml supplies YUAR_AUTH_JWT_SECRET.
+  jwt_secret: ""
+  token_ttl: "24h"
+  refresh_ttl: "168h"
+  bcrypt_cost: 12
+  issuer: "yuarcloud"
+
+admin:
+  # Only consulted when no administrator exists yet. An account seeded from
+  # the shipped default password is pinned to the password-change endpoint
+  # until the credential is replaced, so leaving this alone does not leave an
+  # open server — but setting it saves the first login from being refused.
+  # Generate one:  openssl rand -base64 24
+  default_user: "admin"
+  default_pass: "admin"
+
+share:
+  default_expiry_days: 7
+  max_expiry_days: 365
+  require_password: false
+  max_views: 0
+  base_url: ""
+
+logging:
+  level: "info"
+  # Logs go to stderr, which `docker logs` already collects. There is no log
+  # file: a volume mounted for one buys nothing.
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 120
+  burst: 20
+
+cors:
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Authorization"
+    - "X-Requested-With"
+  allow_credentials: true
+  max_age: 12h

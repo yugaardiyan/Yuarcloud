@@ -1,0 +1,32 @@
+# Binaries
+bin/
+yuarcloud
+*.exe
+
+# Data
+data/
+logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# Config (keep example)
+configs/config.yaml
+.env
+.env.local
+
+# Frontend
+web/dist/
+web/node_modules/
+web/.vite/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*

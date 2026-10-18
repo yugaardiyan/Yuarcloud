@@ -1,0 +1,94 @@
+# Yuarcloud Configuration
+# Copy to config.yaml and modify as needed
+
+server:
+  host: "0.0.0.0"
+  port: 3103
+  mode: "release"        # debug | release
+  read_timeout: 30s
+  write_timeout: 30s
+  max_header_bytes: 1048576
+
+database:
+  type: "sqlite"         # sqlite | postgres
+  sqlite:
+    path: "./data/yuarcloud.db"
+  postgres:
+    host: "localhost"
+    port: 5432
+    user: "yuarcloud"
+    password: "changeme"
+    dbname: "yuarcloud"
+    sslmode: "disable"
+
+storage:
+  # local is the only backend that exists. s3 and webdav were listed here
+  # with a full set of keys beside them and nothing ever read those keys, so a
+  # user filling them in got no error and no S3.
+  type: "local"
+  local:
+    root: "./data/files"
+  chunked:
+    # Seed values only. All three can be changed at runtime from
+    # Admin -> Chunked Upload, which overrides these and survives a restart.
+    max_chunk_size: 10485760       # 10MB per request - Cloudflare Tunnel friendly
+    max_file_size: 10737418240     # 10GB total; 0 means no ceiling
+    temp_dir: "./data/tmp/chunks"
+    # How long an upload may go without sending a chunk before its partial
+    # files are reclaimed. Every chunk resets this, so it is a silence timeout
+    # rather than a cap on transfer duration.
+    cleanup_interval: "1h"
+
+auth:
+  # Leave this empty. The server refuses to start while it is shorter than 32
+  # characters, so a checked-in example file can never carry a usable key —
+  # a key in this repository is a key anyone can forge an admin token with.
+  # Generate one and paste it here, or export YUAR_AUTH_JWT_SECRET:
+  #   openssl rand -base64 48
+  jwt_secret: ""
+  token_ttl: "24h"
+  refresh_ttl: "168h"      # 7 days
+  bcrypt_cost: 12
+  issuer: "yuarcloud"
+
+admin:
+  # Only consulted when no administrator exists yet. An account seeded from
+  # the shipped default password is pinned to the password-change endpoint
+  # until the credential is replaced, so leaving this alone does not leave an
+  # open server — but setting it saves the first login from being refused.
+  # Generate one:  openssl rand -base64 24
+  default_user: "admin"
+  default_pass: "admin"
+
+share:
+  default_expiry_days: 7
+  max_expiry_days: 365
+  require_password: false
+  max_views: 0              # 0 = unlimited
+  base_url: ""              # Auto-detect if empty
+
+logging:
+  level: "info"            # debug | info | warn | error
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 120
+  burst: 20
+
+cors:
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Authorization"
+    - "X-Requested-With"
+  allow_credentials: true
+  max_age: 12h

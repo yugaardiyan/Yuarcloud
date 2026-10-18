@@ -1,0 +1,362 @@
+import React, { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import { X, Link2, Copy, Calendar, Lock, User, CheckCircle, Eye, Upload } from 'lucide-react'
+import { shareApi, apiError } from '../utils/api'
+import { formatDate } from '../utils/helpers'
+import ConfirmModal from './ConfirmModal'
+import toast from 'react-hot-toast'
+import { claimKeyboard } from '../utils/keyboardOwner'
+
+// Duration presets (days). Default 7. Keeps the form to two choices the
+// visitor actually has to think about: password, and how long the link lives.
+// -1 is a sentinel for "no expiry": the link stays open until the owner
+// deletes the file or the share itself.
+const DURATIONS = [
+  { value: -1, label: 'No expiry' },
+  { value: 1, label: '1 day' },
+  { value: 7, label: '7 days' },
+  { value: 30, label: '30 days' },
+  { value: 90, label: '90 days' },
+  { value: 365, label: '1 year' },
+]
+
+const STATUS = {
+  active: { label: 'Active', tone: 'ok' },
+  inactive: { label: 'Deactivated', tone: 'muted' },
+  expired: { label: 'Expired', tone: 'danger' },
+  limit_reached: { label: 'View limit reached', tone: 'danger' },
+}
+
+const PERMISSION = {
+  read: { label: 'Read only', icon: Eye },
+  write: { label: 'Read & write', icon: Upload },
+}
+
+export default function ShareModal({ fileId, fileName, isDir = false, onClose, onCreated }) {
+  // Register as an open surface so document-level shortcuts stand down.
+  // See utils/keyboardOwner — a shortcut asking "is anything open?" cannot be
+  // defeated by a new overlay class it does not know about.
+  useEffect(() => {
+    const release = claimKeyboard('share-modal')
+    return release
+  }, [])
+
+  const [loading, setLoading] = useState(false)
+  const [shares, setShares] = useState([])
+  const [showCreate, setShowCreate] = useState(false)
+  const [formData, setFormData] = useState({
+    password: '',
+    expiryDays: 7,
+    permission: 'read',
+  })
+  const [formErrors, setFormErrors] = useState({})
+  const [copySuccess, setCopySuccess] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // Defensive load: always land on a valid array so the render never throws
+  // and the list can never go "blank" because of a transient shape mismatch.
+  // Memoised so the effect below can name it as a dependency instead of
+  // suppressing the rule. `fileId` is the only thing it reads.
+  const loadShares = useCallback(async () => {
+    try {
+      const response = await shareApi.list(fileId)
+      const list = Array.isArray(response?.data?.shares) ? response.data.shares : []
+      setShares(list)
+    } catch (error) {
+      console.error('Failed to load shares:', error)
+      setShares([])
+    }
+  }, [fileId])
+
+  // After loadShares, not before: a dependency array is evaluated where it is
+  // written, so naming a `const` declared further down throws.
+  useEffect(() => {
+    loadShares()
+  }, [loadShares])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setFormErrors({})
+
+    const errors = {}
+    if (formData.expiryDays !== -1 && (formData.expiryDays < 1 || formData.expiryDays > 365)) {
+      errors.expiryDays = 'Expiry must be between 1 and 365 days'
+    }
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
+
+    setLoading(true)
+    try {
+      await shareApi.create({
+        file_id: fileId,
+        password: formData.password || undefined,
+        expiry_days: formData.expiryDays,
+        permission: formData.permission,
+      })
+      toast.success('Share link created')
+      setShowCreate(false)
+      setFormData({ password: '', expiryDays: 7, permission: 'read' })
+      await loadShares()
+      onCreated?.()
+    } catch (error) {
+      toast.error(apiError(error, 'Failed to create share link'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copyToClipboard = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopySuccess(url)
+      toast.success('Link copied to clipboard')
+      setTimeout(() => setCopySuccess(null), 2000)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = url
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopySuccess(url)
+      toast.success('Link copied')
+      setTimeout(() => setCopySuccess(null), 2000)
+    }
+  }
+
+  // Optimistic delete: drop the row immediately so the list feels instant
+  // and can never look "stuck" while the server round-trips. If the API
+  // call fails we roll the row back so the list stays truthful.
+  const requestDeleteShare = (shareId) => setPendingDelete(shareId)
+
+  const confirmDeleteShare = async () => {
+    const shareId = pendingDelete
+    if (!shareId) return
+    setPendingDelete(null)
+    const previous = shares
+    setShares(shares.filter((s) => s.id !== shareId))
+    try {
+      await shareApi.remove(shareId)
+      toast.success('Share link deleted')
+      // Re-sync from the server in case anything else changed under us.
+      loadShares()
+    } catch (err) {
+      setShares(previous)
+      toast.error(apiError(err, 'Failed to delete share link'))
+    }
+  }
+
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+      <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 id="share-modal-title" className="modal-title">
+            Share "{fileName}"
+          </h2>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className={`modal-body ${shares.length === 0 && !showCreate ? 'is-placeholder' : ''}`}>
+          {shares.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <h3 style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Existing Links
+              </h3>
+              {shares.map((share) => {
+                const status = STATUS[share.status] || STATUS.active
+                const perm = PERMISSION[share.permission] || PERMISSION.read
+                const PermIcon = perm.icon
+                return (
+                  <div key={share.id} className={`card share-row is-${status.tone}`}>
+                    <div className="share-row-top">
+                      <Link2 size={16} className="share-row-link-icon" />
+                      <span className="share-row-url truncate">{share.url}</span>
+
+                      <span className={`share-status share-status-${status.tone}`}>{status.label}</span>
+                      <span className="share-perm" title={perm.label}>
+                        <PermIcon size={13} />
+                        {perm.label}
+                      </span>
+
+                      <div className="share-row-actions">
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => copyToClipboard(share.url)}
+                          aria-label={copySuccess === share.url ? 'Copied' : 'Copy link'}
+                          title={copySuccess === share.url ? 'Copied!' : 'Copy link'}
+                          style={copySuccess === share.url ? { color: 'var(--accent-success)' } : undefined}
+                        >
+                          {copySuccess === share.url ? <CheckCircle size={16} /> : <Copy size={16} />}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => requestDeleteShare(share.id)}
+                          title="Delete share link"
+                          aria-label="Delete share link"
+                          style={{ color: 'var(--accent-danger)' }}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="share-row-meta">
+                      <span>
+                        <Calendar size={12} />
+                        {share.expires_at ? `Expires ${formatDate(share.expires_at)}` : 'Never expires'}
+                      </span>
+                      <span>
+                        <User size={12} />
+                        {share.view_count} downloads
+                      </span>
+                      {share.has_password && (
+                        <span className="is-locked">
+                          <Lock size={12} />
+                          Password protected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {shares.length === 0 && !showCreate && (
+            // Compact, with the action button below it — the same shape as the
+            // create form, where Cancel / Create Share Link close the dialog.
+            // This block used to carry 232px of dead space beneath the button.
+            <div className="share-empty">
+              <Link2 className="share-empty-icon" size={28} />
+              <h3 className="share-empty-title">No share links yet</h3>
+              <p className="share-empty-text">
+                Create a share link to give others access to this {isDir ? 'folder' : 'file'}.
+              </p>
+            </div>
+          )}
+
+          {shares.length > 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', margin: 0 }}>
+              A share link already exists. Delete it to create a new one.
+            </p>
+          ) : !showCreate ? (
+            // Only the way in. This used to toggle back to "Cancel" once the
+            // form was open, which put two identical buttons on screen at
+            // once; the footer's Cancel is the one that closes it.
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowCreate(true)}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}
+            >
+              <Link2 size={16} />
+              Create new share link
+            </button>
+          ) : null}
+
+          {showCreate && shares.length === 0 && (
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
+              <div className="share-form-row">
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--text-primary)' }}>
+                    Password (optional)
+                  </label>
+                  <input
+                    type="password"
+                    className="input input-capsule"
+                    value={formData.password}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--text-primary)' }}>
+                    Duration
+                  </label>
+                  <select
+                    className={`input input-capsule ${formErrors.expiryDays ? 'input-error' : ''}`}
+                    value={formData.expiryDays}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, expiryDays: parseInt(e.target.value, 10) }))}
+                  >
+                    {DURATIONS.map((d) => (
+                      <option key={d.value} value={d.value}>{d.label}</option>
+                    ))}
+                  </select>
+                  {formErrors.expiryDays && (
+                    <span style={{ fontSize: 11, color: 'var(--accent-danger)', marginTop: 4, display: 'block' }}>{formErrors.expiryDays}</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--text-primary)' }}>
+                  Access
+                </label>
+                <div className="share-perm-picker" role="radiogroup" aria-label="Access permission">
+                  {[
+                    { value: 'read', label: 'Read only', icon: Eye, desc: 'Visitors can view and download.' },
+                    { value: 'write', label: 'Read & write', icon: Upload, desc: isDir ? 'Visitors can also upload into this folder.' : 'Available for folders only.' },
+                  ].map((opt) => {
+                    const Icon = opt.icon
+                    const active = formData.permission === opt.value
+                    const disabled = opt.value === 'write' && !isDir
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        disabled={disabled}
+                        className={`share-perm-option ${active ? 'is-active' : ''}`}
+                        onClick={() => !disabled && setFormData((prev) => ({ ...prev, permission: opt.value }))}
+                        title={opt.desc}
+                      >
+                        <Icon size={16} />
+                        <span>
+                          <strong>{opt.label}</strong>
+                          <small>{opt.desc}</small>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ padding: 0, border: 'none' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Share Link'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {pendingDelete !== null && (
+        <ConfirmModal
+          simple
+          title="Delete this share link?"
+          confirmLabel="Ok"
+          cancelLabel="Cancel"
+          danger
+          onConfirm={confirmDeleteShare}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+    </div>,
+    document.body
+  )
+}

@@ -1,0 +1,69 @@
+# Yuarcloud on ZimaOS — paste this whole file into
+# Dashboard → Install a customized app → Import → Docker Compose.
+#
+# Three things differ from the shipped docker-compose.yml, all forced by how
+# ZimaOS installs apps:
+#
+#   1. No ${VARIABLE} substitution. The importer pastes the YAML into a form
+#      and has no .env file to read, so an unset ${YUAR_AUTH_JWT_SECRET} would
+#      arrive as a literal string. Everything here is written out.
+#
+#   2. Bind mounts under /DATA, not named volumes. ZimaOS makes / read-only by
+#      design and keeps app data in /DATA/AppData/<app>. Named volumes also
+#      hide the bytes inside Docker's own directory, which is the one thing you
+#      cannot easily point a backup at.
+#
+#   3. An image reference, not `build: .`. There is no source tree on the box
+#      when the importer runs, so it has to pull one. The `image:` line below
+#      points at a published multi-arch build — see the README to pin a version
+#      or to point at your own fork instead.
+#
+# The data directories are created by Docker on first run and handed to uid 1000
+# by the image's entrypoint, so there is nothing to chown beforehand. That
+# matters here specifically: ZimaOS's file manager cannot chown, so a manual
+# step here would mean the dashboard route did not work at all.
+
+services:
+  yuarcloud:
+    # Already pointing at a published image, so this paste works as-is. Change
+    # it only if you forked: the workflow publishes to whatever repository it
+    # runs in, and ghcr lowercases the name.
+    image: ghcr.io/yugaardiyan/yuarcloud:latest
+    container_name: yuarcloud
+    restart: unless-stopped
+
+    # 3103 inside and out. Both the healthcheck and the published port have to
+    # match the port in configs/config.docker.yaml; change one without the
+    # others and the container serves traffic while reporting itself unhealthy.
+    ports:
+      - mode: ingress
+        target: 3103
+        published: "3103"
+        protocol: tcp
+
+    environment:
+      # Required, and it must be replaced. The server refuses to start with a
+      # blank or short value, which is deliberate: a signing key that ships in
+      # a public repository is a key anyone can use to mint an admin token.
+      # Generate your own:  openssl rand -base64 48
+      - YUAR_AUTH_JWT_SECRET=PASTE-YOUR-OWN-64-CHARACTER-RANDOM-STRING-HERE
+      - TZ=Asia/Jakarta
+
+    volumes:
+      # User files. This is the only directory most people back up.
+      - type: bind
+        source: /DATA/AppData/yuarcloud/srv
+        target: /srv
+      # config.yaml and the SQLite database. App state: small, and it has to
+      # survive an upgrade. Kept apart from /srv so a backup of one is not a
+      # walk through the other.
+      - type: bind
+        source: /DATA/AppData/yuarcloud/config
+        target: /config
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3103/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
