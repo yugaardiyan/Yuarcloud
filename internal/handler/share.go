@@ -168,14 +168,19 @@ func (h *ShareHandler) GetShares(c *gin.Context) {
 func (h *ShareHandler) DeleteShare(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	shareID := c.Param("id")
+	parsed, err := uuid.Parse(shareID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid share id"})
+		return
+	}
 
 	ctx := c.Request.Context()
-	if err := h.shareService.DeleteShare(ctx, userID, uuid.MustParse(shareID)); err != nil {
+	if err := h.shareService.DeleteShare(ctx, userID, parsed); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete share"})
 		return
 	}
 
-	logAudit(h.db, c, userID, "delete_share", "share", uuidPtr(shareID), "Deleted share link")
+	logAudit(h.db, c, userID, "delete_share", "share", &parsed, "Deleted share link")
 
 	c.JSON(http.StatusOK, gin.H{"message": "share deleted"})
 }

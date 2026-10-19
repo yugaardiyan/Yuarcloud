@@ -52,9 +52,14 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	userID := c.Param("id")
+	parsed, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
 
 	ctx := c.Request.Context()
-	user, err := h.adminService.GetUser(ctx, uuid.MustParse(userID))
+	user, err := h.adminService.GetUser(ctx, parsed)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
@@ -367,6 +372,11 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	userID := c.Param("id")
+	parsed, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
 
 	var req struct {
 		QuotaBytes int64 `json:"quota_bytes" binding:"required,gte=0"`
@@ -377,19 +387,24 @@ func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.adminService.UpdateUserQuota(ctx, uuid.MustParse(userID), req.QuotaBytes); err != nil {
+	if err := h.adminService.UpdateUserQuota(ctx, parsed, req.QuotaBytes); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update quota"})
 		return
 	}
 
 	currentUserID, _ := middleware.GetUserID(c)
-	logAudit(h.db, c, currentUserID, "admin_update_quota", "user", uuidPtr(userID), fmt.Sprintf("Quota set to %d bytes", req.QuotaBytes))
+	logAudit(h.db, c, currentUserID, "admin_update_quota", "user", &parsed, fmt.Sprintf("Quota set to %d bytes", req.QuotaBytes))
 
 	c.JSON(http.StatusOK, gin.H{"message": "quota updated"})
 }
 
 func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	userID := c.Param("id")
+	parsed, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
 
 	var req struct {
 		Role string `json:"role" binding:"required,oneof=admin user"`
@@ -400,13 +415,13 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.adminService.UpdateUserRole(ctx, uuid.MustParse(userID), req.Role); err != nil {
+	if err := h.adminService.UpdateUserRole(ctx, parsed, req.Role); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role"})
 		return
 	}
 
 	currentUserID, _ := middleware.GetUserID(c)
-	logAudit(h.db, c, currentUserID, "admin_update_role", "user", uuidPtr(userID), fmt.Sprintf("Role changed to %s", req.Role))
+	logAudit(h.db, c, currentUserID, "admin_update_role", "user", &parsed, fmt.Sprintf("Role changed to %s", req.Role))
 
 	c.JSON(http.StatusOK, gin.H{"message": "role updated"})
 }
