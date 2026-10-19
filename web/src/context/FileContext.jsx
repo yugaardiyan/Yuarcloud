@@ -660,7 +660,7 @@ export function FileProvider({ children }) {
 
   const pasteInto = useCallback(async (targetFolderId = null, targetPath = '') => {
     if (!clipboard.action || !clipboard.ids.length) {
-      toast.info('Clipboard is empty')
+      toast('Clipboard is empty')
       return
     }
     const destination = { target_parent_id: targetFolderId, target_path: targetPath }

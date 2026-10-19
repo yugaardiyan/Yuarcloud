@@ -451,13 +451,26 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
  */
 function UserModal({ user, onClose, onSuccess }) {
   const editing = Boolean(user)
+
+  // The quota the form starts from, expressed the way the form expresses it.
+  //
+  // The field is edited in whole gigabytes, so a quota set to something the
+  // field cannot represent -- 1.5 GB, say -- comes back as 2. Comparing the
+  // submitted bytes against the raw stored value would then always report a
+  // change and quietly round the quota up on every save. Both the initial state
+  // and the change test below have to start from the same rounded number.
+  const DEFAULT_QUOTA_BYTES = 10737418240
+  const initialQuotaBytes = Math.round(
+    (user?.quota_bytes ?? DEFAULT_QUOTA_BYTES) / 1073741824
+  ) * 1073741824
+
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
     display_name: user?.display_name || '',
     password: '',
     role: user?.role || 'user',
-    quota_gb: Math.round((user?.quota_bytes ?? 10737418240) / 1073741824),
+    quota_gb: initialQuotaBytes / 1073741824,
     home_path: user?.home_path || '',
   })
   const [loading, setLoading] = useState(false)
@@ -490,9 +503,24 @@ const set = (key) => (e) => {
     setError('')
   }
 
+  // Only what is actually being sent has to be valid.
+  //
+  // These checks used to be unconditional, so an account with no email on it --
+  // which is exactly what the seeded admin is -- could never be edited at all:
+  // the empty Email box failed the '@' test, Save stayed disabled, and the only
+  // way forward looked like filling in every field. One field could not be
+  // changed on its own. That is the same wall the quota bug put up from the
+  // other side.
+  //
+  // The submit handler sends only changed fields, so an untouched field is not
+  // being validated by the server either, and there is no reason to block the
+  // dialog on it. A field the admin is editing still has to pass.
+  const usernameChanged = formData.username !== (user?.username || '')
+  const emailChanged = formData.email !== (user?.email || '')
+
   const canSubmit =
-    formData.username.length >= 3 &&
-    formData.email.includes('@') &&
+    (!usernameChanged || formData.username.length >= 3) &&
+    (!emailChanged || formData.email.includes('@')) &&
     (editing || formData.password.length >= 8)
 
   const handleSubmit = async (e) => {
@@ -503,17 +531,37 @@ const set = (key) => (e) => {
     setError('')
     try {
       if (editing) {
-        // Only send what changed; an empty password must not blank the hash.
-        const patch = {
-          username: formData.username,
-          email: formData.email,
-          display_name: formData.display_name,
-          role: formData.role,
-          quota_bytes: formData.quota_gb * 1073741824,
-          home_path: formData.home_path,
+        // Only the fields that actually changed.
+        //
+        // The quota is not in here at all: it is deliberately absent from the
+        // general PATCH's allow-list and has a route of its own, which is what
+        // audits it. Sending it here made the server reject the entire save with
+        // "field cannot be updated here: quota_bytes" -- so no edit of any kind
+        // could go through, not even a one-character typo fix. That is also why
+        // this read as a form that insists on every field being retyped: the
+        // only thing it ever did was fail, and the obvious way to respond to a
+        // failure is to try harder with the form.
+        const patch = {}
+        if (formData.username !== user.username) patch.username = formData.username
+        if (formData.email !== user.email) patch.email = formData.email
+        if (formData.display_name !== (user.display_name || '')) {
+          patch.display_name = formData.display_name
         }
+        if (formData.role !== user.role) patch.role = formData.role
+        if (formData.home_path !== (user.home_path || '')) patch.home_path = formData.home_path
+        // An empty password must never blank the hash.
         if (formData.password) patch.password = formData.password
-        await adminApi.updateUser(user.id, patch)
+
+        const quotaBytes = formData.quota_gb * 1073741824
+        const quotaChanged = quotaBytes !== initialQuotaBytes
+
+        if (!Object.keys(patch).length && !quotaChanged) {
+          toast('No changes to save')
+          return
+        }
+
+        if (Object.keys(patch).length) await adminApi.updateUser(user.id, patch)
+        if (quotaChanged) await adminApi.updateUserQuota(user.id, quotaBytes)
         toast.success('User updated')
       } else {
         await adminApi.createUser({
