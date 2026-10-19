@@ -4408,3 +4408,72 @@ input.input[type='number'] {
   line-height: 1.4;
   color: var(--accent-danger);
 }
+
+/* --- View transitions ----------------------------------------------------
+   A view rises into place; when something replaces it, it falls away
+   downwards. The leaving view plays the entering move backwards, so the pair
+   reads as one upward gesture instead of a cross-fade between two pictures.
+
+   This cannot be a plain CSS animation on the element. React removes the
+   outgoing view from the document, and an animation on a removed node has
+   nothing left to run on. The browser's View Transitions API keeps a picture
+   of the old view on screen for the length of the animation — that is what
+   makes an exit possible at all. utils/viewTransition.js starts it.
+
+   Only the parts that actually change between two views are named. Everything
+   unnamed is folded into the root snapshot, which is why naming the header
+   leaves the chrome still while the content moves beneath it. */
+:root {
+  --view-transition-duration: 200ms;
+  --view-transition-ease: ease-out;
+}
+
+@keyframes view-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes view-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(10px); }
+}
+
+/* App shell: the header is chrome and stays put; the content area is the view. */
+.app-header { view-transition-name: app-header; }
+.app-main { view-transition-name: app-view; }
+
+/* A share page has no app shell. It is one card on an otherwise empty page,
+   and that card is the view. */
+.share-view { view-transition-name: share-view; }
+
+::view-transition-old(app-view),
+::view-transition-old(share-view) {
+  animation: view-leave var(--view-transition-duration) var(--view-transition-ease) both;
+}
+
+::view-transition-new(app-view),
+::view-transition-new(share-view) {
+  animation: view-enter var(--view-transition-duration) var(--view-transition-ease) both;
+}
+
+/* Chrome and the page behind the view are the same before and after, so they
+   are not animated: a cross-fade there would only blur the header's own text. */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-old(app-header),
+::view-transition-new(app-header) {
+  animation: none;
+}
+
+/* The first paint has no previous view to animate from, so the shell enters on
+   its own. No fill mode: the transform has to be gone once it has played, or it
+   would keep a containing block for the fixed upload tray and toasts. */
+@media (prefers-reduced-motion: no-preference) {
+  .app {
+    animation: view-enter var(--view-transition-duration) var(--view-transition-ease);
+  }
+}
+
+.share-state-text.is-error {
+  color: var(--accent-danger);
+}

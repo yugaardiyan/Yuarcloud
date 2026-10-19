@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useViewNavigate } from '../utils/viewTransition'
 import {
   Search, X,
   Settings, LogOut, Upload, HardDrive,
@@ -20,7 +20,7 @@ import ConfirmModal from './ConfirmModal'
  * view mode, account, and a highlighted create button on the far right.
  */
 export default function CapsuleToolbar() {
-  const navigate = useNavigate()
+  const navigate = useViewNavigate()
   const { user, isAdmin, logout } = useAuth()
   const {
     view, viewMode, setViewMode,
@@ -192,7 +192,15 @@ export default function CapsuleToolbar() {
       <div className={`capsule-dropdown ${searchOpen ? 'capsule-collapsed' : ''}`} ref={accountRef}>
           <button
             className="capsule-btn"
-            onClick={() => setMenu(menu === 'account' ? null : 'account')}
+            onClick={() => {
+              // Settings lives in its own chunk. Opening this menu is the
+              // earliest point at which it may be wanted; having the chunk in
+              // memory keeps the page's first render from standing on the
+              // loading splash, which is what the transition would otherwise
+              // photograph as the new view.
+              if (isAdmin) import('../pages/Admin')
+              setMenu(menu === 'account' ? null : 'account')
+            }}
             title={user?.display_name || user?.username}
             aria-label="Account"
             aria-expanded={menu === 'account'}

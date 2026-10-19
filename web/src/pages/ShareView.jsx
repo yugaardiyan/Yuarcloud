@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { shareApi, apiError } from '../utils/api'
+import { withViewTransition } from '../utils/viewTransition'
 import { Download, Lock, AlertCircle, CheckCircle, Copy, FolderOpen, Upload, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatBytes, formatDate } from '../utils/helpers'
 import { FileIcon, iconClassFor } from '../components/FileIcon'
@@ -66,33 +67,84 @@ export default function ShareView() {
   // FileContext.
   const requestId = useRef(0)
 
+  // What the visitor is looking at right now. A result that lands on the same
+  // view is committed without animating: a rejected password leaves the same
+  // form up, and fading that form out and back in would read as a glitch.
+  const shownView = useRef('loading')
+
   const load = useCallback(
-    async (pwd = '') => {
+    async (pwd = '', { spinner = true } = {}) => {
       const id = ++requestId.current
-      setLoading(true)
+      if (spinner) setLoading(true)
+
+      // The whole outcome is worked out before anything is set, so the result
+      // can land in one commit — and that commit can be wrapped in a single
+      // transition. Setting one state at a time would let the browser
+      // photograph a half-updated page.
+      let next
       try {
         const response = await shareApi.access(token, pwd)
         if (id !== requestId.current) return
-        setShare(response.data.share)
-        setFile(response.data.file)
-        setError(null)
-        setNeedsPassword(false)
-        setPasswordError(false)
+        next = {
+          share: response.data.share,
+          file: response.data.file,
+          error: null,
+          needsPassword: false,
+          passwordError: false,
+          view: 'content',
+        }
       } catch (err) {
         if (id !== requestId.current) return
         if (err.response?.status === 401) {
-          setNeedsPassword(true)
-          setError('This link is password protected.')
+          next = {
+            needsPassword: true,
+            error: 'This link is password protected.',
+            // An untouched form is not a failure; a password that was sent and
+            // refused is, and the field has to say so.
+            passwordError: pwd !== '',
+            view: 'password',
+          }
         } else if (err.response?.status === 410) {
-          setError('This share link has expired.')
+          next = {
+            error: 'This share link has expired.',
+            needsPassword: false,
+            passwordError: false,
+            view: 'error',
+          }
         } else if (err.response?.status === 403) {
-          setError('This share link is no longer available.')
+          next = {
+            error: 'This share link is no longer available.',
+            needsPassword: false,
+            passwordError: false,
+            view: 'error',
+          }
         } else {
-          setError(apiError(err, 'This share link could not be opened.'))
+          next = {
+            error: apiError(err, 'This share link could not be opened.'),
+            needsPassword: false,
+            passwordError: false,
+            view: 'error',
+          }
         }
-      } finally {
-        if (id === requestId.current) setLoading(false)
       }
+
+      const commit = () => {
+        if (next.share) {
+          setShare(next.share)
+          setFile(next.file)
+        }
+        if (next.error !== undefined) setError(next.error)
+        if (next.needsPassword !== undefined) setNeedsPassword(next.needsPassword)
+        setPasswordError(next.passwordError ?? false)
+        // Cleared here rather than in a `finally`: the spinner has to be gone
+        // in the same commit as the view it was standing in for, or the
+        // transition's "after" picture is still the spinner.
+        setLoading(false)
+      }
+
+      if (next.view === shownView.current) commit()
+      else withViewTransition(commit)
+      shownView.current = next.view
     },
     [token]
   )
@@ -103,7 +155,10 @@ export default function ShareView() {
     e.preventDefault()
     setSubmitting(true)
     try {
-      await load(password)
+      // The form stays where it is while the password is checked. Replacing the
+      // whole card with the loading state for one round trip was a blink, and
+      // the button already says "Checking…".
+      await load(password, { spinner: false })
     } finally {
       setSubmitting(false)
     }
@@ -235,7 +290,7 @@ export default function ShareView() {
       <div className="centered-page">
         <div className="share-shell">
           <ShareBrand />
-          <div key="loading" className="loading-spinner" style={{ padding: 24 }}>Loading shared file…</div>
+          <div key="loading" className="loading-spinner share-view" style={{ padding: 24 }}>Loading shared file…</div>
         </div>
       </div>
     )
@@ -246,9 +301,13 @@ export default function ShareView() {
       <div className="centered-page">
         <div className="share-shell">
           <ShareBrand />
-          <div key="card" className="card share-card">
+          <div key="card" className="card share-card share-view">
             <h1 className="share-state-title">This link is protected</h1>
-            <p className="share-state-text">Enter the password to access the shared file.</p>
+            <p className={`share-state-text${passwordError ? ' is-error' : ''}`}>
+              {passwordError
+                ? 'That password is incorrect. Try again.'
+                : 'Enter the password to access the shared file.'}
+            </p>
 
             <form onSubmit={submitPassword}>
               <label className="field-label" htmlFor="share-password">Password</label>
@@ -286,7 +345,7 @@ export default function ShareView() {
       <div className="centered-page">
         <div className="share-shell">
           <ShareBrand />
-          <div key="card" className="card share-card" style={{ textAlign: 'center' }}>
+          <div key="card" className="card share-card share-view" style={{ textAlign: 'center' }}>
             <div className="error-mark" style={{ margin: '0 auto 10px' }}>
               <AlertCircle size={22} color="var(--accent-danger)" />
             </div>
@@ -306,7 +365,7 @@ export default function ShareView() {
     <div className="centered-page">
       <div className="share-shell">
         <ShareBrand />
-        <div key="card" className="card share-file-card">
+        <div key="card" className="card share-file-card share-view">
           <div className="share-file-head">
             <div className={`file-icon share-icon ${iconClassFor(file)}`}>
               <FileIcon item={file} />
