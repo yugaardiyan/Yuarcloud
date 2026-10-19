@@ -2077,7 +2077,8 @@ input.input[type='number'] {
    too heavy to sit above a single card. */
 .centered-page {
   flex-direction: column;
-  padding: 32px 20px;
+  justify-content: flex-start;
+  padding: 48px 20px 32px;
 }
 
 .share-shell {
@@ -2120,9 +2121,9 @@ input.input[type='number'] {
 .share-card .btn,
 .share-file-card .btn {
   gap: 6px;
-  padding: 7px 13px;
+  padding: 7px 15px;
   font-size: 12.5px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
 }
 
 /* The app's secondary button is a tinted fill; on a single white card a
@@ -2140,8 +2141,9 @@ input.input[type='number'] {
 }
 
 .share-card .input {
-  padding: 8px 11px;
+  padding: 8px 16px;
   font-size: 13px;
+  border-radius: var(--radius-full);
 }
 
 .share-state-title {
