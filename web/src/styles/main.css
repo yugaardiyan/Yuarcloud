@@ -2098,8 +2098,42 @@ input.input[type='number'] {
   border-color: var(--text-tertiary);
 }
 
+/* Brand capsule on the public share page — the same mark and wordmark as the
+   header, scaled down to sit above a compact card rather than in a 63px bar. */
+.share-brand {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  align-self: center;
+  padding: 4px 6px 4px 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+}
+
+.share-brand .brand-mark {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.share-brand .brand-name {
+  display: flex;
+  align-items: baseline;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -0.3px;
+  margin-left: -1px;
+  white-space: nowrap;
+}
+
 .share-file-card {
-  border-radius: 28px;
+  border-radius: 24px;
 }
 
 .share-file-card .btn {

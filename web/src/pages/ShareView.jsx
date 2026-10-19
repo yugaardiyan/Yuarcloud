@@ -161,14 +161,18 @@ export default function ShareView() {
   if (needsPassword) {
     return (
       <div className="centered-page">
+        <div className="share-brand" style={{ marginBottom: 24 }}>
+          <span className="brand-mark"><Logo size={28} /></span>
+          <span className="brand-name">
+            <span className="brand-name-lead">Yuar</span>
+            <span className="brand-name-tail">cloud</span>
+          </span>
+        </div>
         <div className="card share-card">
-          <div className="brand-mark" style={{ margin: '0 auto 16px' }}>
-            <Logo size={56} />
-          </div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 6, textAlign: 'center' }}>
+          <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4, textAlign: 'center' }}>
             This link is protected
           </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: 24 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: 16 }}>
             Enter the password to access the shared file.
           </p>
 
@@ -205,11 +209,18 @@ export default function ShareView() {
   if (error || !file) {
     return (
       <div className="centered-page">
-        <div className="card share-card" style={{ textAlign: 'center' }}>
-          <div className="error-mark" style={{ margin: '0 auto 16px' }}>
-            <AlertCircle size={28} color="var(--accent-danger)" />
+        <div className="share-brand" style={{ marginBottom: 24 }}>
+          <span className="brand-mark"><Logo size={28} /></span>
+          <span className="brand-name">
+            <span className="brand-name-lead">Yuar</span>
+            <span className="brand-name-tail">cloud</span>
+          </span>
+        </div>
+        <div className="card share-card" style={{ textAlign: 'center', padding: 24 }}>
+          <div className="error-mark" style={{ margin: '0 auto 12px' }}>
+            <AlertCircle size={24} color="var(--accent-danger)" />
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Unable to open</h1>
+          <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>Unable to open</h1>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{error}</p>
         </div>
       </div>
@@ -220,18 +231,25 @@ export default function ShareView() {
   const PermIcon = isWrite ? Upload : Lock
 
   return (
-    <div className="centered-page" style={{ alignItems: 'flex-start', paddingTop: 48 }}>
+    <div className="centered-page" style={{ alignItems: 'flex-start', paddingTop: 24 }}>
       <div style={{ width: '100%', maxWidth: 560 }}>
-        <div className="card share-file-card" style={{ padding: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 24 }}>
+        <div className="share-brand" style={{ marginBottom: 16 }}>
+          <span className="brand-mark"><Logo size={28} /></span>
+          <span className="brand-name">
+            <span className="brand-name-lead">Yuar</span>
+            <span className="brand-name-tail">cloud</span>
+          </span>
+        </div>
+        <div className="card share-file-card" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
             <div className={`file-icon share-icon ${iconClassFor(file)}`}>
               <FileIcon item={file} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ fontSize: 19, fontWeight: 600, wordBreak: 'break-word', marginBottom: 6 }}>
+              <h1 style={{ fontSize: 17, fontWeight: 600, wordBreak: 'break-word', marginBottom: 4 }}>
                 {file.name}
               </h1>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontSize: 12, color: 'var(--text-tertiary)' }}>
                 <span>{file.is_dir ? 'Folder' : formatBytes(file.size)}</span>
                 {share?.expires_at && <span>Expires {formatDate(share.expires_at)}</span>}
                 {share?.max_views > 0 && (
@@ -247,32 +265,32 @@ export default function ShareView() {
 
           {share?.has_password && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px',
+              display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px',
               background: 'var(--accent-primary-light)', color: 'var(--accent-primary)',
-              borderRadius: 'var(--radius-md)', fontSize: 12, marginBottom: 20,
+              borderRadius: 'var(--radius-md)', fontSize: 12, marginBottom: 16,
             }}>
               <CheckCircle size={15} />
               Password verified
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {!file.is_dir && canPreview(file) && (
               <button className="btn btn-primary" onClick={() => setPreviewOpen(true)}>
-                <Eye size={17} />
+                <Eye size={15} />
                 Preview
               </button>
             )}
             <button className={`btn ${canPreview(file) && !file.is_dir ? 'btn-secondary' : 'btn-primary'}`} onClick={handleDownload}>
-              <Download size={17} />
+              <Download size={15} />
               {file.is_dir ? 'Download folder' : 'Download'}
             </button>
             <button className="btn btn-secondary" onClick={copyLink}>
-              <Copy size={17} /> Copy link
+              <Copy size={15} /> Copy link
             </button>
             {file.is_dir && (
               <button className="btn btn-secondary" onClick={browseFolder}>
-                <FolderOpen size={17} /> Browse contents
+                <FolderOpen size={15} /> Browse contents
               </button>
             )}
           </div>
@@ -293,18 +311,18 @@ export default function ShareView() {
                 style={{
                   border: `1.5px dashed ${dragOver ? 'var(--accent-primary)' : 'var(--border-color)'}`,
                   borderRadius: 'var(--radius-md)',
-                  padding: '24px 16px',
+                  padding: '16px 12px',
                   textAlign: 'center',
                   cursor: 'pointer',
                   background: dragOver ? 'var(--accent-primary-light)' : 'var(--bg-secondary)',
                   transition: 'all 120ms ease',
                 }}
               >
-                <Upload size={26} color="var(--accent-primary)" style={{ marginBottom: 8 }} />
+                <Upload size={22} color="var(--accent-primary)" style={{ marginBottom: 6 }} />
                 <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
                   Drop files here, or click to pick
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3 }}>
                   Files are added to "{file.name}" without an account.
                 </div>
                 <input
@@ -359,7 +377,7 @@ export default function ShareView() {
           )}
         </div>
 
-        <p style={{ textAlign: 'center', marginTop: 16, color: 'var(--text-tertiary)', fontSize: 12 }}>
+        <p style={{ textAlign: 'center', marginTop: 12, color: 'var(--text-tertiary)', fontSize: 11 }}>
           Shared with <strong>Yuarcloud</strong>
         </p>
       </div>
