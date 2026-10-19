@@ -235,7 +235,7 @@ export default function ShareView() {
       <div className="centered-page">
         <div className="share-shell">
           <ShareBrand />
-          <div className="loading-spinner" style={{ padding: 24 }}>Loading shared file…</div>
+          <div key="loading" className="loading-spinner" style={{ padding: 24 }}>Loading shared file…</div>
         </div>
       </div>
     )
@@ -246,7 +246,7 @@ export default function ShareView() {
       <div className="centered-page">
         <div className="share-shell">
           <ShareBrand />
-          <div className="card share-card">
+          <div key="card" className="card share-card">
             <h1 className="share-state-title">This link is protected</h1>
             <p className="share-state-text">Enter the password to access the shared file.</p>
 
@@ -286,7 +286,7 @@ export default function ShareView() {
       <div className="centered-page">
         <div className="share-shell">
           <ShareBrand />
-          <div className="card share-card" style={{ textAlign: 'center' }}>
+          <div key="card" className="card share-card" style={{ textAlign: 'center' }}>
             <div className="error-mark" style={{ margin: '0 auto 10px' }}>
               <AlertCircle size={22} color="var(--accent-danger)" />
             </div>
@@ -306,7 +306,7 @@ export default function ShareView() {
     <div className="centered-page">
       <div className="share-shell">
         <ShareBrand />
-        <div className="card share-file-card">
+        <div key="card" className="card share-file-card">
           <div className="share-file-head">
             <div className={`file-icon share-icon ${iconClassFor(file)}`}>
               <FileIcon item={file} />

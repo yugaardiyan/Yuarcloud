@@ -393,7 +393,13 @@ input.input[type='number'] {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  transition: all var(--transition-fast);
+  /* Only the shadow is meant to move. `all` also animated the background,
+     border and radius, so any element that *became* a card animated those
+     properties from its previous values. The share page did exactly that:
+     React reuses one <div> when it swaps the loading spinner for the card
+     (same position, same tag, no key), and the corners visibly grew out of
+     square over 150ms instead of simply being round. */
+  transition: box-shadow var(--transition-fast);
 }
 
 .card:hover {
