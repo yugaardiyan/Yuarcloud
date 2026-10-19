@@ -75,7 +75,13 @@ export default function ShareView() {
   const load = useCallback(
     async (pwd = '', { spinner = true } = {}) => {
       const id = ++requestId.current
-      if (spinner) setLoading(true)
+      if (spinner) {
+        setLoading(true)
+        // Entering the wait is itself a change of view. It matters when a second
+        // share link is opened without a reload: the card is gone from the
+        // screen, so its return has to animate rather than cut back in.
+        shownView.current = 'loading'
+      }
 
       // The whole outcome is worked out before anything is set, so the result
       // can land in one commit — and that commit can be wrapped in a single
@@ -285,12 +291,17 @@ export default function ShareView() {
 
   // ---------------------------------------------------------------- states
 
+  // The brand is the only thing that is known before the access request lands,
+  // so that is all the wait shows. A spinner and the words "Loading shared
+  // file…" stood below it and announced a wait that lasts a few frames — and
+  // then vanished in the same breath as the card, which says the same thing by
+  // arriving. Nothing is dimmed or stood in for here: the card is the view, and
+  // the view transition is what carries it in.
   if (loading) {
     return (
       <div className="centered-page">
         <div className="share-shell">
           <ShareBrand />
-          <div key="loading" className="loading-spinner share-view" style={{ padding: 24 }}>Loading shared file…</div>
         </div>
       </div>
     )
@@ -444,18 +455,28 @@ export default function ShareView() {
                 </span>
                 <span className="share-contents-count">
                   {contentsLoading
-                    ? 'Loading…'
+                    ? ''
                     : `${contents.length} item${contents.length === 1 ? '' : 's'}`}
                 </span>
               </div>
 
-              <div className="share-contents-list">
-                {contentsLoading && contents.length === 0 ? (
-                  <div className="share-contents-empty">Loading…</div>
-                ) : contentsError ? (
+              {/* A swap in flight dims what is on screen instead of replacing it
+                  with a loading line. The Drive does the same, and for the same
+                  reason: the line is gone before it can be read, so all it adds
+                  is a flash where the list used to be. */}
+              <div
+                className="share-contents-list"
+                style={{ opacity: contentsLoading ? 0.55 : 1, transition: 'opacity 140ms ease' }}
+              >
+                {contentsError ? (
                   <div className="share-contents-empty share-contents-error">{contentsError}</div>
                 ) : contents.length === 0 ? (
-                  <div className="share-contents-empty">This folder is empty.</div>
+                  // An empty result is only empty once a result has arrived. On
+                  // a cold load the box holds nothing, rather than asserting
+                  // "This folder is empty." while the folder is on its way.
+                  contentsLoading ? null : (
+                    <div className="share-contents-empty">This folder is empty.</div>
+                  )
                 ) : (
                   contents.slice(0, CONTENT_RENDER_CAP).map((item) => (
                     <button
