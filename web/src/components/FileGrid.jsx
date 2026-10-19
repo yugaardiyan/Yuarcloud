@@ -146,8 +146,13 @@ function FileGrid({ onOpen, onDownload, onFile }) {
             <div className="file-info">
               <div className="file-name">{item.name}</div>
               <div className="file-meta">
-                {item.is_dir ? 'Folder' : formatBytes(item.size)}
-                {item.updated_at ? ` · ${formatDate(item.updated_at)}` : ''}
+                {/* A folder reads as a folder from its icon, so the word was
+                    only standing where a size would go — and it pushed the date
+                    behind a dot for no reason. Folders show the date alone now;
+                    files keep size and date. */}
+                {item.is_dir
+                  ? (item.updated_at ? formatDate(item.updated_at) : '—')
+                  : `${formatBytes(item.size)}${item.updated_at ? ` · ${formatDate(item.updated_at)}` : ''}`}
               </div>
             </div>
           </div>

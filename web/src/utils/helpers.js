@@ -23,18 +23,19 @@ export function formatDate(dateString) {
       : date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
-  // Less than 24 hours
-  if (diff < 24 * 60 * 60 * 1000) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
-  // Less than 7 days
-  if (diff < 7 * 24 * 60 * 60 * 1000) {
-    return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
-  }
-
-  // Older
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+  // One shape for everything in the past: the day it happened and the time it
+  // happened. It used to change with age — a clock alone inside a day, then a
+  // weekday and a clock inside a week, then a date with no clock after that —
+  // so two folders side by side could read "03:51 AM" and "Sun 05:16 AM" and
+  // look like they were reporting different things. The weekday is also the
+  // least useful part of it: it only helps while the date is still this week,
+  // and by then the column has already changed shape from row to row.
+  //
+  // The year stays only when it is not the current one. Dropping it from a file
+  // last touched in 2024 would make it look like it was touched this month.
+  const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+  if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric'
+  return date.toLocaleString([], options)
 }
 
 /**

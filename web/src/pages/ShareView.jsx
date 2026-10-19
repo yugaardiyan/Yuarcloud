@@ -403,7 +403,9 @@ export default function ShareView() {
                 {file.name}
               </h1>
               <div className="share-file-meta">
-                <span>{file.is_dir ? 'Folder' : formatBytes(file.size)}</span>
+                {/* A folder is already a folder from its icon and the Download
+                    hint, so the word said nothing the row did not. */}
+                {!file.is_dir && <span>{formatBytes(file.size)}</span>}
                 {share?.expires_at && <span>Expires {formatDate(share.expires_at)}</span>}
                 {share?.max_views > 0 && (
                   <span>{share.view_count} / {share.max_views} downloads</span>
