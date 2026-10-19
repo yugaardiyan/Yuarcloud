@@ -290,6 +290,9 @@ func main() {
 			publicShares.GET("/:token", shareHandler.AccessShare)
 			publicShares.GET("/:token/download", shareHandler.DownloadSharedFile)
 			publicShares.GET("/:token/preview", shareHandler.PreviewSharedFile)
+			// Browse a shared folder: direct children of the shared folder,
+			// or of any folder inside it.
+			publicShares.GET("/:token/children", shareHandler.ListSharedFolder)
 			// Unauthenticated: whoever holds a write-share link can post here,
 			// so this one is the difference between a disk-filling request and
 			// a rejected one.

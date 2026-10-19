@@ -261,11 +261,18 @@ func (h *ShareHandler) DownloadSharedFile(c *gin.Context) {
 		return
 	}
 
+	// A `path` inside the shared folder selects one of its children; without
+	// one this is the shared item itself. Same scoping for files and folders,
+	// so a browse row can download or preview in place.
+	file, ok := h.shareTarget(c, &shareLink.File)
+	if !ok {
+		return
+	}
+
 	h.shareService.IncrementViewCount(ctx, shareLink.ID)
 
-	file := shareLink.File
 	if file.IsDir {
-		h.streamFolderZip(c, file)
+		h.streamFolderZip(c, *file)
 		return
 	}
 
@@ -298,7 +305,14 @@ func (h *ShareHandler) PreviewSharedFile(c *gin.Context) {
 		return
 	}
 
-	serveInline(c, h.storage, &shareLink.File)
+	// Like the download endpoint, `path` can point at a row inside the shared
+	// folder, which is what the browse list uses to preview in place.
+	target, ok := h.shareTarget(c, &shareLink.File)
+	if !ok {
+		return
+	}
+
+	serveInline(c, h.storage, target)
 }
 
 // streamFolderZip streams a shared folder to the visitor as a ZIP archive.
