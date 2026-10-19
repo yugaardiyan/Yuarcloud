@@ -1,4 +1,5 @@
 import { X, CheckCircle, AlertCircle, FolderUp, FileUp } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useFiles } from '../context/FileContext'
 import { formatBytes } from '../utils/helpers'
 import { formatRate, formatEta } from '../utils/uploadSpeed'
@@ -6,6 +7,34 @@ import { formatRate, formatEta } from '../utils/uploadSpeed'
 /** Floating panel showing in-flight uploads with per-file progress. */
 export default function UploadTray() {
   const { uploads, clearUploads } = useFiles()
+
+  // The tray and the toasts share the same bottom-right corner, so a toast
+  // that fires while the tray is open would paint over it. Measuring the tray
+  // and publishing its height as --upload-tray-h lets the toast container sit
+  // above it instead of on top of it; when the tray unmounts the property is
+  // removed and the toasts fall back to the card's bottom edge.
+  // uploads.length is in the deps on purpose: the tray only renders once there
+  // is something to show, so on the first upload the div does not exist when
+  // the effect first runs. With [] the cleanup never re-ran and the variable
+  // was never published, which left the toasts sitting on the tray.
+  const trayRef = useRef(null)
+  useEffect(() => {
+    const el = trayRef.current
+    if (!el) return
+    const update = () => {
+      document.documentElement.style.setProperty(
+        '--upload-tray-h',
+        `${el.offsetHeight + 8}px`
+      )
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      document.documentElement.style.removeProperty('--upload-tray-h')
+    }
+  }, [uploads.length])
 
   if (!uploads.length) return null
 
@@ -43,7 +72,7 @@ export default function UploadTray() {
   }
 
   return (
-    <div className="upload-tray" role="region" aria-label="Uploads">
+    <div className="upload-tray" ref={trayRef} role="region" aria-label="Uploads">
       <div className="upload-tray-header">
         <span>{heading()}</span>
         {/* `.icon-close`, not `.btn-icon.btn-sm`: those carry 8px and 12px

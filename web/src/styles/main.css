@@ -1957,7 +1957,11 @@ input.input[type='number'] {
  * would mean hardcoding the status bar's height back into JSX.
  */
 [data-rht-toaster] {
-  bottom: var(--below-card-h) !important;
+  /* When the upload tray is open it publishes its own height as --upload-tray-h
+     (tray height plus a small gap). Adding it here lifts every toast above the
+     tray instead of painting over it; when the tray closes the property is
+     removed and the toasts drop back to the card's bottom edge. */
+  bottom: calc(var(--below-card-h) + var(--upload-tray-h, 0px)) !important;
   right: var(--drive-shell-gap) !important;
   left: auto !important;
   top: auto !important;

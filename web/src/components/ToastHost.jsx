@@ -34,6 +34,10 @@ export default function ToastHost() {
         },
       }}
       containerStyle={{ pointerEvents: 'none' }}
+      // The toasts' bottom is set from CSS (.toast-card, below) rather than
+      // from here: react-hot-toast writes its own `bottom` from `position`, so a
+      // value in containerStyle loses to it. The variable-driven offset lives on
+      // the card rule, where it can actually move the toasts above an open tray.
     />
   )
 }
