@@ -4408,6 +4408,13 @@ input.input[type='number'] {
 :root {
   --view-transition-duration: 200ms;
   --view-transition-ease: ease-out;
+  /* A share card is the whole page: there is no header or list beside it that
+     has to be ready for it, so it is allowed to take longer than an in-app
+     change would and to settle more gently. The curve spends most of its
+     travel early and eases into place, which reads as smooth rather than slow
+     — the extra time is in the landing, not in the start. */
+  --share-enter-duration: 320ms;
+  --share-enter-ease: cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 @keyframes view-enter {
@@ -4422,12 +4429,14 @@ input.input[type='number'] {
 
 .share-view { view-transition-name: share-view; }
 
+/* Leaving stays quick: the card is on its way out, and holding it there while
+   the new one is still rising would read as two cards arguing for the space. */
 ::view-transition-old(share-view) {
   animation: view-leave var(--view-transition-duration) var(--view-transition-ease) both;
 }
 
 ::view-transition-new(share-view) {
-  animation: view-enter var(--view-transition-duration) var(--view-transition-ease) both;
+  animation: view-enter var(--share-enter-duration) var(--share-enter-ease) both;
 }
 
 /* The brand and the page behind the card are the same before and after, so
