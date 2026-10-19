@@ -1465,7 +1465,10 @@ input.input[type='number'] {
 }
 
 .file-card .file-name {
-  font-size: 13px;
+  /* One step down from the list view's 13px: the tile is 119px wide, so the
+     same size wrapped long names after fewer characters and left the card
+     looking cramped next to its neighbours. */
+  font-size: 12px;
   font-weight: 500;
   text-align: center;
   /* Two lines before the ellipsis. The grid got narrower when its column floor
@@ -1485,7 +1488,7 @@ input.input[type='number'] {
 }
 
 .file-card .file-meta {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary);
   text-align: center;
   /* One line, always. Allowed to wrap it added a second line and grew the card
