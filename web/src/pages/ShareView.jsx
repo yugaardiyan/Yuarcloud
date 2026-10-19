@@ -336,9 +336,8 @@ export default function ShareView() {
             </div>
           )}
 
-          {/* Folder actions are a three-column grid so the buttons share one
-              width; the file case keeps the natural widths of its two. */}
-          <div className={`share-actions${file.is_dir ? ' share-actions-grid' : ''}`}>
+          {/* One row, equal widths, two buttons or three. */}
+          <div className="share-actions">
             <button
               className="btn btn-primary"
               onClick={() => handleDownload(file)}

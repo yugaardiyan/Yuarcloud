@@ -2185,20 +2185,18 @@ input.input[type='number'] {
   color: var(--text-tertiary);
 }
 
+/* Two or three actions, always one row of equal widths: the row is a grid of
+   `auto` columns, so it follows however many buttons the case has instead of
+   being told a count. */
 .share-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
-/* A folder has three actions, so they share the row evenly. */
-.share-actions-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 @media (max-width: 420px) {
-  .share-actions-grid .btn {
+  .share-actions .btn {
     gap: 4px;
     padding: 7px 6px;
     font-size: 11.5px;
