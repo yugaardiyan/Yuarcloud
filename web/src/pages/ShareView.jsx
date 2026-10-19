@@ -52,6 +52,12 @@ export default function ShareView() {
   // never has to be recomputed from strings.
   const [contents, setContents] = useState([])
   const [trail, setTrail] = useState([])
+  // The token whose answer is on screen. `file` and `token` are set by
+  // different updates: on a client-side move from one share link to another,
+  // the token changes first and the file still belongs to the previous link
+  // for a moment. The contents effect below asks for a folder path, and asking
+  // this link for another link's path can only be refused.
+  const [fileToken, setFileToken] = useState(null)
   const [contentsLoading, setContentsLoading] = useState(false)
   const [contentsError, setContentsError] = useState(null)
   const [showContents, setShowContents] = useState(true)
@@ -81,6 +87,14 @@ export default function ShareView() {
         // share link is opened without a reload: the card is gone from the
         // screen, so its return has to animate rather than cut back in.
         shownView.current = 'loading'
+        // Nothing from the previous link outlives the wait either. Its paths
+        // belong to another share, and the contents effect below would ask this
+        // token for them — a request that can only be refused.
+        setShare(null)
+        setFile(null)
+        setContents([])
+        setTrail([])
+        setContentsError(null)
       }
 
       // The whole outcome is worked out before anything is set, so the result
@@ -138,6 +152,7 @@ export default function ShareView() {
         if (next.share) {
           setShare(next.share)
           setFile(next.file)
+          setFileToken(token)
         }
         if (next.error !== undefined) setError(next.error)
         if (next.needsPassword !== undefined) setNeedsPassword(next.needsPassword)
@@ -213,14 +228,16 @@ export default function ShareView() {
 
   // The shared root is the first folder every visitor sees. Running this on
   // the file id (not on every render) keeps a password change, which produces
-  // a new file object, from re-fetching contents twice.
+  // a new file object, from re-fetching contents twice. The token guard is what
+  // keeps it from firing against the wrong link while a move is in flight.
   useEffect(() => {
     if (!file?.is_dir) return
+    if (fileToken !== token) return
     setContents([])
     setTrail([])
     setShowContents(true)
     openFolder(file.path, file.name)
-  }, [file?.id, file?.path, file?.name, file?.is_dir, openFolder])
+  }, [file?.id, file?.path, file?.name, file?.is_dir, fileToken, token, openFolder])
 
   const goBack = () => {
     if (trail.length < 2) return
