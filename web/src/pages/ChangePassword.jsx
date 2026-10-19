@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useViewNavigate } from '../utils/viewTransition'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { authApi, apiError } from '../utils/api'
 import Logo from '../components/Logo'
@@ -21,7 +21,7 @@ import { Lock, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react'
  */
 function ChangePassword() {
   const { user, refreshUser } = useAuth()
-  const navigate = useViewNavigate()
+  const navigate = useNavigate()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')

@@ -1,6 +1,4 @@
-import { useCallback } from 'react'
 import { flushSync } from 'react-dom'
-import { useLocation, useNavigate } from 'react-router-dom'
 
 /**
  * Whether a view transition can run at all: the browser has to be able to keep
@@ -38,34 +36,4 @@ export function withViewTransition(update) {
   // skipped transition rejects `ready`. Nothing here depends on it, so the
   // rejection is swallowed rather than left to surface as a console error.
   transition.ready.catch(() => {})
-}
-
-/**
- * `navigate` for moves between views. Drilling into a folder is deliberately
- * not one: the new listing has not arrived yet, so what the browser would
- * photograph is an empty card, and the animation would play over a load
- * instead of over the result.
- */
-export function useViewNavigate() {
-  const navigate = useNavigate()
-  const { pathname, search } = useLocation()
-
-  return useCallback(
-    (to, options) => {
-      // History moves (a number) are handled by the router, not by a URL.
-      if (typeof to === 'number') {
-        navigate(to)
-        return
-      }
-      // Asking for the view that is already on screen would animate it out and
-      // straight back in, which reads as a flicker rather than as a move. The
-      // nav buttons stay enabled wherever you are, so this is a real click.
-      if (to === pathname + search) {
-        navigate(to, options)
-        return
-      }
-      withViewTransition(() => navigate(to, options))
-    },
-    [navigate, pathname, search]
-  )
 }

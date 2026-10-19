@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
-import { useViewNavigate } from '../utils/viewTransition'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Logo from '../components/Logo'
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 function Login() {
   const { login } = useAuth()
-  const navigate = useViewNavigate()
+  const navigate = useNavigate()
   const [formData, setFormData] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)

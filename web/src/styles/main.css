@@ -1358,20 +1358,6 @@ input.input[type='number'] {
    Components added for the full file browser
    ========================================================================= */
 
-/* --- Splash / loading -------------------------------------------------- */
-.splash {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  background: var(--bg-secondary);
-  color: var(--text-tertiary);
-  font-size: 14px;
-}
-
 /* --- Brand / avatar ---------------------------------------------------- */
 /* The blue disc is drawn inside the SVG, so the box is just a sizer. */
 .brand-mark {
@@ -2880,16 +2866,6 @@ input.input[type='number'] {
 
 .login-notice svg {
   flex-shrink: 0;
-}
-
-/* --- Animations used above --------------------------------------------- */
-.animate-pulse {
-  animation: softPulse 1.6s ease-in-out infinite;
-}
-
-@keyframes softPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.75; transform: scale(0.96); }
 }
 
 /* --- Responsive -------------------------------------------------------- */
@@ -4420,9 +4396,15 @@ input.input[type='number'] {
    of the old view on screen for the length of the animation — that is what
    makes an exit possible at all. utils/viewTransition.js starts it.
 
-   Only the parts that actually change between two views are named. Everything
-   unnamed is folded into the root snapshot, which is why naming the header
-   leaves the chrome still while the content moves beneath it. */
+   Only a share page uses this, and that is the point. Moving between My
+   Cloud, Trash, Search and Settings is not an arrival anywhere: the header
+   and the card stay exactly where they are, so a rise implies movement that
+   did not happen, and it delays every switch by its own duration. Those
+   pages swap their content the way a file manager does — instantly.
+
+   A share page is the opposite case. The card is the only thing on the page,
+   it arrives with the answer, and it is worth 200ms. Naming it lets the
+   browser animate that card alone and leave the brand above it still. */
 :root {
   --view-transition-duration: 200ms;
   --view-transition-ease: ease-out;
@@ -4438,36 +4420,27 @@ input.input[type='number'] {
   to   { opacity: 0; transform: translateY(10px); }
 }
 
-/* App shell: the header is chrome and stays put; the content area is the view. */
-.app-header { view-transition-name: app-header; }
-.app-main { view-transition-name: app-view; }
-
-/* A share page has no app shell. It is one card on an otherwise empty page,
-   and that card is the view. */
 .share-view { view-transition-name: share-view; }
 
-::view-transition-old(app-view),
 ::view-transition-old(share-view) {
   animation: view-leave var(--view-transition-duration) var(--view-transition-ease) both;
 }
 
-::view-transition-new(app-view),
 ::view-transition-new(share-view) {
   animation: view-enter var(--view-transition-duration) var(--view-transition-ease) both;
 }
 
-/* Chrome and the page behind the view are the same before and after, so they
-   are not animated: a cross-fade there would only blur the header's own text. */
+/* The brand and the page behind the card are the same before and after, so
+   they are not animated: a cross-fade there would only blur the wordmark. */
 ::view-transition-old(root),
-::view-transition-new(root),
-::view-transition-old(app-header),
-::view-transition-new(app-header) {
+::view-transition-new(root) {
   animation: none;
 }
 
-/* The first paint has no previous view to animate from, so the shell enters on
-   its own. No fill mode: the transform has to be gone once it has played, or it
-   would keep a containing block for the fixed upload tray and toasts. */
+/* The shell has no previous view to animate from, so it enters on its own.
+   This is what a fresh load shows in place of the splash screen that used to
+   stand there. No fill mode: the transform has to be gone once it has played,
+   or it would keep a containing block for the fixed upload tray and toasts. */
 @media (prefers-reduced-motion: no-preference) {
   .app {
     animation: view-enter var(--view-transition-duration) var(--view-transition-ease);

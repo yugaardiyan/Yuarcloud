@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthContext'
-import { useViewNavigate } from '../utils/viewTransition'
 import { fileApi, apiError } from '../utils/api'
 import { uploadFilesSequentially } from '../utils/upload'
 import { createSpeedTracker, etaFromRate } from '../utils/uploadSpeed'
@@ -87,9 +86,6 @@ export function driveHref(path) {
 
 export function FileProvider({ children }) {
   const navigate = useNavigate()
-  // Page-level moves animate; folder drilling keeps plain `navigate`, because
-  // the listing it would photograph has not loaded yet.
-  const viewNavigate = useViewNavigate()
   const location = useLocation()
 
   const [items, setItems] = useState([])
@@ -290,16 +286,16 @@ export function FileProvider({ children }) {
   }, [navigate])
 
   const showTrash = useCallback(() => {
-    viewNavigate('/trash')
-  }, [viewNavigate])
+    navigate('/trash')
+  }, [navigate])
 
   const showSearch = useCallback((query) => {
-    viewNavigate(`/search?q=${encodeURIComponent(query)}`)
-  }, [viewNavigate])
+    navigate(`/search?q=${encodeURIComponent(query)}`)
+  }, [navigate])
 
   const showDrive = useCallback(() => {
-    viewNavigate('/cloud')
-  }, [viewNavigate])
+    navigate('/cloud')
+  }, [navigate])
 
   // ---------------------------------------------------------------- selection
 

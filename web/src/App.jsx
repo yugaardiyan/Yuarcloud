@@ -2,7 +2,6 @@ import React, { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
-import Logo from './components/Logo'
 import Login from './pages/Login'
 import ChangePassword from './pages/ChangePassword'
 import Drive from './pages/Drive'
@@ -29,19 +28,14 @@ function LegacyShareRedirect() {
   return <Navigate to={`/yc/${token}`} replace />
 }
 
-function Splash() {
-  return (
-    <div className="splash">
-      <div className="brand-mark animate-pulse"><Logo size={30} /></div>
-      <div>Loading Yuarcloud…</div>
-    </div>
-  )
-}
-
 function RequireAuth({ children, adminOnly = false }) {
   const { user, loading, initialized, isAdmin } = useAuth()
 
-  if (loading || !initialized) return <Splash />
+  // Nothing is drawn while the session resolves. This used to be a splash with
+  // the logo and "Loading Yuarcloud…", which flashed for a few frames on every
+  // start and said nothing the browser had not already shown. The app's own
+  // background is up by then, and the shell enters as soon as it is known.
+  if (loading || !initialized) return null
   if (!user) return <Navigate to="/login" replace />
   if (adminOnly && !isAdmin) return <Navigate to="/cloud" replace />
 
@@ -61,7 +55,7 @@ function RequireAuth({ children, adminOnly = false }) {
 function RequirePasswordRotation({ children }) {
   const { user, loading, initialized } = useAuth()
 
-  if (loading || !initialized) return <Splash />
+  if (loading || !initialized) return null
   if (!user) return <Navigate to="/login" replace />
   if (user.must_rotate_password) return <Navigate to="/change-password" replace />
 
@@ -76,7 +70,7 @@ function RequirePasswordRotation({ children }) {
  */
 function RedirectIfAuthed({ children }) {
   const { user, loading, initialized } = useAuth()
-  if (loading || !initialized) return <Splash />
+  if (loading || !initialized) return null
   if (user) {
     // A parked share destination must not override the rotation: that account
     // cannot reach any file route yet, so sending it to one would land on a
@@ -91,10 +85,11 @@ function RedirectIfAuthed({ children }) {
 
 export default function App() {
   return (
-    // The fallback is the same splash the auth guards show, so a deferred page
-    // and a session still resolving look identical rather than one of them
-    // flashing an empty page.
-    <Suspense fallback={<Splash />}>
+    // A deferred page (Settings, a share link) holds the frame it is arriving
+    // into rather than announcing itself: the guards above already return
+    // nothing while a session resolves, so there is no splash to match, and a
+    // chunk that takes a moment shows as the shell it belongs to.
+    <Suspense fallback={null}>
       <Routes>
         <Route path="/login" element={<RedirectIfAuthed><Login /></RedirectIfAuthed>} />
 

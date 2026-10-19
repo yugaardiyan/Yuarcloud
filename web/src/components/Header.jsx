@@ -1,10 +1,10 @@
 import React from 'react'
-import { useViewNavigate } from '../utils/viewTransition'
+import { useNavigate } from 'react-router-dom'
 import CapsuleToolbar from './CapsuleToolbar'
 import Logo from './Logo'
 
 function Header() {
-  const navigate = useViewNavigate()
+  const navigate = useNavigate()
 
   return (
     <header className="app-header">
