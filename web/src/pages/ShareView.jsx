@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { shareApi, apiError } from '../utils/api'
-import { Download, Lock, AlertCircle, CheckCircle, Copy, Folder, FolderOpen, Upload, Eye } from 'lucide-react'
+import { Download, Lock, AlertCircle, CheckCircle, Copy, FolderOpen, Upload, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatBytes, formatDate } from '../utils/helpers'
 import { FileIcon, iconClassFor } from '../components/FileIcon'
 import PreviewModal from '../components/PreviewModal'
 import { canPreview } from '../utils/fileType'
 import Logo from '../components/Logo'
 import toast from 'react-hot-toast'
-import { POST_LOGIN_REDIRECT } from '../utils/postLoginRedirect'
 
 /** The mark and wordmark, plain. The header's bordered capsule carries a
  *  shadow and a 46px height that dwarf a single card, so the share page uses
@@ -24,10 +23,15 @@ function ShareBrand() {
   )
 }
 
+// A folder listing renders every row it is handed. A share of a folder with
+// tens of thousands of entries would put that many buttons in the DOM at once,
+// so the view stops early and says so rather than locking the tab up. The
+// count in the header still reports the real total.
+const CONTENT_RENDER_CAP = 500
+
 /** Public landing page for a shared file. No authentication required. */
 export default function ShareView() {
   const { token } = useParams()
-  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [share, setShare] = useState(null)
@@ -39,7 +43,18 @@ export default function ShareView() {
   // uploads: [{ id, name, progress, status: 'uploading'|'done'|'error', error? }]
   const [uploads, setUploads] = useState([])
   const [dragOver, setDragOver] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
+  // File shown in the viewer. The share root and any row inside a browsed
+  // folder both land here; the URL is built from .path, not from a boolean.
+  const [previewFile, setPreviewFile] = useState(null)
+  // Folder browsing. `trail` is the path walked from the shared root, so the
+  // back button is a matter of dropping the last entry, and the breadcrumb
+  // never has to be recomputed from strings.
+  const [contents, setContents] = useState([])
+  const [trail, setTrail] = useState([])
+  const [contentsLoading, setContentsLoading] = useState(false)
+  const [contentsError, setContentsError] = useState(null)
+  const [showContents, setShowContents] = useState(true)
+  const contentsSeq = useRef(0)
   const fileInputRef = useRef(null)
 
   // Discards a response that arrives after a newer request went out.
@@ -96,24 +111,75 @@ export default function ShareView() {
 
   // Folders stream from the server as a ZIP, so the anchor's download name is
   // only a hint — the Content-Disposition header decides the final filename.
-  const handleDownload = () => {
-    if (!file) return
+  // A target can be any row in a browsed folder; its path is what the public
+  // endpoint resolves against the shared root.
+  const handleDownload = (target) => {
+    const item = target || file
+    if (!item) return
     const link = document.createElement('a')
-    link.href = shareApi.downloadUrl(token, password)
-    link.download = file.is_dir ? `${file.name}.zip` : file.name
+    link.href = shareApi.downloadUrl(token, password, item.path)
+    link.download = item.is_dir ? `${item.name}.zip` : item.name
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
   }
 
-  // Browsing needs a session, so the destination is stashed before the router
-// sends an anonymous visitor to /login — Login.jsx reads it back and forwards
-// there once the sign-in succeeds.
-  const browseFolder = () => {
-    if (!file?.path) return
-    const target = `/cloud/${file.path}`
-    sessionStorage.setItem(POST_LOGIN_REDIRECT, target)
-    navigate(target)
+  // Content requests race like access requests: opening one folder and
+  // immediately opening another must not let the first response paint the
+  // second folder's list. Same counter pattern as `requestId` above.
+  const openFolder = useCallback(
+    async (path, name) => {
+      const id = ++contentsSeq.current
+      setContentsLoading(true)
+      setContentsError(null)
+      setTrail((prev) => {
+        const at = prev.findIndex((entry) => entry.path === path)
+        return at >= 0 ? prev.slice(0, at + 1) : [...prev, { path, name }]
+      })
+      try {
+        const response = await shareApi.children(token, password, path)
+        if (id !== contentsSeq.current) return
+        setContents(response.data.items || [])
+      } catch (err) {
+        if (id !== contentsSeq.current) return
+        setContentsError(apiError(err, 'Could not load this folder'))
+      } finally {
+        if (id === contentsSeq.current) setContentsLoading(false)
+      }
+    },
+    [token, password]
+  )
+
+  // The shared root is the first folder every visitor sees. Running this on
+  // the file id (not on every render) keeps a password change, which produces
+  // a new file object, from re-fetching contents twice.
+  useEffect(() => {
+    if (!file?.is_dir) return
+    setContents([])
+    setTrail([])
+    setShowContents(true)
+    openFolder(file.path, file.name)
+  }, [file?.id, file?.path, file?.name, file?.is_dir, openFolder])
+
+  const goBack = () => {
+    if (trail.length < 2) return
+    const parent = trail[trail.length - 2]
+    openFolder(parent.path, parent.name)
+  }
+
+  // A folder row walks in; a file opens the viewer when it can be rendered,
+  // and downloads otherwise. Only files small enough for the viewer qualify,
+  // which canPreview already encodes.
+  const openEntry = (item) => {
+    if (item.is_dir) {
+      openFolder(item.path, item.name)
+      return
+    }
+    if (canPreview(item)) {
+      setPreviewFile(item)
+      return
+    }
+    handleDownload(item)
   }
 
   const copyLink = async () => {
@@ -234,6 +300,7 @@ export default function ShareView() {
 
   const isWrite = share?.permission === 'write'
   const PermIcon = isWrite ? Upload : Lock
+  const trailLabel = trail.length ? trail.map((entry) => entry.name).join(' / ') : file.name
 
   return (
     <div className="centered-page">
@@ -269,13 +336,19 @@ export default function ShareView() {
             </div>
           )}
 
-          <div className="share-actions">
-            <button className="btn btn-primary" onClick={handleDownload}>
+          {/* Folder actions are a three-column grid so the buttons share one
+              width; the file case keeps the natural widths of its two. */}
+          <div className={`share-actions${file.is_dir ? ' share-actions-grid' : ''}`}>
+            <button
+              className="btn btn-primary"
+              onClick={() => handleDownload(file)}
+              title={file.is_dir ? 'Download the folder as a ZIP archive' : undefined}
+            >
               <Download size={14} />
-              {file.is_dir ? 'Download folder' : 'Download'}
+              Download
             </button>
             {!file.is_dir && canPreview(file) && (
-              <button className="btn btn-secondary" onClick={() => setPreviewOpen(true)}>
+              <button className="btn btn-secondary" onClick={() => setPreviewFile(file)}>
                 <Eye size={14} />
                 Preview
               </button>
@@ -284,11 +357,80 @@ export default function ShareView() {
               <Copy size={14} /> Copy link
             </button>
             {file.is_dir && (
-              <button className="btn btn-secondary" onClick={browseFolder}>
-                <FolderOpen size={14} /> Browse
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowContents((open) => !open)}
+                aria-expanded={showContents}
+              >
+                <FolderOpen size={14} /> {showContents ? 'Hide' : 'Browse'}
               </button>
             )}
           </div>
+
+          {file.is_dir && showContents && (
+            <div className="share-contents">
+              <div className="share-contents-head">
+                {trail.length > 1 ? (
+                  <button
+                    className="share-contents-back"
+                    onClick={goBack}
+                    aria-label="Back to the parent folder"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                ) : (
+                  <span className="share-contents-back is-placeholder" aria-hidden="true" />
+                )}
+                <span className="share-contents-path" title={trailLabel}>
+                  {trailLabel}
+                </span>
+                <span className="share-contents-count">
+                  {contentsLoading
+                    ? 'Loading…'
+                    : `${contents.length} item${contents.length === 1 ? '' : 's'}`}
+                </span>
+              </div>
+
+              <div className="share-contents-list">
+                {contentsLoading && contents.length === 0 ? (
+                  <div className="share-contents-empty">Loading…</div>
+                ) : contentsError ? (
+                  <div className="share-contents-empty share-contents-error">{contentsError}</div>
+                ) : contents.length === 0 ? (
+                  <div className="share-contents-empty">This folder is empty.</div>
+                ) : (
+                  contents.slice(0, CONTENT_RENDER_CAP).map((item) => (
+                    <button
+                      key={item.id}
+                      className="share-contents-row"
+                      onClick={() => openEntry(item)}
+                      title={
+                        item.is_dir
+                          ? `Open ${item.name}`
+                          : canPreview(item)
+                            ? `Preview ${item.name}`
+                            : `Download ${item.name}`
+                      }
+                    >
+                      <span className={`file-icon ${iconClassFor(item)}`}>
+                        <FileIcon item={item} />
+                      </span>
+                      <span className="share-contents-name">{item.name}</span>
+                      <span className="share-contents-size">
+                        {item.is_dir ? <ChevronRight size={14} /> : formatBytes(item.size)}
+                      </span>
+                    </button>
+                  ))
+                )}
+                {!contentsLoading && !contentsError && contents.length > CONTENT_RENDER_CAP && (
+                  <div className="share-contents-empty">
+                    Showing the first {CONTENT_RENDER_CAP} of {contents.length} items — download the
+                    folder to get the rest.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {canUpload && (
             <div className="share-upload">
@@ -353,27 +495,20 @@ export default function ShareView() {
               )}
             </div>
           )}
-
-          {file.is_dir && !canUpload && (
-            <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Folder size={13} />
-              Browsing shared folders is not enabled yet.
-            </p>
-          )}
         </div>
       </div>
 
       {/* Same viewer as the Drive, pointed at the public share endpoint so a
           visitor with no account can still look at the file. */}
-      {previewOpen && !file.is_dir && (
+      {previewFile && !previewFile.is_dir && (
         <PreviewModal
-          item={file}
-          items={[file]}
+          item={previewFile}
+          items={[previewFile]}
           onNavigate={() => {}}
-          onClose={() => setPreviewOpen(false)}
+          onClose={() => setPreviewFile(null)}
           onDownload={handleDownload}
-          streamUrlFor={() => shareApi.previewUrl(token, password)}
-          fetchUrlFor={() => shareApi.previewUrl(token, password)}
+          streamUrlFor={() => shareApi.previewUrl(token, password, previewFile.path)}
+          fetchUrlFor={() => shareApi.previewUrl(token, password, previewFile.path)}
           needsPreviewToken={false}
         />
       )}

@@ -226,12 +226,24 @@ export const shareApi = {
   list: (fileId) => api.get('/shares', { params: fileId ? { file_id: fileId } : {} }),
   remove: (id) => api.delete(`/shares/${id}`),
   access: (token, password) => api.get(`/shares/${token}`, { params: { password } }),
-  downloadUrl: (token, password) =>
-    `/api/shares/${token}/download?password=${encodeURIComponent(password || '')}`,
+  // Direct children of the shared folder, or of a folder inside it. Public:
+  // the token in the path is the credential, same as download and preview.
+  children: (token, password, path) =>
+    api.get(`/shares/${token}/children`, { params: { password, path } }),
+  // `path` selects a row inside a browsed folder; omitted, the shared item
+  // itself is served.
+  downloadUrl: (token, password, path) => {
+    const query = new URLSearchParams({ password: password || '' })
+    if (path) query.set('path', path)
+    return `/api/shares/${token}/download?${query}`
+  },
   // Inline streaming URL for the share page's viewer. Public: the share token
   // in the path is the credential, which is also how the download link works.
-  previewUrl: (token, password) =>
-    `/api/shares/${token}/preview?password=${encodeURIComponent(password || '')}`,
+  previewUrl: (token, password, path) => {
+    const query = new URLSearchParams({ password: password || '' })
+    if (path) query.set('path', path)
+    return `/api/shares/${token}/preview?${query}`
+  },
   // Public upload into a write-enabled shared folder.
   upload: (token, formData, password, onProgress) =>
     api.post(`/shares/${token}/upload`, formData, {

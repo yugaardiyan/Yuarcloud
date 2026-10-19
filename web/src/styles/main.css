@@ -2191,6 +2191,138 @@ input.input[type='number'] {
   gap: 6px;
 }
 
+/* A folder has three actions, so they share the row evenly. */
+.share-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 420px) {
+  .share-actions-grid .btn {
+    gap: 4px;
+    padding: 7px 6px;
+    font-size: 11.5px;
+  }
+}
+
+/* Contents of a shared folder, in place. Rows are buttons so a folder walks
+   in and a file opens the viewer with one tap; the list scrolls instead of
+   stretching the card without a bound. */
+.share-contents {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.share-contents-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.share-contents-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.share-contents-back:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.share-contents-back.is-placeholder {
+  visibility: hidden;
+}
+
+.share-contents-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.share-contents-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.share-contents-list {
+  max-height: 264px;
+  margin: 0 -6px;
+  overflow-y: auto;
+}
+
+.share-contents-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.share-contents-row:hover {
+  background: var(--bg-secondary);
+}
+
+.share-contents-row .file-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.share-contents-row .file-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.share-contents-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-contents-size {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.share-contents-empty {
+  padding: 10px 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.share-contents-error {
+  color: var(--accent-danger);
+}
+
 .share-badge {
   display: flex;
   align-items: center;

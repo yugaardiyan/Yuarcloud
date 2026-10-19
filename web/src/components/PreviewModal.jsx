@@ -125,7 +125,17 @@ export default function PreviewModal({
 
   const seriesLabel = series ? `${series.label} ${series.at} of ${series.total}` : null
 
-  const streamUrl = item && previewToken ? streamUrlFor(item, previewToken) : null
+  // The signed-in viewer waits for the short-lived preview token because the
+  // session token must not travel in a src attribute. A caller that already
+  // has a credential-free URL (the share page) says so with
+  // needsPreviewToken=false; its source is ready immediately. Before this,
+  // that caller still waited for a token that never arrived, so images, PDFs,
+  // video and audio sat on "Loading…" forever.
+  const streamUrl = !item
+    ? null
+    : needsPreviewToken
+      ? (previewToken ? streamUrlFor(item, previewToken) : null)
+      : streamUrlFor(item)
   const blobUrl = item ? fetchUrlFor(item) : null
 
   useEffect(() => {
