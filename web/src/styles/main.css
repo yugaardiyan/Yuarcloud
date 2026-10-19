@@ -1439,6 +1439,16 @@ input.input[type='number'] {
   z-index: 1;
 }
 
+/* The card is a column flex container with `align-items: center`, so this box
+   was sized by its widest child rather than by the card. A nowrap meta line
+   longer than the tile — "4.1 MB · Oct 19, 05:48 AM" needed 133px in a 107px
+   content box — stretched the whole block past the padding, and with it the
+   centred name, so neighbouring tiles wrote over each other. A card's content
+   is not allowed to be wider than the card. */
+.file-card .file-info {
+  width: 100%;
+}
+
 /* The glyph is the whole tile, so it is the only thing in this band — which
    means the band is what sizes the tile, and every pixel of slack in it is
    padding the pointer has to cross before reaching the card's real content.

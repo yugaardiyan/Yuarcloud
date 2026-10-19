@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { Check } from 'lucide-react'
 import { useFiles } from '../context/FileContext'
 import { useContextMenu } from './ContextMenuProvider'
-import { formatBytes, formatDate } from '../utils/helpers'
+import { formatDate } from '../utils/helpers'
 import { FileIcon, iconClassFor } from './FileIcon'
 import { useDragMove } from '../hooks/useDragMove'
 import EmptyState from './EmptyState'
@@ -146,13 +146,11 @@ function FileGrid({ onOpen, onDownload, onFile }) {
             <div className="file-info">
               <div className="file-name">{item.name}</div>
               <div className="file-meta">
-                {/* A folder reads as a folder from its icon, so the word was
-                    only standing where a size would go — and it pushed the date
-                    behind a dot for no reason. Folders show the date alone now;
-                    files keep size and date. */}
-                {item.is_dir
-                  ? (item.updated_at ? formatDate(item.updated_at) : '—')
-                  : `${formatBytes(item.size)}${item.updated_at ? ` · ${formatDate(item.updated_at)}` : ''}`}
+                {/* One short fact per tile. A tile is 116-120px wide, which fits
+                    a date but not a date and a size — trying to show both is
+                    what made a card's text wider than the card. The size is in
+                    the list view and in the Info panel. */}
+                {item.updated_at ? formatDate(item.updated_at) : '—'}
               </div>
             </div>
           </div>
