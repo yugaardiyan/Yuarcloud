@@ -2243,6 +2243,13 @@ input.input[type='number'] {
   width: 22px;
   height: 22px;
   padding: 0;
+  /* Half of the row's own padding plus half of the difference between this
+     button and a file icon: the arrow is 22px wide and the icons are 18px, so
+     pulling the button left by the row's 4px of padding puts its centre on the
+     icon column and, with the 6px gap, lands the path label exactly on the
+     names below it. Without this the arrow sat 4px right of the icons and the
+     label 4px right of the names. */
+  margin-left: -4px;
   border: none;
   border-radius: var(--radius-full);
   background: transparent;
