@@ -2083,7 +2083,10 @@ input.input[type='number'] {
 .centered-page {
   flex-direction: column;
   justify-content: flex-start;
-  padding: 48px 20px 32px;
+  /* The brand sits 56px from the top edge instead of 84: on a share page the
+     card is the page, and the empty space above it was the largest block of
+     nothing on the screen. */
+  padding: 24px 20px 24px;
 }
 
 .share-shell {
@@ -2100,7 +2103,7 @@ input.input[type='number'] {
      gap between two separate things rather than one lockup, and even the 3px
      the header's capsule uses still left daylight at the cap height. */
   gap: 0;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .share-brand .logo {
@@ -2117,7 +2120,7 @@ input.input[type='number'] {
 .share-card,
 .share-file-card {
   width: 100%;
-  padding: 20px;
+  padding: 16px;
   border-radius: var(--radius-xl);
   box-shadow: none;
 }
@@ -2130,7 +2133,7 @@ input.input[type='number'] {
 .share-card .btn,
 .share-file-card .btn {
   gap: 6px;
-  padding: 7px 15px;
+  padding: 6px 14px;
   font-size: 12.5px;
   border-radius: var(--radius-full);
 }
@@ -2173,8 +2176,8 @@ input.input[type='number'] {
 .share-file-head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .share-file-name {
@@ -2216,8 +2219,8 @@ input.input[type='number'] {
    in and a file opens the viewer with one tap; the list scrolls instead of
    stretching the card without a bound. */
 .share-contents {
-  margin-top: 14px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 7px;
   border-top: 1px solid var(--border-color);
 }
 
@@ -2300,7 +2303,7 @@ input.input[type='number'] {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px;
+  padding: 4px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -2363,18 +2366,18 @@ input.input[type='number'] {
 }
 
 .share-upload {
-  margin-top: 18px;
+  margin-top: 12px;
 }
 
 .share-upload-title {
-  margin-bottom: 8px;
+  margin-bottom: 5px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .share-dropzone {
-  padding: 14px 12px;
+  padding: 9px 12px;
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-lg);
   text-align: center;
@@ -2402,9 +2405,9 @@ input.input[type='number'] {
 }
 
 .share-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   flex-shrink: 0;
 }
 
