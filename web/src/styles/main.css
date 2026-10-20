@@ -2095,7 +2095,10 @@ input.input[type='number'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  /* The same 3px the header's capsule uses between its disc and wordmark. The
+     7px that stood here read as a gap between two separate things rather than
+     one lockup, because a round mark curves away from the text beside it. */
+  gap: 3px;
   margin-bottom: 14px;
 }
 
