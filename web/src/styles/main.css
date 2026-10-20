@@ -2088,10 +2088,12 @@ input.input[type='number'] {
 .centered-page {
   flex-direction: column;
   justify-content: flex-start;
-  /* The brand sits 56px from the top edge instead of 84: on a share page the
-     card is the page, and the empty space above it was the largest block of
-     nothing on the screen. */
-  padding: 24px 20px 24px;
+  /* 12px, matching the brand's own bottom margin: the lockup then stands in the
+     exact middle of the band above the card, with as much air over it as under
+     it, and the card starts at 50px instead of 56. On a share page the card is
+     the page; the empty space above it was the largest block of nothing on the
+     screen. */
+  padding: 12px 20px 24px;
 }
 
 .share-shell {
@@ -2108,7 +2110,9 @@ input.input[type='number'] {
      gap between two separate things rather than one lockup, and even the 3px
      the header's capsule uses still left daylight at the cap height. */
   gap: 0;
-  margin-bottom: 10px;
+  /* Equal to the page's top padding, so the lockup sits in the middle of the
+     band above the card rather than hugging the card. */
+  margin-bottom: 12px;
 }
 
 .share-brand .logo {
@@ -2116,7 +2120,7 @@ input.input[type='number'] {
 }
 
 .share-brand-name {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);

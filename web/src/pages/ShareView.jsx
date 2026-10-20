@@ -17,7 +17,7 @@ import toast from 'react-hot-toast'
 function ShareBrand() {
   return (
     <div className="share-brand">
-      <Logo size={22} />
+      <Logo size={26} />
       <span className="share-brand-name">
         Yuar<span className="brand-name-tail">cloud</span>
       </span>
