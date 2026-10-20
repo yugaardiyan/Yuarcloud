@@ -2095,10 +2095,11 @@ input.input[type='number'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* The same 3px the header's capsule uses between its disc and wordmark. The
-     7px that stood here read as a gap between two separate things rather than
-     one lockup, because a round mark curves away from the text beside it. */
-  gap: 3px;
+  /* No gap at all: the disc's widest point meets the text's box. A round mark
+     curves away from the text beside it, so the 7px that stood here read as a
+     gap between two separate things rather than one lockup, and even the 3px
+     the header's capsule uses still left daylight at the cap height. */
+  gap: 0;
   margin-bottom: 14px;
 }
 
