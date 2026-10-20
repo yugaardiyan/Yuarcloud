@@ -30,6 +30,50 @@ function ShareBrand() {
 // count in the header still reports the real total.
 const CONTENT_RENDER_CAP = 500
 
+/** The folder the address bar asks for, if it sits inside the shared folder.
+ *
+ *  A share link with `?path=` is how a visitor comes back to the folder they
+ *  were in after a reload, and how a copied link carries the same place to
+ *  someone else. The value is only a hint: it is checked against the shared
+ *  folder's own path here, and the server checks it again against whole
+ *  segments before answering, so a hand-edited path cannot step outside.
+ */
+function folderFromUrl(rootPath) {
+  if (typeof window === 'undefined') return null
+  const raw = new URLSearchParams(window.location.search).get('path')
+  if (!raw) return null
+  const path = raw.trim().replace(/\/+$/, '')
+  if (!rootPath || path === rootPath) return null
+  if (!path.startsWith(`${rootPath}/`)) return null
+  return path
+}
+
+/** The trail from the shared folder down to `path`, which is what the back
+ *  button and the breadcrumb are built from. */
+function trailTo(rootPath, rootName, path) {
+  const entries = [{ path: rootPath, name: rootName }]
+  let walked = rootPath
+  for (const name of path.slice(rootPath.length + 1).split('/')) {
+    walked = `${walked}/${name}`
+    entries.push({ path: walked, name })
+  }
+  return entries
+}
+
+/** Puts the browsed folder in the address bar without adding a history entry:
+ *  the back button belongs to the browser, not to the folder stack, and the
+ *  page's own back control is the one that walks up. */
+function rememberFolder(path, rootPath) {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  if (!path || path === rootPath) url.searchParams.delete('path')
+  else url.searchParams.set('path', path)
+  const next = `${url.pathname}${url.search}`
+  if (next !== `${window.location.pathname}${window.location.search}`) {
+    window.history.replaceState(window.history.state, '', next)
+  }
+}
+
 /** Public landing page for a shared file. No authentication required. */
 export default function ShareView() {
   const { token } = useParams()
@@ -72,6 +116,10 @@ export default function ShareView() {
   // it. Read in `openFolder` while the old folder is still on screen, spent by
   // the layout effect below once the new rows are in the document.
   const swapFrom = useRef(null)
+  // The shared folder's own path, kept in a ref so the folder fetch can write
+  // the address bar without taking `file` as a dependency and changing identity
+  // on every unlock.
+  const rootPathRef = useRef(null)
   const contentsSeq = useRef(0)
   const fileInputRef = useRef(null)
 
@@ -236,8 +284,18 @@ export default function ShareView() {
           setContentsPaint((n) => n + 1)
         }
         setContents(response.data.items || [])
+        // The folder is on screen, so the address bar can name it: a reload
+        // comes back here, and copying the link while browsing hands someone
+        // the same folder rather than the top of the share.
+        rememberFolder(path, rootPathRef.current)
       } catch (err) {
         if (id !== contentsSeq.current) return
+        // A folder named by the address bar can be gone — deleted since the
+        // link was copied, or hand-edited. Stop pointing the URL at it so a
+        // reload does not repeat a failure the visitor can only back out of.
+        if (err?.response?.status === 404 && path !== rootPathRef.current) {
+          rememberFolder(rootPathRef.current, rootPathRef.current)
+        }
         setContentsError(apiError(err, 'Could not load this folder'))
       } finally {
         if (id === contentsSeq.current) setContentsLoading(false)
@@ -254,8 +312,19 @@ export default function ShareView() {
     if (!file?.is_dir) return
     if (fileToken !== token) return
     setContents([])
-    setTrail([])
     setShowContents(true)
+    rootPathRef.current = file.path
+
+    // A reload, or a link copied while browsing, names a folder rather than
+    // the root. Land there, with the trail already filled in so the breadcrumb
+    // and the back control describe where the visitor is.
+    const wanted = folderFromUrl(file.path)
+    if (wanted) {
+      setTrail(trailTo(file.path, file.name, wanted))
+      openFolder(wanted, wanted.slice(wanted.lastIndexOf('/') + 1))
+      return
+    }
+    setTrail([])
     openFolder(file.path, file.name)
   }, [file?.id, file?.path, file?.name, file?.is_dir, fileToken, token, openFolder])
 
