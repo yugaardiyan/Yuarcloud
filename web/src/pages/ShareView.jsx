@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { shareApi, apiError } from '../utils/api'
 import { withViewTransition } from '../utils/viewTransition'
@@ -67,6 +67,11 @@ export default function ShareView() {
   // same folder does not bump it, so nothing re-fades for no reason.
   const [contentsPaint, setContentsPaint] = useState(0)
   const paintedPath = useRef(null)
+  const contentsListRef = useRef(null)
+  // Height of the list before the rows were replaced, and the element that had
+  // it. Read in `openFolder` while the old folder is still on screen, spent by
+  // the layout effect below once the new rows are in the document.
+  const swapFrom = useRef(null)
   const contentsSeq = useRef(0)
   const fileInputRef = useRef(null)
 
@@ -221,6 +226,11 @@ export default function ShareView() {
       try {
         const response = await shareApi.children(token, password, path)
         if (id !== contentsSeq.current) return
+        // The card is as tall as its rows, so a folder with fewer of them makes
+        // it jump in the same frame the rows are swapped — the one part of the
+        // swap a cross-fade cannot hide. Measure while the old rows are still
+        // laid out; the effect below walks the height to its new value.
+        swapFrom.current = contentsListRef.current?.getBoundingClientRect().height ?? null
         if (paintedPath.current !== path) {
           paintedPath.current = path
           setContentsPaint((n) => n + 1)
@@ -248,6 +258,51 @@ export default function ShareView() {
     setShowContents(true)
     openFolder(file.path, file.name)
   }, [file?.id, file?.path, file?.name, file?.is_dir, fileToken, token, openFolder])
+
+  // Walks the list from the height it had to the height its rows now need.
+  // The rows themselves do not move: the list is top-aligned, so only its
+  // bottom edge (and with it the upload box below) travels. Opacity alone
+  // could not cover this — a card that shrinks by 84px in one frame reads as
+  // a jolt even when the text inside it is fading.
+  //
+  // Web Animations rather than a CSS transition because the start value is
+  // only knowable at runtime and the end value is `auto`; a keyframe pair of
+  // two measured lengths needs neither `interpolate-size` (Chrome-only) nor a
+  // temporary inline height left behind on the element.
+  useLayoutEffect(() => {
+    const el = contentsListRef.current
+    const from = swapFrom.current
+    swapFrom.current = null
+    // No previous height means there was nothing on screen to move away from.
+    if (!el || !from) return
+    const to = el.getBoundingClientRect().height
+    if (Math.abs(to - from) < 1) return
+    if (!window.matchMedia('(prefers-reduced-motion: no-preference)').matches) return
+
+    const style = getComputedStyle(el)
+    // A computed custom property comes back normalised, so the token may read
+    // `0.18s` rather than `180ms`. Taking it at face value hands the animation
+    // a 0.18ms duration — no animation at all.
+    const durationToken = style.getPropertyValue('--contents-enter-duration').trim() || '180ms'
+    const amount = parseFloat(durationToken)
+    const duration = Number.isFinite(amount)
+      ? (durationToken.endsWith('ms') ? amount : amount * 1000)
+      : 180
+    const easing = style.getPropertyValue('--share-enter-ease').trim() || 'ease-out'
+
+    // An auto-overflow list whose box is momentarily shorter than its rows
+    // would grow a scrollbar mid-flight on the platforms that reserve space for
+    // one. The clip is the point of the animation, so hide the overflow only
+    // for its duration.
+    el.style.overflowY = 'hidden'
+    const animation = el.animate(
+      [{ height: `${from}px` }, { height: `${to}px` }],
+      { duration, easing }
+    )
+    const restore = () => { el.style.overflowY = '' }
+    animation.onfinish = restore
+    animation.oncancel = restore
+  }, [contentsPaint])
 
   const goBack = () => {
     if (trail.length < 2) return
@@ -496,6 +551,7 @@ export default function ShareView() {
               <div
                 className="share-contents-list"
                 key={contentsPaint}
+                ref={contentsListRef}
                 style={{ opacity: contentsLoading ? 0.55 : 1, transition: 'opacity 140ms ease' }}
               >
                 {contentsError ? (
