@@ -2275,6 +2275,26 @@ input.input[type='number'] {
   overflow-y: auto;
 }
 
+/* A folder swap replaces every row at once, so the list is keyed on the answer
+   it belongs to and the new rows fade in. Opacity only: the rows are not
+   travelling anywhere, and a height or transform transition here would claim
+   they were — the same reason the pages themselves do not rise. Without this,
+   the new names appear at full strength in a single frame while the old ones
+   are still being read, which is what makes a drill feel like a jump cut. */
+@keyframes share-contents-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* No fill mode: a forwards fill would outrank the inline opacity that dims
+     the list while the next folder is on its way, and the dim would never show
+     after the first swap. */
+  .share-contents-list {
+    animation: share-contents-enter var(--contents-enter-duration) var(--share-enter-ease);
+  }
+}
+
 .share-contents-row {
   display: flex;
   align-items: center;
@@ -4432,6 +4452,10 @@ input.input[type='number'] {
      — the extra time is in the landing, not in the start. */
   --share-enter-duration: 320ms;
   --share-enter-ease: cubic-bezier(0.33, 1, 0.68, 1);
+  /* A folder swap happens inside a card that is already on screen, so it gets a
+     fraction of the card's time. Short enough that the new rows are legible
+     before the eye has finished with the old ones. */
+  --contents-enter-duration: 180ms;
 }
 
 @keyframes view-enter {

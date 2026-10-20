@@ -61,6 +61,12 @@ export default function ShareView() {
   const [contentsLoading, setContentsLoading] = useState(false)
   const [contentsError, setContentsError] = useState(null)
   const [showContents, setShowContents] = useState(true)
+  // The folder whose rows are in the list. Keying the list on it remounts the
+  // list when a different folder's answer lands, which is what replays the
+  // fade-in that keeps the swap from reading as a jump cut. A refresh of the
+  // same folder does not bump it, so nothing re-fades for no reason.
+  const [contentsPaint, setContentsPaint] = useState(0)
+  const paintedPath = useRef(null)
   const contentsSeq = useRef(0)
   const fileInputRef = useRef(null)
 
@@ -215,6 +221,10 @@ export default function ShareView() {
       try {
         const response = await shareApi.children(token, password, path)
         if (id !== contentsSeq.current) return
+        if (paintedPath.current !== path) {
+          paintedPath.current = path
+          setContentsPaint((n) => n + 1)
+        }
         setContents(response.data.items || [])
       } catch (err) {
         if (id !== contentsSeq.current) return
@@ -485,6 +495,7 @@ export default function ShareView() {
                   is a flash where the list used to be. */}
               <div
                 className="share-contents-list"
+                key={contentsPaint}
                 style={{ opacity: contentsLoading ? 0.55 : 1, transition: 'opacity 140ms ease' }}
               >
                 {contentsError ? (
