@@ -121,6 +121,44 @@ async function copyToClipboard(text) {
   }
 }
 
+/** Where a verified share password is kept for the life of the tab.
+ *
+ *  A refresh is the same visit, so asking again is asking for something the
+ *  visitor just gave. A new tab, another browser or another device is a
+ *  different visit, and `sessionStorage` is exactly that boundary: it survives
+ *  a reload and dies with the tab.
+ *
+ *  The password is stored as typed rather than as a token because the API asks
+ *  for it on every request — listing, browsing, preview, download and upload
+ *  all carry it — and the server keeps no unlock session to hand back. */
+const unlockKey = (token) => `yuarcloud:share-unlock:${token}`
+
+function rememberUnlock(token, password) {
+  try {
+    sessionStorage.setItem(unlockKey(token), password)
+  } catch {
+    // Storage can be blocked or full. The page still works; the visitor just
+    // types the password again after a reload.
+  }
+}
+
+function readUnlock(token) {
+  try {
+    return sessionStorage.getItem(unlockKey(token)) || ''
+  } catch {
+    return ''
+  }
+}
+
+function forgetUnlock(token) {
+  try {
+    sessionStorage.removeItem(unlockKey(token))
+  } catch {
+    // Nothing was stored, or storage is unreachable. Either way there is
+    // nothing to clean up.
+  }
+}
+
 /** Public landing page for a shared file. No authentication required. */
 export default function ShareView() {
   const { token } = useParams()
@@ -194,7 +232,7 @@ export default function ShareView() {
   const shownView = useRef('loading')
 
   const load = useCallback(
-    async (pwd = '', { spinner = true } = {}) => {
+    async (pwd = '', { spinner = true, remembered = false } = {}) => {
       const id = ++requestId.current
       if (spinner) {
         setLoading(true)
@@ -228,15 +266,23 @@ export default function ShareView() {
           passwordError: false,
           view: 'content',
         }
+        // Keep the open password for this tab, or drop a stale one: a link that
+        // is no longer protected should not leave a secret sitting in storage.
+        if (response.data.share?.has_password && pwd) rememberUnlock(token, pwd)
+        else forgetUnlock(token)
       } catch (err) {
         if (id !== requestId.current) return
         if (err.response?.status === 401) {
+          // A remembered password that no longer works — rotated, or the link
+          // was re-protected — must go, or every reload would retry it. It is
+          // also not the visitor's mistake, so the form carries no error.
+          forgetUnlock(token)
           next = {
             needsPassword: true,
             error: 'This link is password protected.',
             // An untouched form is not a failure; a password that was sent and
             // refused is, and the field has to say so.
-            passwordError: pwd !== '',
+            passwordError: pwd !== '' && !remembered,
             view: 'password',
           }
         } else if (err.response?.status === 410) {
@@ -247,6 +293,7 @@ export default function ShareView() {
             view: 'error',
           }
         } else if (err.response?.status === 403) {
+          forgetUnlock(token)
           next = {
             error: 'This share link is no longer available.',
             needsPassword: false,
@@ -268,6 +315,10 @@ export default function ShareView() {
           setShare(next.share)
           setFile(next.file)
           setFileToken(token)
+          // Every download, preview and upload sends this password. Restoring
+          // the unlock without restoring this would reopen the card and then
+          // refuse the very actions it offers.
+          if (pwd) setPassword(pwd)
         }
         if (next.error !== undefined) setError(next.error)
         if (next.needsPassword !== undefined) setNeedsPassword(next.needsPassword)
@@ -285,7 +336,10 @@ export default function ShareView() {
     [token]
   )
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const remembered = readUnlock(token)
+    load(remembered, { remembered: remembered !== '' })
+  }, [load, token])
 
   const submitPassword = async (e) => {
     e.preventDefault()
