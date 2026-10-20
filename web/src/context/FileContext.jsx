@@ -382,9 +382,15 @@ export function FileProvider({ children }) {
 
     // A folder can only be created inside the real drive tree, or where the
     // caller explicitly said to put it.
+    //
+    // The keys here are `id` and `path`, which is what the request below and
+    // every other destination in this file reads. They were `parent_id` and
+    // `parent_path`, so `where.id` and `where.path` were always undefined: the
+    // folder was filed in My Cloud no matter which folder was on screen, and
+    // the caller's own destination would have been dropped the same way.
     const where = destination || (view.scope === 'drive'
-      ? { parent_id: view.folderId, parent_path: view.path }
-      : { parent_id: null, parent_path: '' })
+      ? { id: view.folderId, path: view.path }
+      : { id: null, path: '' })
 
     try {
       const response = await fileApi.createFolder({
