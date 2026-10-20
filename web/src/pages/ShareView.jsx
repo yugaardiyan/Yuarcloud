@@ -8,6 +8,7 @@ import { FileIcon, iconClassFor } from '../components/FileIcon'
 import PreviewModal from '../components/PreviewModal'
 import { canPreview } from '../utils/fileType'
 import Logo from '../components/Logo'
+import ToastHost from '../components/ToastHost'
 import toast from 'react-hot-toast'
 
 /** The mark and wordmark, plain. The header's bordered capsule carries a
@@ -48,6 +49,14 @@ function folderFromUrl(rootPath) {
   return path
 }
 
+/** Whether the address bar asks for the list to be open at the shared root.
+ *  A link copied while browsing the root carries `?browse=1`; a bare link is
+ *  the cover, closed. */
+function openFromUrl() {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('browse') === '1'
+}
+
 /** The trail from the shared folder down to `path`, which is what the back
  *  button and the breadcrumb are built from. */
 function trailTo(rootPath, rootName, path) {
@@ -63,14 +72,52 @@ function trailTo(rootPath, rootName, path) {
 /** Puts the browsed folder in the address bar without adding a history entry:
  *  the back button belongs to the browser, not to the folder stack, and the
  *  page's own back control is the one that walks up. */
-function rememberFolder(path, rootPath) {
+function rememberFolder(path, rootPath, open) {
   if (typeof window === 'undefined') return
   const url = new URL(window.location.href)
-  if (!path || path === rootPath) url.searchParams.delete('path')
-  else url.searchParams.set('path', path)
+  const inFolder = !!path && path !== rootPath
+  if (inFolder) url.searchParams.set('path', path)
+  else url.searchParams.delete('path')
+  // A bare link is the card closed: the visitor opens the list themselves. The
+  // flag only appears once they have, so a reload (or a copied link) keeps the
+  // list they were looking at open.
+  if (!inFolder && open) url.searchParams.set('browse', '1')
+  else url.searchParams.delete('browse')
   const next = `${url.pathname}${url.search}`
   if (next !== `${window.location.pathname}${window.location.search}`) {
     window.history.replaceState(window.history.state, '', next)
+  }
+}
+
+/** Puts plain text on the clipboard and reports whether it landed.
+ *
+ *  `navigator.clipboard` needs a secure context, and a share link is routinely
+ *  opened from a plain-http LAN address, where the object does not exist at all.
+ *  Even on https a browser may refuse the write. Both leave the button doing
+ *  nothing visible, so the selection trick has to exist, and the result has to
+ *  be reported rather than assumed. */
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // The refusal is not a reason to give up; fall through to the copy command.
+  }
+  try {
+    const area = document.createElement('textarea')
+    area.value = text
+    area.setAttribute('readonly', '')
+    area.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0'
+    document.body.appendChild(area)
+    area.select()
+    area.setSelectionRange(0, text.length)
+    const copied = document.execCommand('copy')
+    document.body.removeChild(area)
+    return copied
+  } catch {
+    return false
   }
 }
 
@@ -104,7 +151,16 @@ export default function ShareView() {
   const [fileToken, setFileToken] = useState(null)
   const [contentsLoading, setContentsLoading] = useState(false)
   const [contentsError, setContentsError] = useState(null)
-  const [showContents, setShowContents] = useState(true)
+  // Closed on arrival. A folder share is opened to hand someone a single
+  // thing — download it, or copy it — and the list of everything else was
+  // pushing the card past the bottom of a laptop window before the visitor had
+  // asked for it. The visitors who want it press Browse, and the rows are
+  // already fetched by then.
+  const [showContents, setShowContents] = useState(false)
+  // Read by the folder fetch when it writes the address bar. The fetch is async
+  // and its callback is frozen at the identity of the component at call time, so
+  // it cannot see the current `showContents` directly.
+  const showContentsRef = useRef(false)
   // The folder whose rows are in the list. Keying the list on it remounts the
   // list when a different folder's answer lands, which is what replays the
   // fade-in that keeps the swap from reading as a jump cut. A refresh of the
@@ -287,14 +343,14 @@ export default function ShareView() {
         // The folder is on screen, so the address bar can name it: a reload
         // comes back here, and copying the link while browsing hands someone
         // the same folder rather than the top of the share.
-        rememberFolder(path, rootPathRef.current)
+        rememberFolder(path, rootPathRef.current, showContentsRef.current)
       } catch (err) {
         if (id !== contentsSeq.current) return
         // A folder named by the address bar can be gone — deleted since the
         // link was copied, or hand-edited. Stop pointing the URL at it so a
         // reload does not repeat a failure the visitor can only back out of.
         if (err?.response?.status === 404 && path !== rootPathRef.current) {
-          rememberFolder(rootPathRef.current, rootPathRef.current)
+          rememberFolder(rootPathRef.current, rootPathRef.current, false)
         }
         setContentsError(apiError(err, 'Could not load this folder'))
       } finally {
@@ -312,13 +368,15 @@ export default function ShareView() {
     if (!file?.is_dir) return
     if (fileToken !== token) return
     setContents([])
-    setShowContents(true)
     rootPathRef.current = file.path
 
     // A reload, or a link copied while browsing, names a folder rather than
     // the root. Land there, with the trail already filled in so the breadcrumb
     // and the back control describe where the visitor is.
     const wanted = folderFromUrl(file.path)
+    const openOnArrival = !!wanted || openFromUrl()
+    showContentsRef.current = openOnArrival
+    setShowContents(openOnArrival)
     if (wanted) {
       setTrail(trailTo(file.path, file.name, wanted))
       openFolder(wanted, wanted.slice(wanted.lastIndexOf('/') + 1))
@@ -373,6 +431,18 @@ export default function ShareView() {
     animation.oncancel = restore
   }, [contentsPaint])
 
+  // Showing and hiding is also an address-bar change: the visitor who opened
+  // the list and then reloaded expects the list, and the one who never opened
+  // it does not want a link that opens it for them.
+  const toggleContents = () => {
+    const next = !showContents
+    showContentsRef.current = next
+    const rootPath = rootPathRef.current
+    const current = trail.length ? trail[trail.length - 1].path : rootPath
+    rememberFolder(next ? current : null, rootPath, next)
+    setShowContents(next)
+  }
+
   const goBack = () => {
     if (trail.length < 2) return
     const parent = trail[trail.length - 2]
@@ -395,12 +465,9 @@ export default function ShareView() {
   }
 
   const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      toast.success('Link copied')
-    } catch {
-      toast.error('Could not copy — select the address bar instead')
-    }
+    const copied = await copyToClipboard(window.location.href)
+    if (copied) toast.success('Link copied')
+    else toast.error('Could not copy — select the address bar instead')
   }
 
   const canUpload = !!file && !!file.is_dir && share?.permission === 'write'
@@ -581,7 +648,7 @@ export default function ShareView() {
             {file.is_dir && (
               <button
                 className="btn btn-secondary"
-                onClick={() => setShowContents((open) => !open)}
+                onClick={toggleContents}
                 aria-expanded={showContents}
               >
                 <FolderOpen size={14} /> {showContents ? 'Hide' : 'Browse'}
@@ -731,6 +798,12 @@ export default function ShareView() {
           )}
         </div>
       </div>
+
+      {/* The app's notifications live inside Layout, and this page deliberately
+          sits outside it. Without a host here, "Link copied" went nowhere: the
+          visitor pressed Copy, nothing appeared, and the button read as broken
+          — which it also was wherever the clipboard API is unavailable. */}
+      <ToastHost />
 
       {/* Same viewer as the Drive, pointed at the public share endpoint so a
           visitor with no account can still look at the file. */}

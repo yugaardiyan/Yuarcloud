@@ -1966,7 +1966,12 @@ input.input[type='number'] {
      (tray height plus a small gap). Adding it here lifts every toast above the
      tray instead of painting over it; when the tray closes the property is
      removed and the toasts drop back to the card's bottom edge. */
-  bottom: calc(var(--below-card-h) + var(--upload-tray-h, 0px)) !important;
+  /* The fallback is not decoration: --below-card-h is set on .app, and the
+     public share page renders outside it. An undefined var() makes the whole
+     calc() invalid, which leaves `bottom` at its initial `auto` and parks the
+     toast's zero-height stack at the top of the window, off screen. 12px is
+     the value .app uses when no status bar is present. */
+  bottom: calc(var(--below-card-h, 12px) + var(--upload-tray-h, 0px)) !important;
   right: var(--drive-shell-gap) !important;
   left: auto !important;
   top: auto !important;
