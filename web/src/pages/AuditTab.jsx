@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { adminApi, apiError } from '../utils/api'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { AlertCircle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 
 /**
@@ -59,6 +60,10 @@ function AuditTab() {
   const [filter, setFilter] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // Five columns need 700px. On a phone the old answer was a horizontal
+  // scroll, which put the user and the address off-screen to the right; the
+  // rows stack instead, one line of headline and two of detail.
+  const phone = useMediaQuery('(max-width: 560px)')
 
   const load = useCallback(async (target, action) => {
     setLoading(true)
@@ -139,8 +144,31 @@ function AuditTab() {
               there and inherited arithmetic that does not transfer.
 
               Auto sizes each column to its content and wraps the rest. minWidth
-              stops it collapsing into slivers on a phone, and the wrapper turns
-              that into a horizontal scroll rather than clipping anything away. */}
+              stops it collapsing into slivers in a narrow desktop window, and
+              the wrapper scrolls rather than clipping. A phone does not get this
+              table at all — see the stacked list above the ternary. */}
+          {phone ? (
+            <div className="admin-list">
+              {logs.map((log) => (
+                <div key={log.id} className="admin-item">
+                  <div className="admin-item-head">
+                    <span className="admin-item-action" title={log.action}>{log.action}</span>
+                    <span className="admin-item-stamp" title={log.created_at}>{when(log.created_at)}</span>
+                  </div>
+                  {/* The detail is the only field with no fixed shape — a whole
+                      sentence for a rename, empty for a sign-in. It gets its own
+                      wrapping line rather than being cut to an ellipsis. */}
+                  {log.details && (
+                    <div className="admin-item-detail" title={log.details}>{log.details}</div>
+                  )}
+                  <div className="admin-item-meta">
+                    <span>{log.username || '—'}</span>
+                    {log.ip_address && <span className="admin-mono">{log.ip_address}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', minWidth: 700, borderCollapse: 'collapse', fontSize: 13 }}>
             <thead style={{ background: 'var(--bg-secondary)' }}>
@@ -177,6 +205,7 @@ function AuditTab() {
             </tbody>
           </table>
           </div>
+          )}
 
           {pages > 1 && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16 }}>

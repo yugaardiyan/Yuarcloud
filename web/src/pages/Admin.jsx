@@ -5,6 +5,7 @@ import {
   HardDrive, Share2, Folder, AlertCircle, Copy, ScrollText
 } from 'lucide-react'
 import { adminApi, fileApi, apiError } from '../utils/api'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useAuth } from '../context/AuthContext'
 import AuditTab from './AuditTab'
 import StorageMeter from '../components/StorageMeter'
@@ -833,6 +834,11 @@ function SharesTab({ shares, sharesError, onReload }) {
   const [copied, setCopied] = useState(null)
   const [busyId, setBusyId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  // Seven columns do not fit on a phone. At 390px the file column held "In…",
+  // the owner "A…", the expiry date clipped to "10/28/2…" and the status pill
+  // sat on top of the copy button. Below the stylesheet's phone breakpoint the
+  // table is replaced by stacked rows rather than squeezed.
+  const phone = useMediaQuery('(max-width: 560px)')
 
   const copy = async (share) => {
     if (await copyText(share.url)) {
@@ -880,6 +886,79 @@ function SharesTab({ shares, sharesError, onReload }) {
     return (
       <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
         No share links yet.
+      </div>
+    )
+  }
+
+  // Same two buttons in both layouts, so they are written once.
+  const actions = (share) => (
+    <>
+      <button
+        type="button"
+        className="btn btn-ghost btn-icon btn-sm"
+        style={ACTION_BTN}
+        onClick={() => copy(share)}
+        title={copied === share.id ? 'Copied' : 'Copy link'}
+        aria-label={`Copy link for ${share.file_name}`}
+      >
+        {copied === share.id ? '✓' : <Copy size={14} />}
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost btn-icon btn-sm"
+        style={{ ...ACTION_BTN, marginLeft: 2, color: 'var(--danger, #e03131)' }}
+        onClick={() => setPendingDelete(share)}
+        disabled={busyId === share.id}
+        title="Delete link"
+        aria-label={`Delete link for ${share.file_name}`}
+      >
+        {busyId === share.id ? '…' : <Trash2 size={14} />}
+      </button>
+    </>
+  )
+
+  if (phone) {
+    return (
+      <div>
+        <div className="admin-list">
+          {shares.map((share) => {
+            const st = status(share)
+            // One line of facts, in the order the table read them left to
+            // right. Joined rather than separate nodes so it wraps as a
+            // sentence at a space instead of stacking one fact per line.
+            const facts = [
+              share.owner || '—',
+              share.permission === 'write' ? 'Read & write' : 'Read only',
+              `${share.views}${share.max_views > 0 ? ` / ${share.max_views}` : ''} view${share.views === 1 ? '' : 's'}`,
+              share.expires_at ? `Expires ${new Date(share.expires_at).toLocaleDateString()}` : 'Never expires',
+            ].join(' · ')
+
+            return (
+              <div key={share.id} className="admin-item">
+                <div className="admin-item-head">
+                  <span className="admin-item-title" title={share.url}>{share.file_name}</span>
+                  <span className="admin-item-actions">{actions(share)}</span>
+                </div>
+                <div className="admin-item-meta">
+                  <span className="admin-badge" style={{ color: st.color }}>{st.label}</span>
+                  {share.has_password && <span className="admin-badge">pw</span>}
+                  {facts}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {pendingDelete && (
+          <ConfirmModal
+            simple
+            danger
+            title={`Delete the share link for "${pendingDelete.file_name}"?`}
+            confirmLabel="Delete"
+            onConfirm={confirmDelete}
+            onCancel={() => setPendingDelete(null)}
+          />
+        )}
       </div>
     )
   }
@@ -939,27 +1018,7 @@ function SharesTab({ shares, sharesError, onReload }) {
                   <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 11, color: st.color, background: 'var(--bg-tertiary)' }}>{st.label}</span>
                 </td>
                 <td style={{ padding: '12px 6px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-icon btn-sm"
-                    style={ACTION_BTN}
-                    onClick={() => copy(share)}
-                    title={copied === share.id ? 'Copied' : 'Copy link'}
-                    aria-label={`Copy link for ${share.file_name}`}
-                  >
-                    {copied === share.id ? '✓' : <Copy size={14} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-icon btn-sm"
-                    style={{ ...ACTION_BTN, marginLeft: 2, color: 'var(--danger, #e03131)' }}
-                    onClick={() => setPendingDelete(share)}
-                    disabled={busyId === share.id}
-                    title="Delete link"
-                    aria-label={`Delete link for ${share.file_name}`}
-                  >
-                    {busyId === share.id ? '…' : <Trash2 size={14} />}
-                  </button>
+                  {actions(share)}
                 </td>
               </tr>
             )

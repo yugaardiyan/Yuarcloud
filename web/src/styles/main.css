@@ -1301,6 +1301,22 @@ input.input[type='number'] {
   border-bottom-color: var(--accent-primary);
 }
 
+/* Five destinations do not fit on a phone: measured on a 390px screen, the bar
+   wanted 378px inside a 334px card, so "Audit Log" was cut in half — and the
+   bar does not scroll, so the tab was simply unreachable. Wrapping costs a
+   second line and keeps every tab there. */
+@media (max-width: 560px) {
+  .tabs {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .tab {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
+
 /* Tooltip */
 .tooltip {
   position: relative;
@@ -2735,6 +2751,123 @@ input.input[type='number'] {
  * take the slack and the two narrow columns keep their size, so the detail
  * text ellipsises instead of pushing the row wider.
  */
+/*
+ * Settings tables on a phone.
+ *
+ * The share list has seven columns and the audit list five. Squeezed into a
+ * 334px card the share table rendered "In…", "A…" and "10/28/2…" and printed
+ * its status pill on top of the copy button; the audit table needed a sideways
+ * scroll that hid the user and the address off the right edge. Below the phone
+ * breakpoint both render as stacked rows instead of tables: a headline line
+ * with the row's own actions, then the facts as a wrapping sentence.
+ *
+ * Hairlines and no boxes on purpose — this sits inside the white settings card,
+ * and a card inside a card reads as a mistake. It is the same row treatment
+ * .users-table already uses.
+ */
+.admin-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.admin-item:first-child {
+  border-top: none;
+  padding-top: 2px;
+}
+
+.admin-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-item-title,
+.admin-item-action {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* The action name is the audit row's headline, and it is already the accent
+   colour in the table. */
+.admin-item-action {
+  font-size: 12.5px;
+  color: var(--accent-primary);
+}
+
+.admin-item-stamp {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-item-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+/* One block of flowing text, not a flex row. As flex items the badges and the
+   facts each occupied a whole line as soon as the facts did not fit beside the
+   badges — two lines where one and a half would do. Inline, the facts start on
+   the badge line and wrap at a space like a sentence. */
+.admin-item-meta {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* JSX drops the whitespace between sibling elements, so the gap is explicit. */
+.admin-item-meta > span + span {
+  margin-left: 8px;
+}
+
+.admin-item-detail {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  /* A rename detail can be a path with no spaces in it. Without this the line
+     pushes the card wider than the phone. */
+  overflow-wrap: anywhere;
+}
+
+.admin-mono {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+
+/* The status pill the table draws in its own column; here it leads the facts. */
+.admin-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  white-space: nowrap;
+}
+
 .users-table {
   width: 100%;
   border-collapse: collapse;
