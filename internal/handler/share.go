@@ -435,6 +435,24 @@ func (h *ShareHandler) ShareUpload(c *gin.Context) {
 		return
 	}
 
+	// An occupied name is refused before a byte is written.
+	//
+	// This path writes with os.Create, which truncates, and the insert below
+	// fails on the unique path index - so uploading a name that already existed
+	// used to destroy the owner's bytes and then delete the file outright while
+	// its row stayed behind. A public link could erase a file by re-uploading
+	// its name. Both checks are needed: the row catches files the app knows
+	// about, the disk catches leftovers and anything placed there by hand.
+	var occupied int64
+	if err := h.db.Model(&model.File{}).Where("path = ?", targetPath).Count(&occupied).Error; err == nil && occupied > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "an item with that name already exists here"})
+		return
+	}
+	if exists, err := h.storage.Exists(ctx, targetPath); err == nil && exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "an item with that name already exists here"})
+		return
+	}
+
 	src, err := fileHeader.Open()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to open uploaded file"})
@@ -467,7 +485,14 @@ func (h *ShareHandler) ShareUpload(c *gin.Context) {
 		StoragePath: targetPath,
 	}
 	if err := h.db.Create(file).Error; err != nil {
-		h.storage.Remove(ctx, targetPath)
+		// Only remove bytes this request owns. If a concurrent request managed
+		// to register the same path first, its row is live and its bytes must
+		// survive this request's failure.
+		var rows int64
+		h.db.Model(&model.File{}).Where("path = ?", targetPath).Count(&rows)
+		if rows == 0 {
+			h.storage.Remove(ctx, targetPath)
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create file record"})
 		return
 	}

@@ -229,7 +229,11 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	allowed := map[string]bool{
 		"username": true, "email": true, "display_name": true,
 		"avatar_url": true, "home_path": true, "role": true,
-		"password_hash": true,
+		// password, not password_hash: the handler has a branch below that
+		// validates and hashes it, and it was unreachable because the field
+		// never passed this map. A raw hash would skip the length policy and
+		// let a caller store anything the login path cannot verify.
+		"password": true,
 	}
 	var raw map[string]interface{}
 	if err := c.ShouldBindJSON(&raw); err != nil {
@@ -411,6 +415,14 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// The same guard the general PATCH route applies: demoting the last admin
+	// closes the only way back into the panel, and SeedAdmin will not recreate
+	// one while an admin row exists.
+	if req.Role != "admin" && !h.otherAdminRemains(c.Request.Context(), parsed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "this is the last admin account; promote another user first"})
 		return
 	}
 

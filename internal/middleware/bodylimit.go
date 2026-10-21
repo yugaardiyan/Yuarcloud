@@ -24,8 +24,19 @@ import (
 // gets an ordinary-looking error from the multipart parser. BodyTooLarge
 // recognises it so the route can answer 413 rather than a generic 400.
 func BodyLimitMiddleware(limit int64) gin.HandlerFunc {
+	return BodyLimitFunc(func() int64 { return limit })
+}
+
+// BodyLimitFunc is BodyLimitMiddleware with the ceiling read per request.
+//
+// The upload limits are editable from the admin panel, so a value baked in at
+// route registration is whatever the process started with: raising the limit
+// did nothing and lowering it did nothing, until a restart. A negative or zero
+// return means "no ceiling", which is the documented meaning of a zero limit.
+func BodyLimitFunc(limit func() int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if limit <= 0 {
+		max := limit()
+		if max <= 0 {
 			// Zero means "no ceiling", which is a supported configuration for
 			// a self-hosted owner who knows what their disk looks like.
 			c.Next()
@@ -37,7 +48,7 @@ func BodyLimitMiddleware(limit int64) gin.HandlerFunc {
 		// byte after the limit trips, so reading through it to "finish" the
 		// request yields nothing and the connection still resets.
 		underlying := c.Request.Body
-		c.Request.Body = http.MaxBytesReader(c.Writer, underlying, limit)
+		c.Request.Body = http.MaxBytesReader(c.Writer, underlying, max)
 		c.Next()
 
 		// Let the client actually read the refusal.

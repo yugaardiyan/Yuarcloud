@@ -220,14 +220,15 @@ func (s *ShareService) ValidateShare(ctx context.Context, token, password string
 	// browse endpoint followed it there. Trashing is supposed to take the item
 	// out of circulation; a share link quietly undid that, for anyone holding
 	// the token, with no expiry and no view cap involved.
-	if share.File.ID != uuid.Nil && share.File.IsTrashed {
+	if share.File.ID == uuid.Nil || share.File.IsTrashed {
 		return nil, ErrShareNotFound
 	}
 
 	// And so does the account behind it. Preload silently yields a zero-valued
 	// User for a soft-deleted owner, so deletion revoked nothing; the account
-	// is gone and its links are still public.
-	if share.User.ID != uuid.Nil && !share.User.IsActive {
+	// is gone and its links are still public. The zero id is the deleted case,
+	// not a reason to skip the check.
+	if share.User.ID == uuid.Nil || !share.User.IsActive {
 		return nil, ErrShareNotFound
 	}
 

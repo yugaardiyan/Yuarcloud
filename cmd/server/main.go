@@ -148,6 +148,23 @@ func main() {
 	// meant to bound file content, not protocol.
 	const multipartOverhead = 1 << 20 // 1 MiB
 
+	// Read per request, not at registration: these ceilings are editable from
+	// the admin panel, and a literal here froze whatever the process started
+	// with. Zero means "no ceiling" - adding the framing slack to it turned
+	// "unlimited" into 1 MiB, so the value is passed through untouched.
+	fileBodyLimit := func() int64 {
+		if max := store.GetMaxFileSize(); max > 0 {
+			return max + multipartOverhead
+		}
+		return 0
+	}
+	chunkBodyLimit := func() int64 {
+		if max := store.GetMaxChunkSize(); max > 0 {
+			return max + multipartOverhead
+		}
+		return 0
+	}
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
@@ -177,7 +194,7 @@ func main() {
 
 	// Rate limiting
 	if cfg.RateLimit.Enabled {
-		router.Use(middleware.RateLimitMiddleware(cfg.RateLimit.RequestsPerMinute))
+		router.Use(middleware.RateLimitMiddleware(cfg.RateLimit.RequestsPerMinute, len(cfg.Server.TrustedProxies) > 0))
 	}
 
 	// Health check
@@ -204,6 +221,11 @@ func main() {
 		// route keeps long-lived credentials out of URLs everywhere else.
 		preview := api.Group("/files", middleware.AuthPreviewMiddleware(authService))
 		preview.Use(middleware.ScopeMiddleware(db))
+		// The same confinement the protected routes use. It was missing here,
+		// so an account still on the shipped default password could not browse
+		// the panel but could still read any previewable file it owned - which
+		// for an admin is the whole tree.
+		preview.Use(middleware.PasswordRotationRequiredMiddleware(db, map[string]bool{}))
 		{
 			preview.GET("/:id/preview", fileHandler.PreviewFile)
 		}
@@ -245,7 +267,7 @@ func main() {
 				// itself. Enforcing only inside the handler was too late:
 				// the body had already been streamed to a temp file.
 				files.POST("/upload",
-					middleware.BodyLimitMiddleware(store.GetMaxFileSize()+multipartOverhead),
+					middleware.BodyLimitFunc(fileBodyLimit),
 					fileHandler.UploadFile)
 				files.GET("/:id/download", fileHandler.DownloadFile)
 				files.GET("/upload-limits", fileHandler.UploadLimits)
@@ -263,8 +285,12 @@ func main() {
 
 				// Chunked upload
 				files.POST("/upload/chunked/init", fileHandler.InitChunkedUpload)
+				// A chunk is bounded by the chunk ceiling, not the file
+				// ceiling: this route used to accept a whole file's worth of
+				// body and only reject it after the multipart parser had
+				// spooled all of it to a temp file.
 				files.POST("/upload/chunked/:uploadId/chunk/:chunkIndex",
-					middleware.BodyLimitMiddleware(store.GetMaxFileSize()+multipartOverhead),
+					middleware.BodyLimitFunc(chunkBodyLimit),
 					fileHandler.UploadChunk)
 				files.POST("/upload/chunked/:uploadId/complete", fileHandler.CompleteChunkedUpload)
 				files.GET("/upload/chunked/:uploadId/status", fileHandler.GetUploadStatus)
@@ -297,7 +323,7 @@ func main() {
 			// so this one is the difference between a disk-filling request and
 			// a rejected one.
 			publicShares.POST("/:token/upload",
-				middleware.BodyLimitMiddleware(store.GetMaxFileSize()+multipartOverhead),
+				middleware.BodyLimitFunc(fileBodyLimit),
 				shareHandler.ShareUpload)
 		}
 

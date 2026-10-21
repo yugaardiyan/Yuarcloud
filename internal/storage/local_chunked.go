@@ -181,12 +181,20 @@ func (ls *LocalStorage) AssembleChunks(ctx context.Context, uploadID, finalPath 
 	// check has passed. os.Create on the real path truncates whatever is there,
 	// and each failure branch below removes it — so assembling in place meant
 	// any error destroyed a pre-existing file the user still had a row for.
-	partPath := finalFullPath + ".yuarcloud-part"
-	finalFile, err := os.Create(partPath)
+	// A random sibling, not a predictable suffix. ".yuarcloud-part" appended
+	// to the target is itself a legal filename (safeFilename only refuses names
+	// that *start* with .yuarcloud), so a file called report.pdf.yuarcloud-part
+	// could be truncated by an upload of report.pdf and then renamed over it.
+	partFile, err := os.CreateTemp(filepath.Dir(finalFullPath), ".yuarcloud-part-*")
 	if err != nil {
 		return 0, err
 	}
+	partPath := partFile.Name()
+	finalFile := partFile
 	defer finalFile.Close()
+	// After a successful rename the path is gone and this is a no-op; on every
+	// failure branch below it removes the partial assembly.
+	defer os.Remove(partPath) //nolint:errcheck
 
 	hasher := sha256.New()
 	multiWriter := io.MultiWriter(finalFile, hasher)

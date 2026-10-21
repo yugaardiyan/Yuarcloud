@@ -124,6 +124,17 @@ func serveInline(c *gin.Context, store storage.StorageBackend, file *model.File)
 	// `filename*` additionally gives browsers the real UTF-8 name for a
 	// "save as", which the plain ASCII parameter cannot always carry.
 	c.Header("Content-Disposition", contentDisposition("inline", file.Name))
+	// Active content gets a sandboxed origin with no script execution.
+	//
+	// The MIME type is whatever the uploader declared, so a file named .pdf
+	// could arrive as text/html and the PDF viewer's iframe would render it as
+	// a page on this origin - with localStorage access, where the session
+	// tokens live. Sandbox (without allow-scripts) keeps the document
+	// displayable, which is why HTML and SVG previews still work, but nothing
+	// in it can run.
+	if activeContentType(mime) {
+		c.Header("Content-Security-Policy", "sandbox; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; media-src data: blob:")
+	}
 	// Tells the player it may seek. Without this a media element still plays,
 	// but the scrubber is dead and some browsers refuse to start at all.
 	c.Header("Accept-Ranges", "bytes")
@@ -372,4 +383,19 @@ func urlEscape(s string) string {
 func contentDisposition(disposition, name string) string {
 	return fmt.Sprintf("%s; filename=\"%s\"; filename*=UTF-8''%s",
 		disposition, asciiFallback(name), urlEscape(name))
+}
+
+// activeContentType reports whether a browser will treat the decoded bytes as a
+// document rather than as media that cannot execute. The comparison is on the
+// type only: parameters such as charset do not change the answer.
+func activeContentType(mime string) bool {
+	if i := strings.IndexByte(mime, ';'); i >= 0 {
+		mime = mime[:i]
+	}
+	switch strings.ToLower(strings.TrimSpace(mime)) {
+	case "text/html", "application/xhtml+xml", "image/svg+xml",
+		"application/xml", "text/xml", "application/javascript", "text/javascript":
+		return true
+	}
+	return false
 }

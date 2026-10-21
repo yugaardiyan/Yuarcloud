@@ -177,6 +177,14 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	// A rotation that sets the same password is not a rotation. The forced
+	// first-login change clears must_rotate_pass, so accepting the old value
+	// let a shipped default stay in place while the flag said otherwise.
+	if h.authService.CheckPassword(req.NewPassword, user.PasswordHash) == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "the new password must be different from the current one"})
+		return
+	}
+
 	newHash, err := h.authService.HashPassword(req.NewPassword)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})

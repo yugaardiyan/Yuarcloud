@@ -130,7 +130,15 @@ func (s *AdminService) UpdateUserQuota(ctx context.Context, userID uuid.UUID, qu
 }
 
 func (s *AdminService) UpdateUserRole(ctx context.Context, userID uuid.UUID, role string) error {
-	return s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("role", role).Error
+	// The version bump is the revocation. Scope checks read the role carried by
+	// the token, so without it a demoted admin keeps writing to every file for
+	// the 24 hours their access token has left.
+	return s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).
+		Updates(map[string]any{
+			"role":          role,
+			"token_version": gorm.Expr("token_version + 1"),
+			"updated_at":    time.Now(),
+		}).Error
 }
 
 func (s *AdminService) GetStats(ctx context.Context) (*model.UserStats, error) {

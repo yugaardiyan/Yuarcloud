@@ -54,6 +54,20 @@ func (h *FileHandler) InitChunkedUpload(c *gin.Context) {
 		return
 	}
 
+	// The declared chunk count is the only thing that bounds how many temp
+	// files a session may create, and it was never compared with the size it
+	// claims to describe: total_size: 1 with total_chunks: 1000 opened a
+	// thousand max-sized chunks while every quota check saw one byte. The
+	// count has to be exactly what the file needs.
+	if req.TotalSize <= 0 || req.ChunkSize <= 0 || req.TotalChunks <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid upload size"})
+		return
+	}
+	if want := (req.TotalSize + req.ChunkSize - 1) / req.ChunkSize; int64(req.TotalChunks) != want {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "total_chunks does not match total_size and chunk_size"})
+		return
+	}
+
 	// Reduce the name to a single path element before it is ever joined to the
 	// parent path.
 	filename, ok := safeFilename(req.Filename)
@@ -137,6 +151,9 @@ func (h *FileHandler) InitChunkedUpload(c *gin.Context) {
 	uploadSession.ExpiresAt = session.ExpiresAt
 
 	if err := h.db.Create(uploadSession).Error; err != nil {
+		// The in-memory session was created first; without this it lingers
+		// until the sweeper, holding its temp directory for no reason.
+		h.storage.DeleteUploadSession(uploadID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create upload session"})
 		return
 	}
@@ -250,6 +267,31 @@ func (h *FileHandler) CompleteChunkedUpload(c *gin.Context) {
 		return
 	}
 
+	// Exactly one request may assemble a session.
+	//
+	// Two completes used to run the whole path: both passed the name checks,
+	// both assembled to the same destination, both inserted, and the loser's
+	// insert failed on the unique path index - after which its cleanup removed
+	// the destination, deleting the file the winner had just registered. The
+	// conditional status update is the claim: the loser matches no row here and
+	// stops before it can touch the bytes.
+	claim := h.db.Model(&model.UploadSession{}).
+		Where("id = ? AND user_id = ? AND status = ?", uploadID, userID, "uploading").
+		Update("status", "completing")
+	if claim.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to finalise upload"})
+		return
+	}
+	if claim.RowsAffected == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "this upload is already being finalised"})
+		return
+	}
+	// Every early return below puts the session back so the client can retry.
+	release := func() {
+		h.db.Model(&model.UploadSession{}).Where("id = ?", uploadID).
+			Update("status", "uploading")
+	}
+
 	// Checked again at the end, because the name can have been taken while this
 	// upload was in flight — the check at init is a courtesy to the client, not
 	// a lock. AssembleChunks renames its result over the target path, so by the
@@ -257,6 +299,7 @@ func (h *FileHandler) CompleteChunkedUpload(c *gin.Context) {
 	// was there have been replaced, and the failure path below would then remove
 	// them too, leaving a row that downloads 404.
 	if h.rejectPathTaken(c, reqScope(c), session.TargetPath) || h.rejectPathOnDisk(c, session.TargetPath) {
+		release()
 		return
 	}
 
@@ -288,7 +331,14 @@ func (h *FileHandler) CompleteChunkedUpload(c *gin.Context) {
 	}
 
 	if err := h.db.Create(file).Error; err != nil {
-		h.storage.Remove(context.Background(), session.TargetPath)
+		// Only remove bytes with no row behind them: a concurrent winner may
+		// have registered this path, and its file must survive our failure.
+		var rows int64
+		h.db.Model(&model.File{}).Where("path = ?", session.TargetPath).Count(&rows)
+		if rows == 0 {
+			h.storage.Remove(context.Background(), session.TargetPath)
+		}
+		release()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create file record"})
 		return
 	}

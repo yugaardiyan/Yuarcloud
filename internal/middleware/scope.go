@@ -62,6 +62,11 @@ func ScopeMiddleware(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Role comes from the row just read, not from the token. A demotion
+		// bumped token_version and would be caught above, but the scope
+		// decision should never depend on a claim the database has already
+		// contradicted.
+		c.Set(RoleContextKey, user.Role)
 		c.Set(ScopeContextKey, scope.New(user.HomePath))
 		c.Next()
 	}

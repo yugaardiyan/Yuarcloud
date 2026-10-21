@@ -176,7 +176,7 @@ func GetClaims(c *gin.Context) (*auth.Claims, bool) {
 // CORS middleware is handled by gin-contrib/cors
 // RateLimitMiddleware implements a simple in-memory token bucket limiter.
 // Replace with Redis-backed limiting when running multiple instances.
-func RateLimitMiddleware(requestsPerMinute int) gin.HandlerFunc {
+func RateLimitMiddleware(requestsPerMinute int, trustProxy bool) gin.HandlerFunc {
 	type client struct {
 		count     int
 		resetTime int64
@@ -204,17 +204,18 @@ func RateLimitMiddleware(requestsPerMinute int) gin.HandlerFunc {
 			return
 		}
 
-		// RemoteIP, not ClientIP. ClientIP honours X-Forwarded-For, and gin
-		// trusts every proxy unless SetTrustedProxies says otherwise — so the key
-		// was whatever the caller put in a header, and rotating it handed every
-		// request a fresh bucket. The limit on POST /api/auth/login was therefore
-		// decorative for password guessing, and the same spoofable value is what
-		// gets written to audit_logs.ip_address.
-		//
-		// Behind a real proxy this under-counts, since every request then shares
-		// the proxy's address; main.go calls SetTrustedProxies when the operator
-		// names their proxy, which restores per-client attribution.
+		// RemoteIP by default, ClientIP only when the operator has named their
+		// proxies. ClientIP honours X-Forwarded-For, and gin trusts every source
+		// unless SetTrustedProxies says otherwise — keying on it blindly handed
+		// every request a fresh bucket by rotating a header. But the reverse was
+		// also wrong: behind a proxy every request shares one RemoteIP, so one
+		// client's traffic rate-limited everyone. With trusted proxies
+		// configured, SetTrustedProxies has already restricted which sources
+		// ClientIP will believe, so it is the accurate key there.
 		ip := c.RemoteIP()
+		if trustProxy {
+			ip = c.ClientIP()
+		}
 		now := time.Now().Unix()
 
 		mu.Lock()
