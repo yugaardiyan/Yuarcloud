@@ -99,10 +99,20 @@ func (s *ShareService) CreateShare(ctx context.Context, userID, fileID uuid.UUID
 	// link before creating a new one.
 	var existing model.ShareLink
 	err := s.db.WithContext(ctx).Where("file_id = ?", fileID).First(&existing).Error
-	if err == nil {
-		return nil, ErrShareAlreadyExists
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	switch {
+	case err == nil:
+		// A lapsed link is invisible in every listing, so refusing here would
+		// leave the file permanently unshareable: the owner has nothing to
+		// delete. Replace it instead.
+		if existing.ExpiresAt == nil || time.Now().Before(*existing.ExpiresAt) {
+			return nil, ErrShareAlreadyExists
+		}
+		if delErr := s.db.WithContext(ctx).Delete(&existing).Error; delErr != nil {
+			return nil, delErr
+		}
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		// Nothing to replace.
+	default:
 		return nil, err
 	}
 
@@ -286,11 +296,18 @@ func Status(s *model.ShareLink) string {
 	}
 }
 
+// liveShares is the one definition of a link worth listing. A link past its
+// date cannot be opened — ValidateShare refuses it — so keeping it in the list
+// only offers the owner a URL to copy that is guaranteed not to work.
+func liveShares(db *gorm.DB) *gorm.DB {
+	return db.Where("expires_at IS NULL OR expires_at > ?", time.Now())
+}
+
 func (s *ShareService) GetUserShares(ctx context.Context, userID uuid.UUID, page, pageSize int, fileID *uuid.UUID) ([]*model.ShareLink, int64, error) {
 	var shares []*model.ShareLink
 	var total int64
 
-	scoped := s.db.WithContext(ctx).Model(&model.ShareLink{}).Where("user_id = ?", userID)
+	scoped := liveShares(s.db.WithContext(ctx).Model(&model.ShareLink{})).Where("user_id = ?", userID)
 	if fileID != nil {
 		scoped = scoped.Where("file_id = ?", *fileID)
 	}
@@ -300,7 +317,7 @@ func (s *ShareService) GetUserShares(ctx context.Context, userID uuid.UUID, page
 		return nil, 0, err
 	}
 
-	query := s.db.WithContext(ctx).Where("user_id = ?", userID)
+	query := liveShares(s.db.WithContext(ctx).Model(&model.ShareLink{})).Where("user_id = ?", userID)
 	if fileID != nil {
 		query = query.Where("file_id = ?", *fileID)
 	}
@@ -326,12 +343,12 @@ func (s *ShareService) GetAllShares(ctx context.Context, page, pageSize int) ([]
 	var total int64
 
 	// Count on its own statement — Count() cannot share one with Preload.
-	if err := s.db.WithContext(ctx).Model(&model.ShareLink{}).Count(&total).Error; err != nil {
+	if err := liveShares(s.db.WithContext(ctx).Model(&model.ShareLink{})).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
-	if err := s.db.WithContext(ctx).
+	if err := liveShares(s.db.WithContext(ctx).Model(&model.ShareLink{})).
 		Preload("File").
 		// Select the three owner columns inside a closure. Passing bare strings
 		// as trailing args to Preload does not restrict the columns — they are

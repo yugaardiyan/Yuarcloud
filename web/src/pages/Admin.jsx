@@ -869,14 +869,13 @@ function SharesTab({ shares, sharesError, onReload }) {
     }
   }
 
-  // A share list is a list of links that work — saying "Active" on every row
-  // is a column of the same word. What is worth the space is the exception: a
-  // link past its date, out of views, or switched off. Those are reachable
-  // here (expiry and view caps are set in the share dialog), so dropping the
-  // status outright would leave a dead link looking like a live one.
+  // Not a status column — every row in this list is a link that works, and
+  // saying so on each one was a column of the same word. What is worth the
+  // space is the exception the owner still has to act on: a link switched off,
+  // or one that has used up its views. Expired links are not here at all; the
+  // server stops returning them the moment they lapse.
   const warning = (s) => {
     if (!s.is_active) return 'Disabled'
-    if (s.expires_at && new Date(s.expires_at) < new Date()) return 'Expired'
     if (s.max_views > 0 && s.views >= s.max_views) return 'Limit reached'
     return null
   }
