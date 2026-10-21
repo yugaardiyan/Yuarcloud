@@ -246,9 +246,14 @@ function Admin() {
                 className={`tab ${activeTab === tab.id ? 'active' : ''}`}
                 onClick={() => navigate(tab.id === 'users' ? '/admin' : `/admin/${tab.id}`)}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
+                /* A phone drops the words and keeps the glyphs, so the name has
+                   to live somewhere other than the visible text. No title: on a
+                   desktop the label is already on screen, and a tooltip that
+                   repeats the word you are pointing at is noise. */
+                aria-label={tab.label}
               >
-                <tab.icon size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                {tab.label}
+                <tab.icon size={16} className="tab-icon" />
+                <span className="tab-label">{tab.label}</span>
               </button>
             ))}
           </div>

@@ -1281,6 +1281,8 @@ input.input[type='number'] {
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 500;
@@ -1301,19 +1303,46 @@ input.input[type='number'] {
   border-bottom-color: var(--accent-primary);
 }
 
-/* Five destinations do not fit on a phone: measured on a 390px screen, the bar
-   wanted 378px inside a 334px card, so "Audit Log" was cut in half — and the
-   bar does not scroll, so the tab was simply unreachable. Wrapping costs a
-   second line and keeps every tab there. */
+/* Spacing that used to be an inline style on the icon: it has to be takeable
+   back at the phone breakpoint, and an inline style could only be undone with
+   !important. */
+.tab-icon {
+  margin-right: 6px;
+}
+
+/*
+ * Five destinations do not fit on a phone as words: measured on a 390px screen,
+ * the bar wanted 378px inside a 334px card, so "Audit Log" was cut in half —
+ * and the bar does not scroll, so the tab was simply unreachable.
+ *
+ * The labels go instead of the row: five glyphs fit on one line with room to
+ * spare, so each tab becomes an equal fifth of the bar. That is also a bigger
+ * tap target than the words were — ~67px wide and 44px tall, against 34px tall
+ * before — and the bar stops eating two or three lines at the top of the card.
+ *
+ * The name is not lost: every button carries aria-label and title, and the
+ * active tab keeps the accent colour and the underline.
+ */
 @media (max-width: 560px) {
   .tabs {
-    flex-wrap: wrap;
-    row-gap: 2px;
+    flex-wrap: nowrap;
   }
 
   .tab {
-    padding: 8px 10px;
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 13px 0;
     font-size: 12px;
+  }
+
+  .tab-icon {
+    margin-right: 0;
+    width: 18px;
+    height: 18px;
+  }
+
+  .tab-label {
+    display: none;
   }
 }
 
