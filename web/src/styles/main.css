@@ -3201,6 +3201,15 @@ input.input[type='number'] {
   color: #fff;
 }
 
+/* Settings is not a location, so its create segment has nothing to act on.
+   Same inert treatment as an empty trash: the slot stays so the pill does not
+   reflow, but the colour stops promising a press. */
+.capsule-btn-primary:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
 /* The Empty trash button uses the same filled treatment as the
    create button, but in the danger colour so the destructive
    intent is clear at a glance. */
@@ -3220,6 +3229,14 @@ input.input[type='number'] {
   background: var(--bg-tertiary);
   color: var(--text-tertiary);
   cursor: not-allowed;
+}
+
+/* The account segment's own tint lands on the avatar's circle, which is already
+   the same light blue — the marker would be invisible. Fill the circle instead,
+   so "you are here" reads at a glance on the Settings page. */
+.capsule-btn[data-active] .capsule-avatar {
+  background: var(--accent-primary);
+  color: #fff;
 }
 
 .capsule-avatar {

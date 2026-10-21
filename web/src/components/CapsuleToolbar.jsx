@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Search, X,
   Settings, LogOut, Upload, HardDrive,
@@ -21,6 +21,7 @@ import ConfirmModal from './ConfirmModal'
  */
 export default function CapsuleToolbar() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, isAdmin, logout } = useAuth()
   const {
     view, viewMode, setViewMode,
@@ -119,7 +120,13 @@ export default function CapsuleToolbar() {
     setMenu(null)
   }
 
-  const inDrive = view.scope === 'drive'
+  // Settings is a surface of its own, not a folder. The drive context is left
+  // untouched while it is open (there is no folder to list), so `view.scope`
+  // stays 'drive' and the My Cloud tab kept claiming to be the current place.
+  // The marker follows the route instead: while Settings is up it belongs to
+  // the account button, which is what opened it.
+  const onSettings = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  const driveTabActive = view.scope === 'drive' && !onSettings
 
   const handlePickFiles = (e) => {
     const picked = Array.from(e.target.files || [])
@@ -156,11 +163,11 @@ export default function CapsuleToolbar() {
 
         <button
           className="capsule-btn"
-          data-active={inDrive || undefined}
+          data-active={driveTabActive || undefined}
           onClick={() => go(() => gotoDrive(showDrive))}
           title="My Cloud"
           aria-label="My Cloud"
-          aria-pressed={inDrive}
+          aria-pressed={driveTabActive}
         >
           <MyCloudGlyph />
         </button>
@@ -204,6 +211,8 @@ export default function CapsuleToolbar() {
             aria-label="Account"
             aria-expanded={menu === 'account'}
             aria-haspopup="true"
+            data-active={onSettings || undefined}
+            aria-current={onSettings ? 'page' : undefined}
           >
             <span className="capsule-avatar">
               {(user?.display_name || user?.username || 'U')[0].toUpperCase()}
@@ -259,7 +268,21 @@ export default function CapsuleToolbar() {
 
             Emptying is permanent and there is no undo, so it asks first —
             same guard as every other destructive action in the app. */}
-        {view.scope === 'trash' ? (
+        {onSettings ? (
+          // Settings has no folder of its own, so there is nothing here to
+          // create inside. Before this, the segment still worked and filed the
+          // folder into whichever folder was last open — the same silent
+          // wrong-destination the trash segment already refuses. It keeps its
+          // slot, inert, rather than vanishing and shifting the pill.
+          <button
+            className="capsule-btn capsule-btn-primary"
+            disabled
+            title="Files are created in My Cloud"
+            aria-label="Create new — available in My Cloud"
+          >
+            <NewFolderGlyph />
+          </button>
+        ) : view.scope === 'trash' ? (
           <button
             className="capsule-btn capsule-btn-danger"
             onClick={() => go(() => setEmptyTrashOpen(true))}
