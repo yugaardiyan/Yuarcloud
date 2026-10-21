@@ -2744,24 +2744,15 @@ input.input[type='number'] {
 }
 
 /* --- Users list (compact table, mobile-friendly) -------------------------- */
+/* Only the create button lives here now: the panel's tab already says "Users",
+   and the count repeated what the paging line says when it exists. */
 .users-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   margin-bottom: 10px;
   flex-wrap: wrap;
-}
-
-.users-header h2 {
-  margin: 0;
-  font-size: 16px;
-  color: var(--text-primary);
-}
-
-.users-count {
-  font-size: 12px;
-  color: var(--text-tertiary);
 }
 
 .users-wrap {
@@ -2929,25 +2920,27 @@ input.input[type='number'] {
   font-size: 12px;
 }
 
-/* Wide enough for the worst realistic pair, "999.9 MB /999.9 GB" at this
-   size. Narrower than that and the figure clipped mid-number — "481.6 MB
-   /51…" — which is worse than a slightly wider column: an admin cannot tell
-   whether the quota is 512 MB or 51 GB. The name column has the slack to
-   give, and it degrades gracefully. */
+/* The home folder, on a line of its own instead of a third line under the
+   address. Fixed like the other narrow columns: a long path ellipsises inside
+   it rather than pushing the storage figure off the edge. */
 .users-table th:nth-child(2),
 .users-table td:nth-child(2) {
-  width: 124px;
+  width: 190px;
 }
 
-/*
- * Sized to the two buttons, not guessed. `.btn-icon` carries 8px padding and
- * `.btn-sm` 6px 12px, so a default icon button is ~37px wide and two of them
- * with a gap came to ~78px inside a 68px column — the edit and delete buttons
- * sat on top of the storage figure. The padding is overridden under
- * .user-actions below, so this width has to match what that actually renders.
- */
+/* Wide enough for the worst realistic pair, "999.9 MB / 999.9 GB" at this
+   size, plus the usage bar under it. Narrower than that and the figure clipped
+   mid-number — "481.6 MB /51…" — which is worse than a slightly wider column:
+   an admin cannot tell whether the quota is 512 MB or 51 GB. */
 .users-table th:nth-child(3),
 .users-table td:nth-child(3) {
+  width: 150px;
+}
+
+/* Two 30px buttons and their 2px gap, plus the 10px cell padding on each
+   side. Was 62px when the buttons were 23px wide. */
+.users-table th:nth-child(4),
+.users-table td:nth-child(4) {
   width: 82px;
 }
 
@@ -3023,17 +3016,6 @@ input.input[type='number'] {
   text-overflow: ellipsis;
 }
 
-.user-home {
-  /* 10px was the smallest text in the panel and the only line carrying a
-     path; the card sets the same detail at 11.5px. */
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 /* The user card on a phone: the avatar stack is the flexible side, the buttons
    keep their width. */
 @media (max-width: 560px) {
@@ -3082,14 +3064,60 @@ input.input[type='number'] {
   color: var(--text-secondary);
 }
 
-.user-storage {
-  font-size: 11px;
+/* Home folder, on the desktop row. */
+.user-folder {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11.5px;
   color: var(--text-tertiary);
-  white-space: nowrap;
-  /* A figure like "1.2 GB /100 GB" is wider than the column, and nowrap
-     without a clip let it run under the action buttons. */
+}
+
+.user-folder > span {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Quota: the figure and, under it, how close to the edge it is — the same
+   reading the storage card gives the whole instance. */
+.user-usage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.user-usage-figure {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.user-usage-bar {
+  display: block;
+  width: 92px;
+  height: 3px;
+  border-radius: 99px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.user-usage-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent-primary);
+}
+
+.user-usage-bar.is-warning > span {
+  background: #f59f00;
+}
+
+.user-usage-bar.is-critical > span {
+  background: var(--accent-danger);
 }
 
 .user-actions {
@@ -3098,11 +3126,10 @@ input.input[type='number'] {
   justify-content: flex-end;
 }
 
-/* Compact square buttons, and they stay square: `.btn-sm`'s 6px 12px would
-   otherwise widen each one to ~37px and push the pair past its column. */
 /* 30px, the same target the share table uses. 23px was the table's old size;
    inside the card it is too small for a thumb, and two sizes for the same pair
-   of buttons in the same panel reads as an accident. */
+   of buttons in the same panel reads as an accident. Sized explicitly so
+   .btn-sm's 6px 12px cannot widen them. */
 .user-actions .btn {
   width: 30px;
   height: 30px;
@@ -3119,26 +3146,27 @@ input.input[type='number'] {
     padding: 6px 8px;
   }
 
+  /* Four columns in 533px: the folder and quota keep their widths, the name
+     column takes what is left and the address ellipsises. */
   .users-table th:nth-child(2),
   .users-table td:nth-child(2) {
-    width: 92px;
+    width: 116px;
+  }
+
+  .users-table th:nth-child(3),
+  .users-table td:nth-child(3) {
+    width: 112px;
   }
 
   /* 80px: two 30px buttons and their 2px gap, plus the 8px cell padding on
-     each side. At the old 56px the wider buttons spilled over the storage
-     figure. */
-  .users-table th:nth-child(3),
-  .users-table td:nth-child(3) {
+     each side. */
+  .users-table th:nth-child(4),
+  .users-table td:nth-child(4) {
     width: 80px;
   }
 
-  /* The storage column cannot be both narrow and whole on a phone. Wrapping
-     the figure onto a second line costs one row-height; clipping it would
-     cost the number itself. */
-  .user-storage {
-    white-space: normal;
-    overflow: visible;
-    line-height: 1.35;
+  .user-usage-bar {
+    width: 80px;
   }
 
   .user-cell {
@@ -3155,19 +3183,6 @@ input.input[type='number'] {
     margin-left: 4px;
   }
 
-  /* The icon stays on the line; the path beside it ellipsises. The earlier
-     column rule here put the folder glyph above its own text, which read as
-     a stray mark rather than a label. */
-  .user-home {
-    margin-top: 1px;
-  }
-
-  .user-home span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 }
 
 /* Lives under the card, not inside it. The fixed height reserves its line even

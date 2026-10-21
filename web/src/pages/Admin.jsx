@@ -300,6 +300,16 @@ function Admin() {
   )
 }
 
+// The storage card turns amber at 70% and red at 90%. A per-user figure means
+// the same thing, so it turns at the same points.
+const usagePercent = (user) =>
+  user.quota_bytes > 0 ? Math.min(100, ((user.used_bytes || 0) / user.quota_bytes) * 100) : 0
+
+const usageTone = (user) => {
+  const pct = usagePercent(user)
+  return pct >= 90 ? 'critical' : pct >= 70 ? 'warning' : 'normal'
+}
+
 function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDelete, showCreateUser, setShowCreateUser, showEditUser, setShowEditUser, loadUsers, currentUser }) {
   // Three columns are too many once the card is 320px wide: the name column
   // fell to 98px and "Administrator" clipped to "Adminis…", with the storage
@@ -345,10 +355,6 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
       ) : (
         <>
           <div className="users-header">
-            <div>
-              <h2>Users</h2>
-              <span className="users-count">{users.length} of {usersTotal}</span>
-            </div>
             <button
               className="btn btn-primary btn-pill"
               onClick={() => setShowCreateUser(true)}
@@ -409,6 +415,7 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
               <thead>
                 <tr>
                   <th>User</th>
+                  <th>Folder</th>
                   <th style={{ textAlign: 'right' }}>Storage</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -423,6 +430,10 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
                             user.username?.[0]?.toUpperCase() ||
                             'U'}
                         </div>
+                        {/* Name and address only. The home folder used to be a
+                            third line in this cell, and it was what made the
+                            row 66px tall; it has a column of its own now, on
+                            width that was sitting empty behind the address. */}
                         <div>
                           <div className="user-name">
                             {user.display_name || user.username}
@@ -433,20 +444,30 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
                               {user.role}
                             </span>
                           </div>
-                          <div className="user-email">{user.email}</div>
-                          <div className="user-home">
-                            <Folder size={10} />
-                            <span>{user.home_path || 'All files'}</span>
-                          </div>
+                          {/* The address ellipsises before the folder column
+                              does, so it carries its own tooltip. */}
+                          <div className="user-email" title={user.email}>{user.email}</div>
                         </div>
                       </div>
                     </td>
+                    <td>
+                      <span className="user-folder" title={user.home_path || 'All files'}>
+                        <Folder size={11} />
+                        <span>{user.home_path || 'All files'}</span>
+                      </span>
+                    </td>
                     <td style={{ textAlign: 'right' }}>
-                      <div className="user-storage">
-                        {/* An explicit space: a newline after the slash is
-                            dropped by JSX, which rendered "0 B /10 GB". */}
-                        {formatBytes(user.used_bytes || 0)}{' / '}
-                        {formatBytes(user.quota_bytes || 0)}
+                      <div className="user-usage">
+                        <span className="user-usage-figure">
+                          {formatBytes(user.used_bytes || 0)}{' / '}
+                          {formatBytes(user.quota_bytes || 0)}
+                        </span>
+                        {/* The storage card goes amber at 70% and red at 90%; a
+                            per-user figure means the same thing at the same
+                            thresholds. */}
+                        <span className={`user-usage-bar is-${usageTone(user)}`}>
+                          <span style={{ width: `${usagePercent(user)}%` }} />
+                        </span>
                       </div>
                     </td>
                     <td style={{ textAlign: 'right' }}>
