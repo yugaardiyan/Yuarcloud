@@ -5,7 +5,7 @@ import {
   Upload, HardDrive, CheckSquare,
 } from 'lucide-react'
 import { NewFolderGlyph } from './icons'
-import { useFiles } from '../context/FileContext'
+import { useFiles, driveHref } from '../context/FileContext'
 import { useNavigate } from 'react-router-dom'
 import ShareModal from './ShareModal'
 import InfoModal from './InfoModal'
@@ -179,7 +179,7 @@ export default function ContextMenuProvider({ children }) {
 
     switch (action) {
       case 'open':
-        if (first?.is_dir) navigate(`/cloud/${first.path}`)
+        if (first?.is_dir) navigate(driveHref(first.path))
         else window.dispatchEvent(new CustomEvent('yuar:preview', { detail: { id: first.id } }))
         break
 

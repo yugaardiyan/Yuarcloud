@@ -169,7 +169,7 @@ function Drive() {
 
   // Breadcrumb navigation: clicking a path segment jumps to it.
   const goToBreadcrumb = useCallback((path) => {
-    navigate(path === '' ? '/cloud' : `/cloud/${path}`)
+    navigate(driveHref(path))
   }, [navigate])
 
   // ---------------------------------------------------------------- delete confirm
