@@ -2948,7 +2948,7 @@ input.input[type='number'] {
  */
 .users-table th:nth-child(3),
 .users-table td:nth-child(3) {
-  width: 62px;
+  width: 82px;
 }
 
 .users-table th {
@@ -3024,7 +3024,9 @@ input.input[type='number'] {
 }
 
 .user-home {
-  font-size: 10px;
+  /* 10px was the smallest text in the panel and the only line carrying a
+     path; the card sets the same detail at 11.5px. */
+  font-size: 11px;
   color: var(--text-tertiary);
   margin-top: 2px;
   display: flex;
@@ -3058,25 +3060,6 @@ input.input[type='number'] {
     overflow: visible;
     overflow-wrap: anywhere;
   }
-
-  /* 23px was the table's size; a thumb wants the 30px the share list uses. */
-  .admin-item .user-actions .btn {
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-}
-
-/* Leading the facts line, next to the storage figure. */
-.admin-item .user-role-badge {
-  vertical-align: 1px;
-}
-
-.user-role-badge.admin {
-  color: #7048e8;
 }
 
 /* A home path can be one long unbroken word. */
@@ -3117,8 +3100,16 @@ input.input[type='number'] {
 
 /* Compact square buttons, and they stay square: `.btn-sm`'s 6px 12px would
    otherwise widen each one to ~37px and push the pair past its column. */
+/* 30px, the same target the share table uses. 23px was the table's old size;
+   inside the card it is too small for a thumb, and two sizes for the same pair
+   of buttons in the same panel reads as an accident. */
 .user-actions .btn {
-  padding: 5px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
 }
 
@@ -3133,9 +3124,12 @@ input.input[type='number'] {
     width: 92px;
   }
 
+  /* 80px: two 30px buttons and their 2px gap, plus the 8px cell padding on
+     each side. At the old 56px the wider buttons spilled over the storage
+     figure. */
   .users-table th:nth-child(3),
   .users-table td:nth-child(3) {
-    width: 56px;
+    width: 80px;
   }
 
   /* The storage column cannot be both narrow and whole on a phone. Wrapping

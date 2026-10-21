@@ -376,14 +376,23 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
                           leads the facts line instead — same place the share
                           list puts its warning chip. */}
                       <div>
-                        <div className="user-name">{user.display_name || user.username}</div>
+                        <div className="user-name">
+                          {user.display_name || user.username}
+                          {/* Coloured text, not a chip: the same marker the
+                              table uses, so the two modes agree. */}
+                          <span
+                            className="user-role-text"
+                            style={{ color: user.role === 'admin' ? '#7048e8' : 'var(--text-secondary)' }}
+                          >
+                            {user.role}
+                          </span>
+                        </div>
                         <div className="user-email">{user.email}</div>
                       </div>
                     </div>
                     {userActions(user)}
                   </div>
                   <div className="admin-item-meta">
-                    <span className={`admin-badge user-role-badge ${user.role}`}>{user.role}</span>
                     {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes || 0)}
                     {' · '}
                     {/* The path is the one detail that can be longer than the
