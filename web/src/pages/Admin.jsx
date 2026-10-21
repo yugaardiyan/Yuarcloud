@@ -869,12 +869,16 @@ function SharesTab({ shares, sharesError, onReload }) {
     }
   }
 
-  // A link is only usable if it is active, unexpired, and under its view cap.
-  const status = (s) => {
-    if (!s.is_active) return { label: 'Disabled', color: 'var(--text-tertiary)' }
-    if (s.expires_at && new Date(s.expires_at) < new Date()) return { label: 'Expired', color: 'var(--text-tertiary)' }
-    if (s.max_views > 0 && s.views >= s.max_views) return { label: 'View limit', color: 'var(--text-tertiary)' }
-    return { label: 'Active', color: 'var(--accent-success)' }
+  // A share list is a list of links that work — saying "Active" on every row
+  // is a column of the same word. What is worth the space is the exception: a
+  // link past its date, out of views, or switched off. Those are reachable
+  // here (expiry and view caps are set in the share dialog), so dropping the
+  // status outright would leave a dead link looking like a live one.
+  const warning = (s) => {
+    if (!s.is_active) return 'Disabled'
+    if (s.expires_at && new Date(s.expires_at) < new Date()) return 'Expired'
+    if (s.max_views > 0 && s.views >= s.max_views) return 'Limit reached'
+    return null
   }
 
   if (sharesError) {
@@ -927,7 +931,7 @@ function SharesTab({ shares, sharesError, onReload }) {
       <div>
         <div className="admin-list">
           {shares.map((share) => {
-            const st = status(share)
+            const warn = warning(share)
             // One line of facts, in the order the table read them left to
             // right. Joined rather than separate nodes so it wraps as a
             // sentence at a space instead of stacking one fact per line.
@@ -945,7 +949,7 @@ function SharesTab({ shares, sharesError, onReload }) {
                   <span className="admin-item-actions">{actions(share)}</span>
                 </div>
                 <div className="admin-item-meta">
-                  <span className="admin-badge" style={{ color: st.color }}>{st.label}</span>
+                  {warn && <span className="admin-badge admin-badge-warn">{warn}</span>}
                   {share.has_password && <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />}
                   {facts}
                 </div>
@@ -977,13 +981,14 @@ function SharesTab({ shares, sharesError, onReload }) {
           text columns, and are trimmed to leave room for it. */}
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed' }}>
         <colgroup>
+          {/* No Status column: the shares that need attention carry a marker
+              beside their own name instead. */}
           {[
-            ['19%', 'File'],
-            ['17%', 'Owner'],
-            ['16%', 'Access'],
-            ['9%', 'Views'],
-            ['14%', 'Expires'],
-            ['12%', 'Status'],
+            ['22%', 'File'],
+            ['20%', 'Owner'],
+            ['18%', 'Access'],
+            ['10%', 'Views'],
+            ['16%', 'Expires'],
             ['74px', 'Actions'],
           ].map(([w, label]) => (
             <col key={label} style={{ width: w }} />
@@ -991,20 +996,25 @@ function SharesTab({ shares, sharesError, onReload }) {
         </colgroup>
         <thead style={{ background: 'var(--bg-secondary)' }}>
           <tr>
-            {['File', 'Owner', 'Access', 'Views', 'Expires', 'Status', ''].map((h, i) => (
+            {['File', 'Owner', 'Access', 'Views', 'Expires', ''].map((h, i) => (
               <th key={h || i} style={{ padding: 12, textAlign: 'left', fontSize: 11, textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {shares.map(share => {
-            const st = status(share)
+            const warn = warning(share)
             return (
               <tr key={share.id} style={{ borderTop: '1px solid var(--border-color)' }}>
-                <td style={{ padding: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={share.url}>
+                <td style={{ padding: 12, whiteSpace: 'nowrap' }} title={share.url}>
                   {/* No link column — the full URL is in this tooltip and is
                       what Copy puts on the clipboard. */}
-                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'ui-monospace, Menlo, monospace' }}>{share.file_name}</span>
+                  {/* flexWrap so the marker drops to a second line rather than
+                      squeezing the name to "A…" on a narrow window. */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 6px', minWidth: 0 }}>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'ui-monospace, Menlo, monospace' }}>{share.file_name}</span>
+                    {warn && <span className="admin-badge admin-badge-warn">{warn}</span>}
+                  </div>
                 </td>
                 <td style={{ padding: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={share.owner}>{share.owner || '—'}</td>
                 <td style={{ padding: 12, whiteSpace: 'nowrap' }}>
@@ -1018,9 +1028,6 @@ function SharesTab({ shares, sharesError, onReload }) {
                 </td>
                 <td style={{ padding: 12, whiteSpace: 'nowrap', color: 'var(--text-tertiary)' }}>
                   {share.expires_at ? new Date(share.expires_at).toLocaleDateString() : 'Never'}
-                </td>
-                <td style={{ padding: 12, whiteSpace: 'nowrap' }}>
-                  <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 11, color: st.color, background: 'var(--bg-tertiary)' }}>{st.label}</span>
                 </td>
                 <td style={{ padding: '12px 6px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                   {actions(share)}

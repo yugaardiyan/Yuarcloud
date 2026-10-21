@@ -2893,7 +2893,8 @@ input.input[type='number'] {
   color: var(--text-tertiary);
 }
 
-/* The status pill the table draws in its own column; here it leads the facts. */
+/* Small pill for the one thing a stacked row still needs to flag — a link that
+   no longer works. It leads the facts line. */
 .admin-badge {
   display: inline-block;
   padding: 1px 6px;
@@ -2905,6 +2906,14 @@ input.input[type='number'] {
   color: var(--text-tertiary);
   background: var(--bg-tertiary);
   white-space: nowrap;
+}
+
+/* A link that needs attention (expired, out of views, disabled) says so beside
+   its own name. The working ones say nothing — which is the point of dropping
+   the Status column. Declared after .admin-badge so it wins the colour. */
+.admin-badge-warn {
+  color: var(--accent-danger);
+  flex: 0 0 auto;
 }
 
 .users-table {
