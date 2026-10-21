@@ -3032,6 +3032,58 @@ input.input[type='number'] {
   gap: 4px;
 }
 
+/* The user card on a phone: the avatar stack is the flexible side, the buttons
+   keep their width. */
+@media (max-width: 560px) {
+  .admin-item-head .user-cell {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .admin-item-head .user-actions {
+    flex: 0 0 auto;
+  }
+
+  /* The table's nowrap-and-clip is right for a fixed column and wrong for a
+     card: at 320px it cut the name to "Siti Nurhaliza Ramad…" and the address
+     to its domain's beginning. A card can spend a second line instead. */
+  .admin-item .user-name {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.4;
+  }
+
+  .admin-item .user-email {
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
+
+  /* 23px was the table's size; a thumb wants the 30px the share list uses. */
+  .admin-item .user-actions .btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Leading the facts line, next to the storage figure. */
+.admin-item .user-role-badge {
+  vertical-align: 1px;
+}
+
+.user-role-badge.admin {
+  color: #7048e8;
+}
+
+/* A home path can be one long unbroken word. */
+.user-home-path {
+  overflow-wrap: anywhere;
+}
+
 .user-role-text {
   font-size: 10px;
   font-weight: 600;
