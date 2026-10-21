@@ -65,7 +65,12 @@ api.interceptors.response.use(
 
     // Public share endpoints answer 401 to mean "this link needs a password".
     // That is not an expired session, so never redirect away from a share page.
-    const isPublicShare = original.url?.startsWith('/shares/')
+    // DELETE /shares/:id is an owner action, not a public one: matching on the
+    // path alone swallowed its expired-token 401, which then surfaced as a
+    // failed delete instead of a silent refresh.
+    const method = (original.method || 'get').toLowerCase()
+    const isPublicShare =
+      original.url?.startsWith('/shares/') && (method === 'get' || method === 'post')
 
     if (error.response?.status === 401 && !original._retried && !isPublicShare) {
       original._retried = true

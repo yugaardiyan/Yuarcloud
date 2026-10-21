@@ -81,7 +81,11 @@ export function viewFromLocation(pathname, search) {
 
 /** Build the route for a drive folder. */
 export function driveHref(path) {
-  return path ? `/cloud/${path}` : '/cloud'
+  if (!path) return '/cloud'
+  // Encoded per segment, mirroring viewFromLocation. A literal '#' in a folder
+  // name turned the rest of the path into a fragment and opened the wrong
+  // folder; a '%' could make the route undecodable.
+  return `/cloud/${path.split('/').map(encodeURIComponent).join('/')}`
 }
 
 export function FileProvider({ children }) {
@@ -455,6 +459,10 @@ export function FileProvider({ children }) {
 
     // dirId: absolute path (relative to the destination) -> created folder id
     const dirId = new Map([['', baseParentId]])
+    // A directory whose creation failed, and whose contents therefore have no
+    // honest destination. They are skipped instead of falling back to the
+    // parent, which is what used to flatten the tree.
+    const failedDirs = new Set()
 
     for (const dirPath of dirPaths) {
       const parentPath = dirPath.includes('/') ? dirPath.slice(0, dirPath.lastIndexOf('/')) : ''
@@ -474,14 +482,29 @@ export function FileProvider({ children }) {
           toast.error(apiError(err, `Could not create folder "${dirPath}"`))
           // Anything inside this directory would land in the wrong place.
           // Stop the tree here rather than flattening it by accident.
-          dirId.set(dirPath, null)
+          failedDirs.add(dirPath)
           continue
         }
         dirId.set(dirPath, existing.id)
       }
     }
 
-    const jobs = list.map((file, i) => ({
+    // Skip every file whose directory (or one of its ancestors) could not be
+    // created. `?? baseParentId` in parentIdFor would otherwise read the
+    // failure as "put it at the top" and flatten the pick.
+    const underFailedDir = (dir) => {
+      let cur = dir
+      while (cur) {
+        if (failedDirs.has(cur)) return true
+        const cut = cur.lastIndexOf('/')
+        cur = cut < 0 ? '' : cur.slice(0, cut)
+      }
+      return false
+    }
+    const uploadable = list.filter((file) => !underFailedDir(dirOf(file)))
+    if (!uploadable.length) return { results: [], failures: [] }
+
+    const jobs = uploadable.map((file, i) => ({
       // Not crypto.randomUUID(): that is [SecureContext], so it is undefined on
       // plain HTTP over a LAN address — which is exactly how a self-hosted
       // server is usually reached. The throw happened before any tray row
@@ -512,14 +535,14 @@ export function FileProvider({ children }) {
     // picks while the first is still running — matched on name, so one success
     // marked both rows done: a failed upload was shown as Complete, and the
     // cleanup timer then removed the error row along with it.
-    const jobIdAt = (index) => `${list[index]?.name}-${list[index]?.size}-${list[index]?.lastModified}-${index}`
+    const jobIdAt = (index) => `${uploadable[index]?.name}-${uploadable[index]?.size}-${uploadable[index]?.lastModified}-${index}`
 
     // Sample buffers for the rate, kept in a ref because they are written on
     // every progress event and never rendered directly.
     const speed = speedTrackerRef.current
     jobs.forEach((job) => speed.reset(job.id))
 
-    const { results, failures } = await uploadFilesSequentially(list, {
+    const { results, failures } = await uploadFilesSequentially(uploadable, {
       parentIdFor: (file) => dirId.get(dirOf(file)) ?? baseParentId,
       onUpdate: ({ index, progress, loaded, status, message }) => {
         const id = jobIdAt(index)
@@ -694,19 +717,20 @@ export function FileProvider({ children }) {
   // ---------------------------------------------------------------- download
 
   const downloadItem = useCallback(async (item) => {
-    if (item.is_dir) {
-      triggerDownload(fileApi.downloadZipUrl(item.id), `${item.name}.zip`)
-      return
-    }
+    // Both branches fetch with the auth header. A folder used to be handed
+    // straight to an <a href>, which the browser requests without one, so the
+    // server answered 401 and no zip ever arrived.
+    const href = item.is_dir ? fileApi.downloadZipUrl(item.id) : fileApi.downloadUrl(item.id)
+    const filename = item.is_dir ? `${item.name}.zip` : item.name
     try {
-      const response = await fetch(fileApi.downloadUrl(item.id), {
+      const response = await fetch(href, {
         headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
-      triggerDownload(URL.createObjectURL(blob), item.name, true)
+      triggerDownload(URL.createObjectURL(blob), filename, true)
     } catch {
-      toast.error(`Failed to download ${item.name}`)
+      toast.error(`Failed to download ${filename}`)
     }
   }, [])
 

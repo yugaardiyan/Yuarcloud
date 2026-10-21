@@ -45,9 +45,9 @@ func main() {
 	// tokens anyone can forge, because the same empty string signs and verifies.
 	// The shipped config leaves this empty on purpose, so this check is what
 	// stops a fresh `docker run` from coming up publicly forgeable.
-	if len(cfg.Auth.JWTSecret) < 32 {
+	if len(cfg.Auth.JWTSecret) < 32 || placeholderSecret(cfg.Auth.JWTSecret) {
 		log.Fatalf(
-			"auth.jwt_secret is missing or shorter than 32 characters.\n" +
+			"auth.jwt_secret is missing, shorter than 32 characters, or still a placeholder.\n" +
 				"Set it in the config file, or export YUAR_AUTH_JWT_SECRET with a random value, e.g.\n" +
 				"  openssl rand -base64 48")
 	}
@@ -485,6 +485,25 @@ func main() {
 // value, while the sweep for already-existing accounts compares against this
 // constant and would wave a year-old default-password admin straight through.
 const defaultShippedAdminPass = "yuarcloud"
+
+// placeholderSecret reports whether the signing key is one of the instruction
+// strings the repository prints. A length check alone accepted them: the
+// compose file's "PASTE-YOUR-OWN-64-CHARACTER-RANDOM-STRING-HERE" is long
+// enough to pass, so every deployment that followed the example signed tokens
+// with a key printed in the repository — and anyone could mint an admin token.
+func placeholderSecret(secret string) bool {
+	s := strings.ToLower(secret)
+	for _, marker := range []string{
+		"generate-with-openssl", "paste-your-own", "change-me", "changeme",
+		"replace-me", "your-secret", "your-own", "random-string",
+		"placeholder", "supersecret", "secret-key", "example-secret",
+	} {
+		if strings.Contains(s, marker) {
+			return true
+		}
+	}
+	return false
+}
 
 func hashPassword(password string, authService *auth.AuthService) string {
 	hash, _ := authService.HashPassword(password)

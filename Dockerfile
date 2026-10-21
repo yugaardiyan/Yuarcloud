@@ -20,8 +20,12 @@ RUN go mod download
 COPY . .
 COPY --from=frontend-builder /app/web/dist ./web/dist
 
-# Build static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/yuarcloud ./cmd/server
+# CGO stays on. gorm's sqlite driver is mattn/go-sqlite3, which is cgo
+# code: with CGO_ENABLED=0 the dependency builds a stub whose Open() returns
+# "Binary was compiled with 'CGO_ENABLED=0'" — so the image started, failed
+# to open the default database, and exited. The runtime is alpine, so the
+# dynamic musl link the builder produces resolves there.
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /app/yuarcloud ./cmd/server
 
 # Stage 3: Runtime
 FROM alpine:3.19
@@ -40,6 +44,11 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # The container's own config, with absolute /srv and /config paths. See the
 # header of the file for why relative ones are unsafe here.
 COPY --from=backend-builder /app/configs/config.docker.yaml /config/config.yaml
+# A second copy outside /config. The line above lands in the image layer, and
+# a bind mount on /config hides that layer completely — which is exactly what
+# the ZimaOS compose file does, leaving the server with no config at all.
+# The entrypoint restores this one into an empty /config.
+COPY --from=backend-builder /app/configs/config.docker.yaml /app/config.docker.yaml
 
 # /srv holds user files, /config holds config.yaml and the SQLite database.
 # Both are volumes; the binary only ever writes inside them. Chunked-upload

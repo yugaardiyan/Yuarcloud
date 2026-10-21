@@ -147,6 +147,19 @@ function Drive() {
 
   const closePreview = useCallback(() => setPreviewId(null), [])
 
+  // The context menu's "Open" lives in a provider above this page and cannot
+  // call openPreview itself, so it asks for it the same way F2 asks for the
+  // rename dialog. Opening a file meant downloading it, while Enter and a
+  // double click both previewed — the same word did two different things.
+  useEffect(() => {
+    const onPreview = (e) => {
+      const item = items.find((f) => f.id === e.detail?.id)
+      if (item && !item.is_dir) openPreview(item)
+    }
+    window.addEventListener('yuar:preview', onPreview)
+    return () => window.removeEventListener('yuar:preview', onPreview)
+  }, [items, openPreview])
+
   const stepPreview = useCallback((delta) => {
     const next = previewFiles[previewIndex + delta]
     // Stop at the ends rather than wrapping: bouncing back to the first file

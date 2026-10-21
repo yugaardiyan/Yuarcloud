@@ -180,7 +180,7 @@ export default function ContextMenuProvider({ children }) {
     switch (action) {
       case 'open':
         if (first?.is_dir) navigate(`/cloud/${first.path}`)
-        else downloadItem(first)
+        else window.dispatchEvent(new CustomEvent('yuar:preview', { detail: { id: first.id } }))
         break
 
       case 'download':
@@ -269,8 +269,12 @@ export default function ContextMenuProvider({ children }) {
       if (key === 'c' && selected.size) { e.preventDefault(); copyToClipboard(Array.from(selected)) }
       if (key === 'x' && selected.size) { e.preventDefault(); cutItems(Array.from(selected)) }
       if (key === 'v' && clipboard.action) {
+        // Trash and search are listings, not locations. Resolving their null
+        // folder to the root pasted the clipboard into My Cloud, a place the
+        // user was not looking at.
+        if (view.scope !== 'drive') return
         e.preventDefault()
-        pasteInto(view.scope === 'drive' ? view.folderId : null, view.scope === 'drive' ? view.path : '')
+        pasteInto(view.folderId, view.path)
       }
     }
     document.addEventListener('keydown', onKey)

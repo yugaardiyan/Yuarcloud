@@ -25,6 +25,18 @@ set -e
 #     permissions warning into an outage; starting as root and carrying on is
 #     worse but recoverable, and the message says what happened.
 
+# A fresh bind mount on /config is empty, and an empty one hides the copy
+# baked into the image. Without this the container started with no config and
+# exited on the missing jwt secret, which read as a broken image rather than
+# as an uninitialised volume.
+if [ ! -f /config/config.yaml ] && [ -f /app/config.docker.yaml ]; then
+  if cp /app/config.docker.yaml /config/config.yaml 2>/dev/null; then
+    echo "yuarcloud: created /config/config.yaml from the image default" >&2
+  else
+    echo "yuarcloud: could not write /config/config.yaml" >&2
+  fi
+fi
+
 if [ "$(id -u)" = "0" ]; then
   for dir in /srv /config; do
     if chown 1000:1000 "$dir" 2>/dev/null; then
@@ -35,6 +47,8 @@ if [ "$(id -u)" = "0" ]; then
       echo "yuarcloud: directory writable by uid 1000 on the host." >&2
     fi
   done
+  # The file itself, not just the directory: chown is not recursive.
+  chown 1000:1000 /config/config.yaml 2>/dev/null || true
   exec su-exec yuarcloud "$@"
 fi
 

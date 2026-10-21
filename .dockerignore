@@ -1,0 +1,11 @@
+.git
+.github
+bin
+web/node_modules
+web/dist
+configs/config.yaml
+configs/data
+*.db
+*.db-shm
+*.db-wal
+*.log

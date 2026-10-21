@@ -21,9 +21,15 @@ export function AuthProvider({ children }) {
       const response = await authApi.me()
       setUser(response.data.user)
     } catch (error) {
+      // Only a rejected credential ends the session. A timeout, a dropped
+      // connection or a 5xx on this one call used to delete both tokens and
+      // force a fresh login even though the session was perfectly valid.
+      const status = error?.response?.status
+      if (status === 401 || status === 403) {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+      }
       setUser(null)
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
     } finally {
       setLoading(false)
       setInitialized(true)
@@ -58,6 +64,11 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     setUser(null)
+    // The drive, its selection, the clipboard and the upload tray all live in
+    // a provider that outlives this call. Signing out and back in as someone
+    // else used to show the previous account's file names until the next
+    // navigation. A full load is the only reset that cannot miss one of them.
+    window.location.assign('/login')
   }, [])
 
   const updateUser = useCallback((updates) => {

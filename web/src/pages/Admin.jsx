@@ -145,11 +145,14 @@ function Admin() {
     const id = ++usersRequestId.current
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (page > 1) params.append('page', page)
-      if (pageSize !== 20) params.append('page_size', pageSize)
+      // A plain object, not params.toString(): axios expects a record here and
+      // a string is serialised as a single unnamed parameter, so page 2 was
+      // requested as the default page 1.
+      const params = {}
+      if (page > 1) params.page = page
+      if (pageSize !== 20) params.page_size = pageSize
 
-      const response = await adminApi.getUsers(params.toString())
+      const response = await adminApi.getUsers(params)
       if (id !== usersRequestId.current) return
       setLoadError(null)
       setUsers(response.data.users)
@@ -681,6 +684,9 @@ function ChunkedConfigTab({ config }) {
   }, [config])
 
   const handleSave = async () => {
+    // The form starts on defaults while the fetch is in flight. Saving then
+    // wrote 10 MB / 10 GB / 1h over whatever the server actually had.
+    if (!config) return
     setLoading(true)
     try {
       await adminApi.updateChunkedConfig({
@@ -875,7 +881,7 @@ function SharesTab({ shares, sharesError, onReload }) {
       <div className="empty-state">
         <AlertCircle size={28} color="var(--accent-danger)" />
         <p>{sharesError}</p>
-        <button className="btn btn-secondary" onClick={loadShares}>Try again</button>
+        <button className="btn btn-secondary" onClick={onReload}>Try again</button>
       </div>
     )
   }

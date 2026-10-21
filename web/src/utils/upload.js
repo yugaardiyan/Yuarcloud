@@ -287,6 +287,16 @@ export async function uploadFilesSequentially(files, options = {}) {
       onUpdate?.({ file, index, progress: 100, loaded: file.size, status: 'done' })
     } catch (error) {
       failures.push({ file, index, error })
+      // The chunked path reports its own failures through onError; the simple
+      // path did not, so its row stayed on "uploading" with a frozen progress
+      // bar until the panel was closed.
+      onUpdate?.({
+        file,
+        index,
+        progress: 0,
+        status: 'error',
+        message: error?.message || 'Upload failed',
+      })
     }
   }
 
