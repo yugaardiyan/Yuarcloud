@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Users, BarChart3, Plus, Edit2, Trash2, X,
-  HardDrive, Share2, Folder, AlertCircle, Copy, ScrollText
+  HardDrive, Share2, Folder, AlertCircle, Copy, ScrollText, Lock
 } from 'lucide-react'
 import { adminApi, fileApi, apiError } from '../utils/api'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -946,7 +946,7 @@ function SharesTab({ shares, sharesError, onReload }) {
                 </div>
                 <div className="admin-item-meta">
                   <span className="admin-badge" style={{ color: st.color }}>{st.label}</span>
-                  {share.has_password && <span className="admin-badge">pw</span>}
+                  {share.has_password && <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />}
                   {facts}
                 </div>
               </div>
@@ -1010,7 +1010,7 @@ function SharesTab({ shares, sharesError, onReload }) {
                 <td style={{ padding: 12, whiteSpace: 'nowrap' }}>
                   {share.permission === 'write' ? 'Read & write' : 'Read only'}
                   {share.has_password && (
-                    <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>· pw</span>
+                    <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />
                   )}
                 </td>
                 <td style={{ padding: 12, whiteSpace: 'nowrap' }}>

@@ -2883,6 +2883,16 @@ input.input[type='number'] {
   font-size: 11px;
 }
 
+/* A padlock, not a word. It sits where "· pw" sat in the table and where the
+   "pw" badge sat in the stacked row: locked links are the exception, and a
+   second chip beside the status pill made the exception look like a status. */
+.admin-lock {
+  display: inline-block;
+  margin: 0 6px;
+  vertical-align: -1px;
+  color: var(--text-tertiary);
+}
+
 /* The status pill the table draws in its own column; here it leads the facts. */
 .admin-badge {
   display: inline-block;
