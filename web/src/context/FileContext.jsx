@@ -341,6 +341,19 @@ export function FileProvider({ children }) {
     anchorRef.current = null
     setSelected(new Set())
   }, [])
+  // Rubber-band selection commits a whole set at once. Calling select() per id
+  // would re-render once per tile and, worse, run the anchor bookkeeping per
+  // id — the anchor is the *last* item the pointer touched, not the last id in
+  // DOM order that happened to be committed last.
+  const selectMany = useCallback((ids, { additive = false } = {}) => {
+    const list = Array.from(ids)
+    if (!additive) anchorRef.current = list.length ? list[list.length - 1] : null
+    setSelected((prev) => {
+      const next = additive ? new Set(prev) : new Set()
+      for (const id of list) next.add(id)
+      return next
+    })
+  }, [])
   const isSelected = useCallback((id) => selected.has(id), [selected])
   const selectedItems = useMemo(() => items.filter((f) => selected.has(f.id)), [items, selected])
 
@@ -709,6 +722,7 @@ export function FileProvider({ children }) {
     selected,
     selectedItems,
     select,
+    selectMany,
     selectAll,
     clearSelection,
     isSelected,

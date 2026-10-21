@@ -9,6 +9,7 @@ import { hasInternalDrag } from '../utils/dragItems'
 import { keyboardIsOwned, isTypingTarget } from '../utils/keyboardOwner'
 import { fireAndForget } from '../utils/fireAndForget'
 import { useFiles, driveHref } from '../context/FileContext'
+import { useMarqueeSelect } from '../hooks/useMarqueeSelect'
 import { useAuth } from '../context/AuthContext'
 import { useContextMenu } from '../components/ContextMenuProvider'
 import { Folder, RefreshCw, ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react'
@@ -27,6 +28,22 @@ function Drive() {
 
   const folderInputRef = useRef(null)
   const contentRef = useRef(null)
+
+  // Rubber-band selection over the listing (grid and list). It owns what a
+  // press on the background means, so the click-to-clear handlers that used to
+  // live in the grid and the list are gone.
+  useMarqueeSelect(contentRef)
+
+  // Clicking outside the listing still drops the selection, as it always did.
+  // One owner for the whole pane: the two components each decided this for
+  // themselves, and neither could tell a Ctrl-drag from a plain press.
+  useEffect(() => {
+    const onDown = (e) => {
+      if (contentRef.current && !contentRef.current.contains(e.target)) clearSelection()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [clearSelection])
 
   // ---------------------------------------------------------------- routing
   //
@@ -344,7 +361,6 @@ function Drive() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={(e) => { if (e.target === e.currentTarget) clearSelection() }}
           onContextMenu={handleContentContextMenu}
         >
         {awaitingFirstLoad ? null : error ? (

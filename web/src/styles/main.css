@@ -1586,6 +1586,31 @@ input.input[type='number'] {
   outline: none;
   padding: var(--drive-pad-x);
   background: var(--bg-primary);
+  /* The rubber band is drawn inside the scroll container, in content
+     coordinates, so it stays over the tiles it covers while they scroll. */
+  position: relative;
+}
+
+/* Dragging the band must not drag a text selection out of the tile labels. */
+.drive-content.is-marquee {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.drive-content.is-marquee .file-item {
+  cursor: default;
+}
+
+/* The band itself. A tint rather than a solid, so the tiles it covers stay
+   readable; the border is the accent the selection already uses. */
+.marquee-box {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid var(--accent-primary);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 
 /* The settings page reuses this card, so its scroll container has to fill it the

@@ -93,14 +93,6 @@ function FileList({ onOpen, onDownload, onFile }) {
     return () => document.removeEventListener('selectstart', prevent)
   }, [resizing])
 
-  useEffect(() => {
-    const onDown = (e) => {
-      if (listRef.current && !listRef.current.contains(e.target)) clearSelection()
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [clearSelection])
-
   // Folders navigate; files open in the viewer when one is wired up, and fall
   // back to downloading when the list is rendered somewhere without it.
   const activate = (item) => {
@@ -198,13 +190,6 @@ function FileList({ onOpen, onDownload, onFile }) {
       aria-label="Files"
       tabIndex={0}
       style={{ outline: 'none' }}
-      onClick={(e) => {
-        // Same fix as FileGrid: clicking the empty area to the right of the
-        // rows, or below the last row, must deselect. The header lives inside
-        // the container, so e.target === e.currentTarget keeps sort-header
-        // clicks from clearing the selection.
-        if (e.target === e.currentTarget) clearSelection()
-      }}
     >
       <div className="file-list-header" role="row">
         <span style={{ width: 32, flexShrink: 0 }} />

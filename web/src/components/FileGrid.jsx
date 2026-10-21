@@ -16,15 +16,6 @@ function FileGrid({ onOpen, onDownload, onFile }) {
   const gridRef = useRef(null)
   const { itemProps } = useDragMove()
 
-  // Clicking outside the grid clears the selection.
-  useEffect(() => {
-    const onDown = (e) => {
-      if (gridRef.current && !gridRef.current.contains(e.target)) clearSelection()
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [clearSelection])
-
   // Folders navigate; files open in the viewer when one is wired up, and fall
   // back to downloading when the grid is rendered somewhere without it.
   const activate = (item) => {
@@ -98,12 +89,6 @@ function FileGrid({ onOpen, onDownload, onFile }) {
       aria-label="Files"
       tabIndex={0}
       style={{ outline: 'none' }}
-      onClick={(e) => {
-        // Clicking the empty grid background (right of the last file, below
-        // the last row, etc.) must deselect. Clicks on a file item bubble up
-        // here too, so guard with e.target === e.currentTarget.
-        if (e.target === e.currentTarget) clearSelection()
-      }}
     >
       {items.map((item) => {
         const active = isSelected(item.id)
