@@ -667,7 +667,7 @@ export default function ShareView() {
                 )}
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: isWrite ? 'var(--accent-primary)' : 'var(--text-tertiary)' }}>
                   <PermIcon size={11} />
-                  {isWrite ? 'Read & write' : 'Read only'}
+                  {isWrite ? 'Edit' : 'View'}
                 </span>
               </div>
             </div>

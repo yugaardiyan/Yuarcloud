@@ -28,8 +28,8 @@ const STATUS = {
 }
 
 const PERMISSION = {
-  read: { label: 'Read only', icon: Eye },
-  write: { label: 'Read & write', icon: Upload },
+  read: { label: 'View', icon: Eye },
+  write: { label: 'Edit', icon: Upload },
 }
 
 export default function ShareModal({ fileId, fileName, isDir = false, onClose, onCreated }) {
@@ -304,8 +304,8 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                 </label>
                 <div className="share-perm-picker" role="radiogroup" aria-label="Access permission">
                   {[
-                    { value: 'read', label: 'Read only', icon: Eye, desc: 'Visitors can view and download.' },
-                    { value: 'write', label: 'Read & write', icon: Upload, desc: isDir ? 'Visitors can also upload into this folder.' : 'Available for folders only.' },
+                    { value: 'read', label: 'View', icon: Eye, desc: 'Visitors can view and download.' },
+                    { value: 'write', label: 'Edit', icon: Upload, desc: isDir ? 'Visitors can also upload into this folder.' : 'Available for folders only.' },
                   ].map((opt) => {
                     const Icon = opt.icon
                     const active = formData.permission === opt.value

@@ -936,7 +936,7 @@ function SharesTab({ shares, sharesError, onReload }) {
             // sentence at a space instead of stacking one fact per line.
             const facts = [
               share.owner || '—',
-              share.permission === 'write' ? 'Read & write' : 'Read only',
+              share.permission === 'write' ? 'Edit' : 'View',
               `${share.views}${share.max_views > 0 ? ` / ${share.max_views}` : ''} view${share.views === 1 ? '' : 's'}`,
               share.expires_at ? `Expires ${new Date(share.expires_at).toLocaleDateString()}` : 'Never expires',
             ].join(' · ')
@@ -983,9 +983,9 @@ function SharesTab({ shares, sharesError, onReload }) {
           {/* No Status column: the shares that need attention carry a marker
               beside their own name instead. */}
           {[
-            ['22%', 'File'],
+            ['28%', 'File'],
             ['20%', 'Owner'],
-            ['18%', 'Access'],
+            ['12%', 'Access'],
             ['10%', 'Views'],
             ['16%', 'Expires'],
             ['74px', 'Actions'],
@@ -1017,7 +1017,7 @@ function SharesTab({ shares, sharesError, onReload }) {
                 </td>
                 <td style={{ padding: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={share.owner}>{share.owner || '—'}</td>
                 <td style={{ padding: 12, whiteSpace: 'nowrap' }}>
-                  {share.permission === 'write' ? 'Read & write' : 'Read only'}
+                  {share.permission === 'write' ? 'Edit' : 'View'}
                   {share.has_password && (
                     <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />
                   )}
