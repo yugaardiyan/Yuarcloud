@@ -2888,9 +2888,15 @@ input.input[type='number'] {
    second chip beside the status pill made the exception look like a status. */
 .admin-lock {
   display: inline-block;
-  margin: 0 6px;
+  margin-left: 5px;
   vertical-align: -1px;
   color: var(--text-tertiary);
+}
+
+/* Keep the padlock with the word it qualifies — it belongs to View/Edit, so a
+   line break between them would orphan it. */
+.admin-perm {
+  white-space: nowrap;
 }
 
 /* Small pill for the one thing a stacked row still needs to flag — a link that

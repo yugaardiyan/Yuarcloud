@@ -932,14 +932,15 @@ function SharesTab({ shares, sharesError, onReload }) {
           {shares.map((share) => {
             const warn = warning(share)
             // One line of facts, in the order the table read them left to
-            // right. Joined rather than separate nodes so it wraps as a
-            // sentence at a space instead of stacking one fact per line.
-            const facts = [
-              share.owner || '—',
-              share.permission === 'write' ? 'Edit' : 'View',
-              `${share.views}${share.max_views > 0 ? ` / ${share.max_views}` : ''} view${share.views === 1 ? '' : 's'}`,
-              share.expires_at ? `Expires ${new Date(share.expires_at).toLocaleDateString()}` : 'Never expires',
-            ].join(' · ')
+            // right, written as inline text rather than stacked nodes so it
+            // wraps as a sentence at a space. The padlock is not a fact of its
+            // own — it qualifies the access beside it, which is where the
+            // table puts it too (in the Access column).
+            const perm = share.permission === 'write' ? 'Edit' : 'View'
+            const views = `${share.views}${share.max_views > 0 ? ` / ${share.max_views}` : ''} view${share.views === 1 ? '' : 's'}`
+            const expiry = share.expires_at
+              ? `Expires ${new Date(share.expires_at).toLocaleDateString()}`
+              : 'Never expires'
 
             return (
               <div key={share.id} className="admin-item">
@@ -949,8 +950,12 @@ function SharesTab({ shares, sharesError, onReload }) {
                 </div>
                 <div className="admin-item-meta">
                   {warn && <span className="admin-badge admin-badge-warn">{warn}</span>}
-                  {share.has_password && <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />}
-                  {facts}
+                  {share.owner || '—'}{' · '}
+                  <span className="admin-perm">
+                    {perm}
+                    {share.has_password && <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />}
+                  </span>
+                  {' · '}{views}{' · '}{expiry}
                 </div>
               </div>
             )
