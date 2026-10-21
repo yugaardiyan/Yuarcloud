@@ -2755,22 +2755,13 @@ input.input[type='number'] {
   flex-wrap: wrap;
 }
 
-.users-wrap {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  overflow: hidden;
+/* Still in use: the audit tab's event count. It was dropped with the user
+   header and the audit page lost its quiet grey figure. */
+.users-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
-/*
- * Fixed layout, no min-width.
- *
- * The three columns are all short, so the table fits a phone without a
- * horizontal scrollbar — which is what made it hostile before: `min-width`
- * forced sideways scrolling on every narrow screen to reveal two numbers and
- * two buttons that were already visible. Fixed layout lets the name column
- * take the slack and the two narrow columns keep their size, so the detail
- * text ellipsises instead of pushing the row wider.
- */
 /*
  * Settings tables on a phone.
  *
@@ -2783,7 +2774,7 @@ input.input[type='number'] {
  *
  * Hairlines and no boxes on purpose — this sits inside the white settings card,
  * and a card inside a card reads as a mistake. It is the same row treatment
- * .users-table already uses.
+ * .users-list uses, and which the users table used to.
  */
 .admin-list {
   display: flex;
@@ -2913,61 +2904,6 @@ input.input[type='number'] {
   flex: 0 0 auto;
 }
 
-.users-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: 12px;
-}
-
-/* The home folder, on a line of its own instead of a third line under the
-   address. Fixed like the other narrow columns: a long path ellipsises inside
-   it rather than pushing the storage figure off the edge. */
-.users-table th:nth-child(2),
-.users-table td:nth-child(2) {
-  width: 190px;
-}
-
-/* Wide enough for the worst realistic pair, "999.9 MB / 999.9 GB" at this
-   size, plus the usage bar under it. Narrower than that and the figure clipped
-   mid-number — "481.6 MB /51…" — which is worse than a slightly wider column:
-   an admin cannot tell whether the quota is 512 MB or 51 GB. */
-.users-table th:nth-child(3),
-.users-table td:nth-child(3) {
-  width: 150px;
-}
-
-/* Two 30px buttons and their 2px gap, plus the 10px cell padding on each
-   side. Was 62px when the buttons were 23px wide. */
-.users-table th:nth-child(4),
-.users-table td:nth-child(4) {
-  width: 82px;
-}
-
-.users-table th {
-  background: var(--bg-secondary);
-  color: var(--text-tertiary);
-  font-size: 10px;
-  text-transform: uppercase;
-  padding: 6px 10px;
-  text-align: left;
-  font-weight: 600;
-}
-
-.users-table th:last-child,
-.users-table td:last-child {
-  text-align: right;
-}
-
-.users-table td {
-  padding: 6px 10px;
-  border-top: 1px solid var(--border-color);
-  vertical-align: top;
-}
-
-.users-table tr:first-child td {
-  border-top: none;
-}
 
 .user-cell {
   display: flex;
@@ -3016,38 +2952,6 @@ input.input[type='number'] {
   text-overflow: ellipsis;
 }
 
-/* The user card on a phone: the avatar stack is the flexible side, the buttons
-   keep their width. */
-@media (max-width: 560px) {
-  .admin-item-head .user-cell {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .admin-item-head .user-actions {
-    flex: 0 0 auto;
-  }
-
-  /* The table's nowrap-and-clip is right for a fixed column and wrong for a
-     card: at 320px it cut the name to "Siti Nurhaliza Ramad…" and the address
-     to its domain's beginning. A card can spend a second line instead. */
-  .admin-item .user-name {
-    white-space: normal;
-    overflow: visible;
-    line-height: 1.4;
-  }
-
-  .admin-item .user-email {
-    white-space: normal;
-    overflow: visible;
-    overflow-wrap: anywhere;
-  }
-}
-
-/* A home path can be one long unbroken word. */
-.user-home-path {
-  overflow-wrap: anywhere;
-}
 
 .user-role-text {
   font-size: 10px;
@@ -3064,60 +2968,104 @@ input.input[type='number'] {
   color: var(--text-secondary);
 }
 
-/* Home folder, on the desktop row. */
-.user-folder {
+/* One row per person, not a table. Four columns were more scaffolding than a
+   list of names ever needs: the name leads, the quota and the home folder sit
+   together on the right exactly as the phone card puts them, and the buttons
+   close the row. Same markup, two layouts. */
+.users-list .admin-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: 'user meta actions';
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.users-list .user-cell {
+  grid-area: user;
+}
+
+.users-list .user-actions {
+  grid-area: actions;
+}
+
+/* The quota and the folder read as one fact, so they are one line: the figure
+   first and stable, the path after it giving way with an ellipsis. */
+.users-list .admin-item-meta {
+  grid-area: meta;
   display: flex;
   align-items: center;
   gap: 5px;
-  min-width: 0;
+  margin-top: 0;
+  white-space: nowrap;
   font-size: 11.5px;
   color: var(--text-tertiary);
 }
 
-.user-folder > span {
+.users-list .admin-item-meta > span + span {
+  margin-left: 0;
+}
+
+.users-list .user-figure {
+  font-variant-numeric: tabular-nums;
+}
+
+.users-list .user-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 30ch;
+}
+
+.users-list .user-folder > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Quota: the figure and, under it, how close to the edge it is — the same
-   reading the storage card gives the whole instance. */
-.user-usage {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
+/* The same row on a phone: the name keeps the top line with the buttons, the
+   quota and folder drop to the second. */
+@media (max-width: 560px) {
+  .users-list .admin-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'user actions'
+      'meta meta';
+    gap: 5px 8px;
+    padding: 10px 0;
+  }
 
-.user-usage-figure {
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
+  .users-list .admin-item-meta {
+    white-space: normal;
+    flex-wrap: wrap;
+  }
 
-.user-usage-bar {
-  display: block;
-  width: 92px;
-  height: 3px;
-  border-radius: 99px;
-  background: var(--bg-tertiary);
-  overflow: hidden;
-}
+  .users-list .user-folder {
+    max-width: none;
+    min-width: 0;
+  }
 
-.user-usage-bar > span {
-  display: block;
-  height: 100%;
-  border-radius: 99px;
-  background: var(--accent-primary);
-}
+  .users-list .user-folder > span:last-child {
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
 
-.user-usage-bar.is-warning > span {
-  background: #f59f00;
-}
+  /* A column clips; a card can spend a second line instead. At 320px the clip
+     cut the name to "Siti Nurhaliza Ramad…" and the address to the start of
+     its domain. */
+  .users-list .user-name {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.4;
+  }
 
-.user-usage-bar.is-critical > span {
-  background: var(--accent-danger);
+  .users-list .user-email {
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
 }
 
 .user-actions {
@@ -3140,50 +3088,6 @@ input.input[type='number'] {
   border-radius: var(--radius-sm);
 }
 
-@media (max-width: 639px) {
-  .users-table th,
-  .users-table td {
-    padding: 6px 8px;
-  }
-
-  /* Four columns in 533px: the folder and quota keep their widths, the name
-     column takes what is left and the address ellipsises. */
-  .users-table th:nth-child(2),
-  .users-table td:nth-child(2) {
-    width: 116px;
-  }
-
-  .users-table th:nth-child(3),
-  .users-table td:nth-child(3) {
-    width: 112px;
-  }
-
-  /* 80px: two 30px buttons and their 2px gap, plus the 8px cell padding on
-     each side. */
-  .users-table th:nth-child(4),
-  .users-table td:nth-child(4) {
-    width: 80px;
-  }
-
-  .user-usage-bar {
-    width: 80px;
-  }
-
-  .user-cell {
-    gap: 7px;
-  }
-
-  .user-avatar {
-    width: 26px;
-    height: 26px;
-    font-size: 11px;
-  }
-
-  .user-role-text {
-    margin-left: 4px;
-  }
-
-}
 
 /* Lives under the card, not inside it. The fixed height reserves its line even
    when empty, so the card above never moves when an error shows. */

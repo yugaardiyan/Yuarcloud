@@ -300,23 +300,7 @@ function Admin() {
   )
 }
 
-// The storage card turns amber at 70% and red at 90%. A per-user figure means
-// the same thing, so it turns at the same points.
-const usagePercent = (user) =>
-  user.quota_bytes > 0 ? Math.min(100, ((user.used_bytes || 0) / user.quota_bytes) * 100) : 0
-
-const usageTone = (user) => {
-  const pct = usagePercent(user)
-  return pct >= 90 ? 'critical' : pct >= 70 ? 'warning' : 'normal'
-}
-
 function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDelete, showCreateUser, setShowCreateUser, showEditUser, setShowEditUser, loadUsers, currentUser }) {
-  // Three columns are too many once the card is 320px wide: the name column
-  // fell to 98px and "Administrator" clipped to "Adminis…", with the storage
-  // figure squeezed onto two lines. Below the stylesheet's phone breakpoint the
-  // row becomes a block, same as the share list.
-  const phone = useMediaQuery('(max-width: 560px)')
-
   const userActions = (user) => (
     <div className="user-actions">
       <button
@@ -364,121 +348,47 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
             </button>
           </div>
 
-          {phone ? (
-            <div className="admin-list">
-              {users.map((user) => (
-                <div key={user.id} className="admin-item">
-                  <div className="admin-item-head">
-                    <div className="user-cell">
-                      <div className="user-avatar">
-                        {user.display_name?.[0]?.toUpperCase() ||
-                          user.username?.[0]?.toUpperCase() ||
-                          'U'}
-                      </div>
-                      {/* The name and the address each get the whole line. A
-                          role pill after the name was tried first: at 320px it
-                          dropped to a line of its own whenever the name filled
-                          the width, one 18px line holding a 35px chip. It
-                          leads the facts line instead — same place the share
-                          list puts its warning chip. */}
-                      <div>
-                        <div className="user-name">
-                          {user.display_name || user.username}
-                          {/* Coloured text, not a chip: the same marker the
-                              table uses, so the two modes agree. */}
-                          <span
-                            className="user-role-text"
-                            style={{ color: user.role === 'admin' ? '#7048e8' : 'var(--text-secondary)' }}
-                          >
-                            {user.role}
-                          </span>
-                        </div>
-                        <div className="user-email">{user.email}</div>
-                      </div>
-                    </div>
-                    {userActions(user)}
+          <div className="admin-list users-list">
+            {users.map((user) => (
+              <div key={user.id} className="admin-item">
+                <div className="user-cell">
+                  <div className="user-avatar">
+                    {user.display_name?.[0]?.toUpperCase() ||
+                      user.username?.[0]?.toUpperCase() ||
+                      'U'}
                   </div>
-                  <div className="admin-item-meta">
-                    {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes || 0)}
-                    {' · '}
-                    {/* The path is the one detail that can be longer than the
-                        card, so it stays inline text and wraps at any point. */}
-                    <Folder size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
-                    <span className="user-home-path">{user.home_path || 'All files'}</span>
+                  <div className="user-id">
+                    <div className="user-name">
+                      {user.display_name || user.username}
+                      {/* Coloured text, not a chip, on both ends of the
+                          breakpoint. */}
+                      <span
+                        className="user-role-text"
+                        style={{ color: user.role === 'admin' ? '#7048e8' : 'var(--text-secondary)' }}
+                      >
+                        {user.role}
+                      </span>
+                    </div>
+                    <div className="user-email" title={user.email}>{user.email}</div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-          <div className="users-wrap">
-            <table className="users-table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Folder</th>
-                  <th style={{ textAlign: 'right' }}>Storage</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id}>
-                    <td>
-                      <div className="user-cell">
-                        <div className="user-avatar">
-                          {user.display_name?.[0]?.toUpperCase() ||
-                            user.username?.[0]?.toUpperCase() ||
-                            'U'}
-                        </div>
-                        {/* Name and address only. The home folder used to be a
-                            third line in this cell, and it was what made the
-                            row 66px tall; it has a column of its own now, on
-                            width that was sitting empty behind the address. */}
-                        <div>
-                          <div className="user-name">
-                            {user.display_name || user.username}
-                            <span
-                              className="user-role-text"
-                              style={{ color: user.role === 'admin' ? '#7048e8' : 'var(--text-secondary)' }}
-                            >
-                              {user.role}
-                            </span>
-                          </div>
-                          {/* The address ellipsises before the folder column
-                              does, so it carries its own tooltip. */}
-                          <div className="user-email" title={user.email}>{user.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="user-folder" title={user.home_path || 'All files'}>
-                        <Folder size={11} />
-                        <span>{user.home_path || 'All files'}</span>
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="user-usage">
-                        <span className="user-usage-figure">
-                          {formatBytes(user.used_bytes || 0)}{' / '}
-                          {formatBytes(user.quota_bytes || 0)}
-                        </span>
-                        {/* The storage card goes amber at 70% and red at 90%; a
-                            per-user figure means the same thing at the same
-                            thresholds. */}
-                        <span className={`user-usage-bar is-${usageTone(user)}`}>
-                          <span style={{ width: `${usagePercent(user)}%` }} />
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      {userActions(user)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <div className="admin-item-meta">
+                  <span className="user-figure">
+                    {formatBytes(user.used_bytes || 0)}{' / '}
+                    {formatBytes(user.quota_bytes || 0)}
+                  </span>
+                  {/* The middot is inside the folder's own span so a wrapping
+                      row never leaves it stranded at the end of a line. */}
+                  <span className="user-folder" title={user.home_path || 'All files'}>
+                    <span className="user-folder-dot" aria-hidden="true">·</span>
+                    <Folder size={10} />
+                    <span>{user.home_path || 'All files'}</span>
+                  </span>
+                </div>
+                {userActions(user)}
+              </div>
+            ))}
           </div>
-          )}
 
           {usersTotal > 20 && (
             <div
