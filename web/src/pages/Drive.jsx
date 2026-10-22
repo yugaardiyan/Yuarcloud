@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FileGrid from '../components/FileGrid'
 import FileList from '../components/FileList'
@@ -10,6 +10,7 @@ import { keyboardIsOwned, isTypingTarget } from '../utils/keyboardOwner'
 import { fireAndForget } from '../utils/fireAndForget'
 import { useFiles, driveHref } from '../context/FileContext'
 import { useMarqueeSelect } from '../hooks/useMarqueeSelect'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useAuth } from '../context/AuthContext'
 import { useContextMenu } from '../components/ContextMenuProvider'
 import { Folder, RefreshCw, ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react'
@@ -20,6 +21,7 @@ function Drive() {
   const { user } = useAuth()
   const files = useFiles()
   const { openEmptyMenu } = useContextMenu()
+  const phone = useMediaQuery('(max-width: 560px)')
 
   const {
     items, view, loading, error, viewMode, setViewMode,
@@ -28,6 +30,7 @@ function Drive() {
 
   const folderInputRef = useRef(null)
   const contentRef = useRef(null)
+  const breadcrumbRef = useRef(null)
 
   // Rubber-band selection over the listing (grid and list). It owns what a
   // press on the background means, so the click-to-clear handlers that used to
@@ -56,6 +59,17 @@ function Drive() {
   // This page therefore only has to navigate; it never decides what is loaded.
 
   const urlPath = params['*'] || ''
+
+  // On a phone the breadcrumb is a horizontal strip (see the 560px status-bar
+  // block in main.css). Keep the newest segment — the folder you are actually
+  // in — in view if an unusually long name makes the strip overflow. On wider
+  // screens the full path is meant to stay left-aligned, so reset any scroll
+  // left over from a rotation.
+  useLayoutEffect(() => {
+    const el = breadcrumbRef.current
+    if (!el) return
+    el.scrollLeft = phone ? el.scrollWidth : 0
+  }, [phone, view.path, view.scope])
 
   // ---------------------------------------------------------------- history
   //
@@ -352,6 +366,14 @@ function Drive() {
   // Breadcrumb segments for the current folder path.
   const driveSegments = view.path ? view.path.split('/').filter(Boolean) : []
 
+  // A phone cannot hold the whole path beside the arrows. Drop the middle
+  // rather than letting every segment shrink to a letter: "… › Proyek 2026 ›
+  // Foto Liburan" is a path you can read, and the leading ellipsis still goes
+  // home. One-level paths keep "My Cloud", because they fit.
+  const compactCrumbs = phone && driveSegments.length > 1
+  const firstCrumbIndex = compactCrumbs ? driveSegments.length - 2 : 0
+  const shownSegments = driveSegments.slice(firstCrumbIndex)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
       {/* Navigation lives in the status bar at the bottom, so there is no scope
@@ -438,12 +460,17 @@ function Drive() {
           )}
 
           {view.scope === 'drive' ? (
-            <nav className="breadcrumb" aria-label="Breadcrumb">
-              <button className="breadcrumb-item" onClick={() => goToBreadcrumb('')}>
-                My Cloud
+            <nav ref={breadcrumbRef} className="breadcrumb" aria-label="Breadcrumb">
+              <button
+                className={`breadcrumb-item${compactCrumbs ? ' breadcrumb-item-compact' : ''}`}
+                onClick={() => goToBreadcrumb('')}
+                title={compactCrumbs ? 'My Cloud' : undefined}
+                aria-label={compactCrumbs ? 'My Cloud' : undefined}
+              >
+                {compactCrumbs ? '…' : 'My Cloud'}
               </button>
-              {driveSegments.map((seg, i) => {
-                const segPath = driveSegments.slice(0, i + 1).join('/')
+              {shownSegments.map((seg, i) => {
+                const segPath = driveSegments.slice(0, firstCrumbIndex + i + 1).join('/')
                 return (
                   <React.Fragment key={segPath}>
                     <span className="breadcrumb-sep" aria-hidden="true">

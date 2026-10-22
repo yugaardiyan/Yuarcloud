@@ -416,7 +416,13 @@ input.input[type='number'] {
    the shell already filled, so clipping here changes what is on screen by
    nothing — it only stops the animation from making the document scroll. */
 .app-frame {
-  height: 100%;
+  /* `100vh` is the large viewport on a phone: it includes the strip behind the
+     browser's retractable address bar. Sizing the shell from it put the status
+     bar under that strip, so Back/Forward, the breadcrumb and the quota were
+     laid out but never visible. `dvh` follows the bar as it shows and hides;
+     the `vh` line above it stays as the fallback for older browsers. */
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden; /* fallback for browsers without `clip` */
   overflow: clip;
 }
@@ -425,17 +431,18 @@ input.input[type='number'] {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 
   /* Space below the drive card, which is what the upload tray sits above.
 
-     Two pages carry a card and differ in what is under it. The drive has a 38px
+     Two pages carry a card and differ in what is under it. The drive has a
      status bar plus the card's own 2px margin; the settings page has no status
      bar and gives its card a 12px bottom margin instead (see
      `.settings-page .drive-shell`), so the tray has to clear 12px there and
-     40px here. Using one figure for both put the tray 2px past the card's
-     bottom edge on admin, overhanging the rounded corner it was meant to sit
-     inside.
+     the bar plus 2px here. Using one figure for both put the tray 2px past the
+     card's bottom edge on admin, overhanging the rounded corner it was meant
+     to sit inside.
 
      The status bar height is separate so the bar can size itself from it, with
      a fallback so it can never collapse to nothing. */
@@ -444,7 +451,9 @@ input.input[type='number'] {
 }
 
 .app.has-status-bar {
-  --below-card-h: 40px;
+  /* Derived rather than hard-coded so the upload tray follows the bar when the
+     phone layout makes it taller. The extra 2px is the card's bottom margin. */
+  --below-card-h: calc(var(--status-bar-h) + 2px);
 }
 
 .app-header {
@@ -3131,6 +3140,69 @@ input.input[type='number'] {
   .status-bar {
     font-size: 11px;
     padding: 0 12px;
+  }
+}
+
+/* On a phone the bar becomes two lines instead of squeezing one. The card's
+   width is already down to 296px at 320px wide, and the count + quota alone
+   take ~160px of that; leaving them on the same line as the breadcrumb left
+   every ancestor as "M." / "D..." / "P..." — visible, but not a path anyone
+   could read or tap. Navigation keeps the first line, the figures get the
+   second, and each gets the full width. The breadcrumb scrolls sideways with
+   the current folder held in view (see Drive.jsx), so long paths stay usable
+   without growing the bar further. */
+@media (max-width: 560px) {
+  .app.has-status-bar {
+    --status-bar-h: 54px;
+  }
+
+  .status-bar {
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 2px 8px;
+    padding: 0 12px;
+  }
+
+  .status-bar-nav,
+  .status-bar-meta {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .status-bar-meta {
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .breadcrumb {
+    overflow-x: auto;
+    /* The bar is 54px tall on purpose; a scrollbar inside it would add a
+       second, heavier line under the path. The path is still scrollable by
+       touch and trackpad, just without the gutter. */
+    scrollbar-width: none;
+  }
+
+  .breadcrumb::-webkit-scrollbar {
+    display: none;
+  }
+
+  .breadcrumb-item {
+    /* Without this every segment shrinks to its share of a 300px row, which
+       is what produced the one-letter crumbs. Let them keep their width and
+       let the row scroll if an unusually long name still needs the room. */
+    flex-shrink: 0;
+    padding: 2px 5px;
+    /* Two trail segments plus the compact root and separators have to fit in
+       the 254px path row at 320px wide. Scaling the cap with the viewport
+       keeps current + parent whole there without leaving a 430px phone with
+       needlessly clipped names. */
+    max-width: clamp(88px, 28vw, 150px);
+  }
+
+  /* The compact root is one glyph; let it take only that. */
+  .breadcrumb-item-compact {
+    padding-left: 3px;
+    padding-right: 3px;
   }
 }
 
