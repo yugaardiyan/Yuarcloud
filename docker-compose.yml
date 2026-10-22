@@ -26,7 +26,10 @@ services:
       # Required. The server refuses to start without it: the shipped config
       # leaves it blank on purpose, because a signing key that ships in a public
       # repository is a key anyone can use to mint an admin token.
-      - YUAR_AUTH_JWT_SECRET=${YUAR_AUTH_JWT_SECRET:?set YUAR_AUTH_JWT_SECRET in .env — generate one with: openssl rand -base64 48}
+      # Quoted: an unquoted "… with: openssl …" is a YAML mapping, not a
+      # string, and Compose rejects the whole file with
+      # "environment.[0]: unexpected type map[string]interface {}".
+      - "YUAR_AUTH_JWT_SECRET=${YUAR_AUTH_JWT_SECRET:?set YUAR_AUTH_JWT_SECRET in .env — generate one with: openssl rand -base64 48}"
       # Every path and knob below is overridable the same way. Uncomment only
       # what you need; the image's own defaults are already correct.
       # - YUAR_STORAGE_LOCAL_ROOT=/srv

@@ -38,6 +38,11 @@ RUN apk add --no-cache ca-certificates tzdata curl sqlite su-exec \
 WORKDIR /app
 
 COPY --from=backend-builder /app/yuarcloud /app/yuarcloud
+# The frontend, not just the binary. The backend builder already has it (see
+# the COPY --from=frontend-builder above), but this stage never copied it, so
+# the image came up as "API-only mode" and every / route answered 404. The
+# server reads web/dist from its working directory; /app is that directory.
+COPY --from=backend-builder /app/web/dist ./web/dist
 COPY --from=backend-builder /app/configs/config.yaml.example /app/configs/config.yaml.example
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
