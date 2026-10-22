@@ -1,74 +1,82 @@
-# Yuarcloud on ZimaOS — paste this whole file into
+# Yuarcloud — ZimaOS / CasaOS app compose
+#
 # Dashboard → Install a customized app → Import → Docker Compose.
+# Paste all of this, then replace the JWT placeholder:
 #
-# Three things differ from the shipped docker-compose.yml, all forced by how
-# ZimaOS installs apps:
+#   openssl rand -base64 48
 #
-#   1. No ${VARIABLE} substitution. The importer pastes the YAML into a form
-#      and has no .env file to read, so an unset ${YUAR_AUTH_JWT_SECRET} would
-#      arrive as a literal string. Everything here is written out.
+# First login: yuarcloud / yuarcloud — change it immediately.
 #
-#   2. Bind mounts under /DATA, not named volumes. ZimaOS makes / read-only by
-#      design and keeps app data in /DATA/AppData/<app>. Named volumes also
-#      hide the bytes inside Docker's own directory, which is the one thing you
-#      cannot easily point a backup at.
+# Default data:
+#   /DATA/AppData/yuarcloud/srv     user files — back this up
+#   /DATA/AppData/yuarcloud/config  config.yaml + SQLite — back this up
 #
-#   3. An image reference, not `build: .`. There is no source tree on the box
-#      when the importer runs, so it has to pull one. The `image:` line below
-#      points at a published multi-arch build — see the README to pin a version
-#      or to point at your own fork instead.
+# Custom folder: change only the first volume's `source` to a dedicated empty
+# folder, e.g. /DATA/Media/Yuarcloud. Keep `target: /srv`. Yuarcloud does not
+# import files already in that folder; only uploads through the app appear.
 #
-# The data directories are created by Docker on first run and handed to uid 1000
-# by the image's entrypoint, so there is nothing to chown beforehand. That
-# matters here specifically: ZimaOS's file manager cannot chown, so a manual
-# step here would mean the dashboard route did not work at all.
+# Image pinned to v1.1 (multi-arch). Change the tag to update.
+# If 3103 is taken, change only `published` (e.g. "3104"); keep target 3103.
+#
+# x-casaos.hostname is what the dashboard uses for its Open link. Change it to
+# your DNS name, or remove it and use http://<IP-ZimaOS>:3103 directly. Set
+# scheme to https if the name is served through an HTTPS reverse proxy.
+
+networks:
+  default:
+    name: yuarcloud
 
 services:
   yuarcloud:
-    # Already pointing at a published image, so this paste works as-is. Change
-    # it only if you forked: the workflow publishes to whatever repository it
-    # runs in, and ghcr lowercases the name.
-    image: ghcr.io/yugaardiyan/yuarcloud:latest
     container_name: yuarcloud
-    restart: unless-stopped
-
-    # 3103 inside and out. Both the healthcheck and the published port have to
-    # match the port in configs/config.docker.yaml; change one without the
-    # others and the container serves traffic while reporting itself unhealthy.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2GB
+        reservations:
+          cpus: "0.00"
+          memory: 256MB
+    environment:
+      TZ: Asia/Jakarta
+      # REQUIRED: replace this. The server rejects the placeholder.
+      YUAR_AUTH_JWT_SECRET: "PASTE-YOUR-OWN-64-CHARACTER-RANDOM-STRING-HERE"
+    image: ghcr.io/yugaardiyan/yuarcloud:v1.1
+    labels:
+      icon: https://cdn.jsdelivr.net/gh/yugaardiyan/Yuarcloud@v1.1/web/public/logo.png
+    network_mode: bridge
     ports:
       - mode: ingress
-        target: 3103
-        published: "3103"
         protocol: tcp
-
-    environment:
-      # Required, and it must be replaced. The server refuses to start with a
-      # blank or short value, which is deliberate: a signing key that ships in
-      # a public repository is a key anyone can use to mint an admin token.
-      # Generate your own:  openssl rand -base64 48
-      - YUAR_AUTH_JWT_SECRET=PASTE-YOUR-OWN-64-CHARACTER-RANDOM-STRING-HERE
-      - TZ=Asia/Jakarta
-
+        published: "3103"
+        target: 3103
+    restart: unless-stopped
     volumes:
-      # User files. This is the only directory most people back up.
-      #
-      # To use another folder, point `source` at it and leave `target` as /srv
-      # — no environment change needed. Use a dedicated folder: Yuarcloud
-      # lists only what was uploaded through it and does not import files that
-      # were already there. See "Custom storage location" in the README.
-      - type: bind
+      - bind:
+          create_host_path: true
         source: /DATA/AppData/yuarcloud/srv
         target: /srv
-      # config.yaml and the SQLite database. App state: small, and it has to
-      # survive an upgrade. Kept apart from /srv so a backup of one is not a
-      # walk through the other.
-      - type: bind
+        type: bind
+      - bind:
+          create_host_path: true
         source: /DATA/AppData/yuarcloud/config
         target: /config
-
+        type: bind
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3103/health"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
+
+x-casaos:
+  hostname: yuarcloud.yuar.my.id
+  icon: https://cdn.jsdelivr.net/gh/yugaardiyan/Yuarcloud@v1.1/web/public/logo.png
+  index: /
+  is_uncontrolled: false
+  main: yuarcloud
+  port_map: "3103"
+  scheme: http
+  store_app_id: yuarcloud
+  title:
+    custom: Yuarcloud
