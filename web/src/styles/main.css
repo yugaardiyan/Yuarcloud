@@ -407,6 +407,20 @@ input.input[type='number'] {
 }
 
 /* Layout */
+
+/* The shell slides up from 10px down when it mounts (see view-enter at the
+   end of this file). The slide moves the whole 100vh box past the bottom of
+   the viewport for 200ms; that overflow used to reach the document, so a
+   scrollbar appeared and disappeared, narrowing the viewport by its width and
+   shifting the capsule and the card sideways. The frame is exactly the box
+   the shell already filled, so clipping here changes what is on screen by
+   nothing — it only stops the animation from making the document scroll. */
+.app-frame {
+  height: 100%;
+  overflow: hidden; /* fallback for browsers without `clip` */
+  overflow: clip;
+}
+
 .app {
   display: flex;
   flex-direction: column;

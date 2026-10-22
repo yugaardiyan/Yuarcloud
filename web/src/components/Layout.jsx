@@ -40,19 +40,28 @@ function Layout() {
 
   return (
     <ContextMenuProvider>
-      <div
-        className={`app${onCardedPage ? ' is-drive' : ''}${hasStatusBar ? ' has-status-bar' : ''}`}
-      >
-        <Header />
+      {/* The shell's entrance animation starts it 10px below the viewport.
+          Without a frame to clip it, those 10px become document scroll, a
+          scrollbar shows up for the length of the animation, and the whole
+          page narrows by the scrollbar's width — the capsule and the card
+          visibly jump sideways and back on every refresh. This frame is the
+          viewport-sized box the shell already occupied; clipping there keeps
+          the slide identical and leaves the document nothing to scroll. */}
+      <div className="app-frame">
+        <div
+          className={`app${onCardedPage ? ' is-drive' : ''}${hasStatusBar ? ' has-status-bar' : ''}`}
+        >
+          <Header />
 
-        <div className="app-body">
-          <main className="app-main">
-            <Outlet />
-          </main>
+          <div className="app-body">
+            <main className="app-main">
+              <Outlet />
+            </main>
+          </div>
+
+          <UploadTray />
+          <ToastHost />
         </div>
-
-        <UploadTray />
-        <ToastHost />
       </div>
     </ContextMenuProvider>
   )
