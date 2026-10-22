@@ -38,7 +38,21 @@ if [ ! -f /config/config.yaml ] && [ -f /app/config.docker.yaml ]; then
 fi
 
 if [ "$(id -u)" = "0" ]; then
-  for dir in /srv /config; do
+  # The root and the chunk scratch are wherever the operator pointed them.
+  # Fixing only /srv left a custom bind mount root-owned, so the server (uid
+  # 1000) failed at startup with "mkdir /library/.yuarcloud-trash: permission
+  # denied" — a custom location that looked broken rather than unwritable.
+  #
+  # An empty temp_dir is the server's way of asking for
+  # "<root>/.yuarcloud-chunks"; the entrypoint has to resolve the same
+  # fallback or it would chown a directory the server never uses.
+  storage_root="${YUAR_STORAGE_LOCAL_ROOT:-/srv}"
+  chunk_temp="${YUAR_STORAGE_CHUNKED_TEMP_DIR:-$storage_root/.yuarcloud-chunks}"
+
+  for dir in "$storage_root" "$chunk_temp" /config; do
+    # A path that does not exist yet is created by the server as uid 1000
+    # under a parent this loop has just fixed; chowning it here can only fail.
+    [ -e "$dir" ] || continue
     if chown 1000:1000 "$dir" 2>/dev/null; then
       :
     else

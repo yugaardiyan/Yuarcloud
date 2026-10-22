@@ -43,11 +43,15 @@ storage:
   chunked:
     max_chunk_size: 10485760
     max_file_size: 10737418240
-    # Partial uploads live on the same volume as the files they will become,
-    # so a large upload never eats into the container's own writable layer. The
-    # leading dot is what keeps it out of the browser: LocalStorage.List skips
-    # dot-prefixed entries, the same way .yuarcloud-trash is hidden.
-    temp_dir: "/srv/.yuarcloud-chunks"
+    # Empty means "<storage root>/.yuarcloud-chunks". That keeps partial
+    # uploads on the same volume as the files they will become even when
+    # YUAR_STORAGE_LOCAL_ROOT points at another disk, so a large upload never
+    # eats into the container's own writable layer. Set an absolute path here
+    # (or via YUAR_STORAGE_CHUNKED_TEMP_DIR) to place it elsewhere.
+    #
+    # The `.yuarcloud` prefix keeps it out of the browser: List hides the
+    # server's own entries, not every dot-prefixed file.
+    temp_dir: ""
     cleanup_interval: "1h"
 
 auth:

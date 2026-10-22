@@ -51,6 +51,11 @@ services:
 
     volumes:
       # User files. This is the only directory most people back up.
+      #
+      # To use another folder, point `source` at it and leave `target` as /srv
+      # — no environment change needed. Use a dedicated folder: Yuarcloud
+      # lists only what was uploaded through it and does not import files that
+      # were already there. See "Custom storage location" in the README.
       - type: bind
         source: /DATA/AppData/yuarcloud/srv
         target: /srv

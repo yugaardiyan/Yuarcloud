@@ -56,6 +56,16 @@ func NewLocalStorageWithLimits(cfg *config.Config, limits *Limits) (*LocalStorag
 	rootDir := cfg.Storage.Local.Root
 	tempDir := cfg.Storage.Chunked.TempDir
 
+	// An empty temp_dir means "keep partial uploads under the storage root".
+	// The Docker image ships it empty for exactly that reason: pointing
+	// storage.local.root at another volume must not leave the scratch dir on
+	// the old one (or, worse, inside the container's writable layer), where a
+	// large upload would fill a disk the operator was not watching. An
+	// explicit value still wins.
+	if tempDir == "" {
+		tempDir = filepath.Join(rootDir, InternalPrefix+"-chunks")
+	}
+
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return nil, fmt.Errorf("create root dir: %w", err)
 	}

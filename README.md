@@ -96,11 +96,55 @@ A cleanly stopped server checkpoints on the way out and leaves `y.db` complete
 on its own. If the host is NFS or SMB, WAL is skipped automatically and this
 does not apply.
 
-Chunked-upload scratch lives at `/srv/.yuarcloud-chunks`, on the same volume as
-the files it will become, so a large upload never fills the container's own
-writable layer.
+Chunked-upload scratch lives at `<storage root>/.yuarcloud-chunks`, on the same
+volume as the files it will become, so a large upload never fills the
+container's own writable layer.
 
 Logs go to stderr — `docker logs yuarcloud`. There is no log file.
+
+### Custom storage location
+
+`/srv` is only the default. The simplest way to use another folder is to point
+the `/srv` bind mount at it — the container path stays `/srv`, and nothing else
+changes:
+
+```yaml
+    volumes:
+      - type: bind
+        source: /DATA/Media/Yuarcloud   # any absolute path on the host
+        target: /srv
+```
+
+If the folder has to live inside a larger mount, mount that instead and name
+the root explicitly. The entrypoint fixes ownership of whichever directory the
+environment names — a root set only inside `/config/config.yaml` is invisible
+to it, so use `YUAR_STORAGE_LOCAL_ROOT` in the compose file (or chown the
+folder yourself):
+
+```yaml
+    environment:
+      - YUAR_STORAGE_LOCAL_ROOT=/library
+    volumes:
+      - type: bind
+        source: /DATA/Media
+        target: /library
+```
+
+Two things to know before pointing it at an existing library:
+
+- **Yuarcloud does not adopt files it did not upload.** The browser lists the
+  disk intersected with the database, and only uploads create rows there.
+  Files already in the folder are invisible; there is no scan or import. Use a
+  dedicated folder and upload through the app. This is the one place where it
+  is not FileBrowser.
+- The entrypoint chowns the named root and the chunk directory, but **not
+  recursively**. A folder that already contains another app's files keeps
+  their ownership; create new content through Yuarcloud, or fix permissions
+  yourself. Point it at a dedicated folder rather than a shared media root.
+
+The scratch directory follows the root (`<root>/.yuarcloud-chunks`) when
+`storage.chunked.temp_dir` is empty, which is what the Docker image ships. Set
+`YUAR_STORAGE_CHUNKED_TEMP_DIR` only if it needs to live somewhere else.
 
 ## Layout
 
