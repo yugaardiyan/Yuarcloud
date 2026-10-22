@@ -17,7 +17,7 @@
 # moved or rewritten. Nested items may need host write permission for uid 1000
 # before they can be moved or deleted from the app.
 #
-# Image pinned to v1.2 (multi-arch). Change the tag to update.
+# Image pinned to v1.2.1 (multi-arch). Change the tag to update.
 # If 3103 is taken, change only `published` (e.g. "3104"); keep target 3103.
 #
 # x-casaos.hostname is what the dashboard uses for its Open link. Change it to
@@ -43,9 +43,9 @@ services:
       TZ: Asia/Jakarta
       # REQUIRED: replace this. The server rejects the placeholder.
       YUAR_AUTH_JWT_SECRET: "PASTE-YOUR-OWN-64-CHARACTER-RANDOM-STRING-HERE"
-    image: ghcr.io/yugaardiyan/yuarcloud:v1.2
+    image: ghcr.io/yugaardiyan/yuarcloud:v1.2.1
     labels:
-      icon: https://cdn.jsdelivr.net/gh/yugaardiyan/Yuarcloud@v1.2/web/public/logo.png
+      icon: https://cdn.jsdelivr.net/gh/yugaardiyan/Yuarcloud@v1.2.1/web/public/logo.png
     network_mode: bridge
     ports:
       - mode: ingress
@@ -73,7 +73,7 @@ services:
 
 x-casaos:
   hostname: yuarcloud.yuar.my.id
-  icon: https://cdn.jsdelivr.net/gh/yugaardiyan/Yuarcloud@v1.2/web/public/logo.png
+  icon: https://cdn.jsdelivr.net/gh/yugaardiyan/Yuarcloud@v1.2.1/web/public/logo.png
   index: /
   is_uncontrolled: false
   main: yuarcloud
