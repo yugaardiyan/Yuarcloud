@@ -14,7 +14,7 @@ Kode: ~13.100 baris Go (`internal/`), ~765 baris `cmd/`, ~14.000 baris frontend.
 
 | Tingkat | Jumlah | Diperbaiki | Bukti empiris |
 |---|---:|---:|---|
-| Kritis | 13 | 13 | 9 direproduksi langsung, 4 diverifikasi lewat kode/header |
+| Kritis | 15 | 15 | 12 direproduksi langsung (termasuk image Docker), 3 lewat kode/header |
 | Tinggi | 15 | 15 | 6 direproduksi, sisanya verifikasi kode + build |
 | Sedang | 6 | 1 | 1 diperbaiki, 5 didokumentasikan (butuh keputusan/ubah API) |
 | Rendah | 4 | 2 | 2 diperbaiki |
@@ -56,7 +56,7 @@ Tidak ada perubahan tampilan: semua perbaikan frontend menyentuh perilaku (state
 - Reproduksi lokal: `CGO_ENABLED=0 go build -o /tmp/yc-nocgo ./cmd/server` lalu dijalankan →
   `Failed to initialize database: open database: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub`.
 - Perbaikan: `CGO_ENABLED=1` pada build image. Runtime alpine sudah membawa musl.
-- Batasan: tidak ada container runtime di mesin ini, jadi image belum dijalankan; yang dibuktikan adalah penyebab kegagalannya.
+- Verifikasi: setelah Docker terpasang, image dibangun dan dijalankan — container `healthy`, log `SQLite journal mode: WAL`, UI/asset/login 200.
 
 ### K6. Bind mount ZimaOS menutupi config
 - Lokasi: `Dockerfile`, `docker-entrypoint.sh`, `docker-compose.zimaos.yml`.
@@ -102,6 +102,18 @@ Tidak ada perubahan tampilan: semua perbaikan frontend menyentuh perilaku (state
 - Fakta: `total_chunks` tidak pernah dibandingkan dengan `total_size`/`chunk_size`. `total_size: 1, total_chunks: 1000` membuka 1000 chunk berukuran maksimum sementara semua pemeriksaan kuota melihat 1 byte.
 - Perbaikan: tolak ukuran nol/negatif dan wajibkan `total_chunks == ceil(total_size / chunk_size)`; sesi di memori dibersihkan bila insert DB gagal.
 - Verifikasi: `{"total_size":1,"chunk_size":8388608,"total_chunks":1000}` → 400 `total_chunks does not match total_size and chunk_size`.
+
+### K14. `docker-compose.yml` bukan YAML yang valid
+- Lokasi: `docker-compose.yml` → `services.yuarcloud.environment[0]`.
+- Fakta: nilai `YUAR_AUTH_JWT_SECRET=... generate one with: openssl ...` tidak dikutip. YAML membaca `with: openssl` sebagai pasangan kunci-nilai, sehingga item environment menjadi objek, dan Compose menolak seluruh file: `environment.[0]: unexpected type map[string]interface {}`.
+- Perbaikan: nilai dikutip; `docker compose config` valid.
+- Ditemukan saat percobaan instalasi Docker yang sesungguhnya — tidak terlihat dari pembacaan kode.
+
+### K15. Image runtime tidak berisi frontend (UI 404)
+- Lokasi: `Dockerfile`, stage runtime.
+- Fakta: `web/dist` dibangun di stage frontend dan disalin ke backend builder, tetapi stage runtime hanya menyalin binary dan config. Server start dengan `Frontend not built ... API-only mode`; `/` menjawab 404 dan hanya API yang hidup.
+- Perbaikan: `COPY --from=backend-builder /app/web/dist ./web/dist` (WORKDIR `/app`).
+- Verifikasi: setelah rebuild, log `Serving frontend from /app/web/dist`, `/` 200, asset `index-*.js` 200, login 200.
 
 ---
 
@@ -236,12 +248,17 @@ Tidak ada perubahan tampilan: semua perbaikan frontend menyentuh perilaku (state
 | Admin UI | halaman render, tab Chunked Upload memuat 10 MB/10 GB, tanpa error konsol |
 | Menu Open | modal pratinjau terbuka, tidak mengunduh |
 | Build tanpa cgo | gagal saat buka SQLite (penyebab K5 terbukti) |
+| `docker compose up -d --build` | image terbangun, container `healthy` |
+| Container: SQLite | `SQLite journal mode: WAL`, DB di `/config/yuarcloud.db` |
+| Container: frontend | `Serving frontend from /app/web/dist`, `/` 200, asset 200 |
+| Container: login | `yuarcloud`/`yuarcloud` → token, `must_rotate_password: true` |
+| Container: privilege | PID 1 berjalan sebagai uid 1000 (`su-exec`), file DB milik uid 1000 |
 
 ---
 
 ## Batasan
 
-- **Tidak ada container runtime** (docker/podman/colima) di mesin ini. Perbaikan Dockerfile/entrypoint (K5, K6) tidak dijalankan sebagai container; K5 dibuktikan pada level binary, K6 lewat pembacaan alur mount + salinan config.
+- **Docker awalnya tidak terpasang.** Saat audit dimulai tidak ada runtime container; Docker kemudian dipasang dan image berhasil dibangun/dijalankan. K5, K14, dan K15 kini terbukti di container. K6 (bind mount ZimaOS) masih diuji lewat alur mount + salinan config, bukan di ZimaOS sungguhan.
 - **Tangkapan layar tidak tersedia** ("Screenshot needs a visible tab"). Verifikasi UI memakai pengukuran DOM dan konsol browser.
 - **Halaman 2 daftar user** tidak bisa direproduksi dengan 4 akun di instance uji. Perbaikannya diverifikasi dari bentuk parameter yang dikirim dan tipe yang diterima axios.
 - **Share `bjcS1X`** (password tidak diketahui) belum diuji; pemiliknya perlu memverifikasi.
