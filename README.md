@@ -130,17 +130,35 @@ folder yourself):
         target: /library
 ```
 
-Two things to know before pointing it at an existing library:
+Pointing it at an existing library works like FileBrowser: when a directory is
+opened, files and folders already on disk are adopted into the database on the
+spot, so they appear in the listing and can be shared, moved, downloaded or
+moved to the trash. Nothing on disk is rewritten by that first listing.
 
-- **Yuarcloud does not adopt files it did not upload.** The browser lists the
-  disk intersected with the database, and only uploads create rows there.
-  Files already in the folder are invisible; there is no scan or import. Use a
-  dedicated folder and upload through the app. This is the one place where it
-  is not FileBrowser.
+Things to know:
+
+- **Adoption is lazy, one directory level at a time.** Opening a folder adopts
+  its direct children; opening a child adopts the next level. This avoids a
+  full-disk scan on first start. Search and the move/copy folder tree only know
+  items that have been adopted, so a deep item can be missing from those views
+  until its folder has been browsed once.
+- **Adopted bytes do not count toward the account quota.** They were already
+  there before the account existed, and charging them retroactively could lock
+  the account out of uploading. New uploads, copies and share uploads are
+  charged normally. Deleting an adopted file therefore does not change
+  `used_bytes`.
+- **Symbolic links are skipped.** Following a link could leave the storage root
+  and expose arbitrary host files, so the importer never turns one into a
+  browsable entry. Hard links and ordinary files are unaffected.
 - The entrypoint chowns the named root and the chunk directory, but **not
   recursively**. A folder that already contains another app's files keeps
-  their ownership; create new content through Yuarcloud, or fix permissions
-  yourself. Point it at a dedicated folder rather than a shared media root.
+  their ownership. Reading usually works, but moving or deleting a nested item
+  needs write permission on its parent directory for uid 1000. If those
+  operations fail with "permission denied", fix the host permissions or run on
+  a dedicated folder.
+- The database is still the index. A file dropped into an already-open folder
+  appears on the next refresh; a file edited outside the app has its size and
+  MIME type refreshed the next time its folder is listed.
 
 The scratch directory follows the root (`<root>/.yuarcloud-chunks`) when
 `storage.chunked.temp_dir` is empty, which is what the Docker image ships. Set

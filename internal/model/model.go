@@ -72,12 +72,19 @@ func (User) TableName() string {
 }
 
 type File struct {
-	ID           uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
-	UserID       uuid.UUID      `gorm:"type:uuid;index;not null" json:"user_id"`
-	ParentID     *uuid.UUID     `gorm:"type:uuid;index" json:"parent_id"`
-	Name         string         `gorm:"size:255;not null" json:"name"`
-	Path         string         `gorm:"size:1000;not null;index" json:"path"`
-	Size         int64          `gorm:"default:0" json:"size"`
+	ID       uuid.UUID  `gorm:"type:uuid;primary_key" json:"id"`
+	UserID   uuid.UUID  `gorm:"type:uuid;index;not null" json:"user_id"`
+	ParentID *uuid.UUID `gorm:"type:uuid;index" json:"parent_id"`
+	Name     string     `gorm:"size:255;not null" json:"name"`
+	Path     string     `gorm:"size:1000;not null;index" json:"path"`
+	Size     int64      `gorm:"default:0" json:"size"`
+	// QuotaCharged records whether Size was added to the owner's used_bytes.
+	// A nil value means "created by the application", whose rows have always
+	// been charged; the column default is true. Rows adopted from files that
+	// were already on disk are explicitly false, so browsing an existing
+	// library does not retroactively consume the account's quota and deleting
+	// one of those files cannot release bytes that were never charged.
+	QuotaCharged *bool          `gorm:"default:true" json:"-"`
 	MimeType     string         `gorm:"size:100" json:"mime_type"`
 	IsDir        bool           `gorm:"default:false;index" json:"is_dir"`
 	Checksum     string         `gorm:"size:64" json:"checksum"` // SHA256
@@ -98,6 +105,15 @@ func (f *File) BeforeCreate(*gorm.DB) error {
 	generateUUID(&f.ID)
 
 	return nil
+}
+
+// CountsAgainstQuota reports whether this row's bytes were added to used_bytes.
+//
+// Nil is the normal state for a row the application created: the database
+// default is true, and the pointer only carries an explicit false for files
+// adopted from disk.
+func (f *File) CountsAgainstQuota() bool {
+	return f.QuotaCharged == nil || *f.QuotaCharged
 }
 
 func (File) TableName() string {

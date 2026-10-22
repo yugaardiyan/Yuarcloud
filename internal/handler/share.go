@@ -2,9 +2,7 @@ package handler
 
 import (
 	"archive/zip"
-	"context"
 	"fmt"
-	"io"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -317,51 +315,17 @@ func (h *ShareHandler) PreviewSharedFile(c *gin.Context) {
 
 // streamFolderZip streams a shared folder to the visitor as a ZIP archive.
 //
-// The rows are scoped to the folder's owner, not the visitor: the link grants
-// access to that owner's tree, and the visitor has no account of their own.
-// Mirrors FileHandler.DownloadFolder — the archive is piped straight into the
-// response so a large folder never has to be staged in memory or on disk.
+// The disk is the source of truth, not the rows: a shared folder can contain
+// descendants that no authenticated listing has adopted yet, and the visitor
+// must still receive them. The link's path prefix already confines the walk to
+// the owner's tree; writeFolderZip skips symlinks and unreadable entries.
 func (h *ShareHandler) streamFolderZip(c *gin.Context, folder model.File) {
-	pattern, _ := childPathPatterns(folder.Path)
-
-	var descendants []model.File
-	h.db.Where("user_id = ? AND is_trashed = ? AND path LIKE ? ESCAPE '\\'",
-		folder.UserID, false, pattern).
-		Find(&descendants)
-
 	c.Header("Content-Disposition", contentDisposition("attachment", folder.Name+".zip"))
 	c.Header("Content-Type", "application/zip")
 
 	zw := zip.NewWriter(c.Writer)
 	defer zw.Close()
-
-	seen := make(map[string]bool, len(descendants))
-	for i := range descendants {
-		f := &descendants[i]
-		if f.IsDir {
-			continue
-		}
-		rel := strings.TrimPrefix(strings.TrimPrefix(f.Path, folder.Path), "/")
-		if rel == "" || seen[rel] {
-			continue
-		}
-
-		reader, err := h.storage.Read(context.Background(), f.Path)
-		if err != nil {
-			continue // skip unreadable entries, keep the archive valid
-		}
-		entry, err := zw.Create(rel)
-		if err != nil {
-			reader.Close()
-			return
-		}
-		if _, err := io.Copy(entry, reader); err != nil {
-			reader.Close()
-			return
-		}
-		reader.Close()
-		seen[rel] = true
-	}
+	writeFolderZip(c.Request.Context(), h.storage, zw, folder.Path)
 }
 
 // ShareUpload lets a visitor push a file into a write-enabled shared folder

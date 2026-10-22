@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,9 +31,16 @@ func (ls *LocalStorage) Copy(ctx context.Context, srcPath, dstPath string) error
 }
 
 func (ls *LocalStorage) copyFileOrDir(src, dst string) error {
-	info, err := os.Stat(src)
+	// Lstat, not Stat: a symlink in an adopted library must not turn a folder
+	// copy into a copy of whatever it points at. The importer skips links for
+	// the same reason; copying has to agree or it re-admits their bytes as
+	// ordinary files with no row and no charge.
+	info, err := os.Lstat(src)
 	if err != nil {
 		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("copy: refusing to follow symlink %s", src)
 	}
 
 	if info.IsDir() {
@@ -52,6 +60,12 @@ func (ls *LocalStorage) copyDir(src, dst string) error {
 	}
 
 	for _, entry := range entries {
+		// The server's own directories are not part of a user's tree. List
+		// hides them, so copying them would create hidden bytes that no
+		// listing can show and no row can charge.
+		if isInternal(entry.Name()) || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
 

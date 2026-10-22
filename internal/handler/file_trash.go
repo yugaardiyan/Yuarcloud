@@ -176,9 +176,13 @@ func (h *FileHandler) releaseSubtreeUsage(root string, sign int64) {
 		Bytes  int64
 	}
 	var rows []ownerBytes
+	// Only rows the application actually charged may move used_bytes. Files
+	// adopted from disk were never added to the counter, so releasing them
+	// here would hand out quota for bytes nobody paid for (and could drive
+	// the total below zero). Copies are charged and therefore still count.
 	whereSubtree(h.db.Model(&model.File{}), "path", root).
 		Select("user_id, COALESCE(SUM(size), 0) AS bytes").
-		Where("is_dir = ?", false).
+		Where("is_dir = ? AND quota_charged = ?", false, true).
 		Group("user_id").
 		Scan(&rows)
 

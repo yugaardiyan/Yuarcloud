@@ -60,6 +60,7 @@ func (h *FileHandler) maxChunkSize() int64 { return h.storage.GetLimits().MaxChu
 const internalPrefix = storage.InternalPrefix
 
 func (h *FileHandler) ListFiles(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
 	sc := reqScope(c)
 
 	// Normalise the requested path, then lift it into the caller's home. A
@@ -79,13 +80,43 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 	var parentFolder *model.File
 	if pidStr := c.Query("parent_id"); pidStr != "" {
 		if pid, err := uuid.Parse(pidStr); err == nil {
-			scoped(sc, h.db).First(&parentFolder, "id = ? AND is_dir = ?", pid, true)
+			scoped(sc, h.db).First(&parentFolder, "id = ? AND is_dir = ? AND is_trashed = ?", pid, true, false)
 		}
 	}
 	if parentFolder == nil && path != sc.Home {
 		var found model.File
-		if err := scoped(sc, h.db).First(&found, "path = ? AND is_dir = ?", path, true).Error; err == nil {
+		if err := scoped(sc, h.db).First(&found, "path = ? AND is_dir = ? AND is_trashed = ?", path, true, false).Error; err == nil {
 			parentFolder = &found
+		}
+	}
+	// parent_id is only a hint. It must not be able to label the children of
+	// `path` with a different folder's id; the path is what the disk listing
+	// and the adoption below use.
+	if parentFolder != nil && parentFolder.Path != path {
+		parentFolder = nil
+	}
+
+	// A direct URL or a refresh can name a folder whose ancestors have never
+	// been listed. Fill in the chain from the caller's home before touching
+	// the disk; adoptPathFrom uses Lstat, so a path that climbs through a
+	// symlink is refused instead of importing whatever it points at.
+	if parentFolder == nil && path != "" && path != sc.Home {
+		found, err := adoptPathFrom(h.db, h.storage, userID, sc.Home, nil, path)
+		if err != nil {
+			if err == storage.ErrNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "directory not found"})
+				return
+			}
+			c.Error(err) //nolint:errcheck
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare directory"})
+			return
+		}
+		if found != nil {
+			if !found.IsDir {
+				c.JSON(http.StatusNotFound, gin.H{"error": "directory not found"})
+				return
+			}
+			parentFolder = found
 		}
 	}
 
@@ -101,6 +132,15 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 		return
 	}
 
+	// The disk is the source of truth for what exists. Give anything that has
+	// no row one now, so the query below can return it and every client-side
+	// action (share, move, trash, download) has an id to work with.
+	if err := adoptDirectoryEntries(h.db, userID, path, parentFolder, files); err != nil {
+		c.Error(err) //nolint:errcheck
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to index directory"})
+		return
+	}
+
 	// Load the DB rows for the direct children of `path` inside the caller's
 	// home. Scoping by path prefix (not parent_id) keeps the home listing
 	// working, where parent_id is NULL. The NOT LIKE excludes deeper nesting so
@@ -112,6 +152,11 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 		if nested != "" {
 			query = query.Where("path NOT LIKE ? ESCAPE '\\'", nested)
 		}
+	} else {
+		// Root listing: only paths without a slash are direct children. The
+		// old unfiltered query loaded every live row in the database just to
+		// intersect it with the top of the tree.
+		query = query.Where("path NOT LIKE ?", "%/%")
 	}
 	query.Find(&candidates)
 

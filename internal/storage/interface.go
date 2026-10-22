@@ -12,7 +12,11 @@ type FileInfo struct {
 	Size     int64
 	MimeType string
 	IsDir    bool
-	ModTime  time.Time
+	// IsSymlink marks an entry that is a symbolic link. List and Stat report
+	// the link itself rather than following it; the adoption path uses this
+	// to skip links, because a link can point outside the storage root.
+	IsSymlink bool
+	ModTime   time.Time
 	// Checksum is the SHA-256 of the file's contents, and it is only ever
 	// populated by paths that already have the whole file in hand. Stat and
 	// List deliberately leave it empty.

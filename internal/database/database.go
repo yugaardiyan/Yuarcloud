@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 
 	"golang.org/x/crypto/bcrypt"
@@ -230,8 +231,45 @@ func autoMigrate(db *gorm.DB) error {
 	if err := migratePartialUserIndexes(db); err != nil {
 		return err
 	}
+	if err := migrateQuotaCharged(db); err != nil {
+		return err
+	}
 
 	return migrateFilePathUniqueness(db)
+}
+
+// migrateQuotaCharged marks every row that predates the adoption feature as
+// charged.
+//
+// Before adoption, every files row came from an upload or a copy and its bytes
+// were added to used_bytes. The new quota_charged column has to preserve that
+// history: leaving old rows NULL (or false) would make trashing them release
+// bytes the account never paid for, while the migration itself must not touch
+// rows adopted later. The settings marker makes this a one-time operation, and
+// the update and marker share a transaction so a crash cannot leave old rows
+// uncharged or turn a future adopted row into a charged one.
+func migrateQuotaCharged(db *gorm.DB) error {
+	var done int64
+	if err := db.Raw("SELECT count(*) FROM settings WHERE key = ?", "migration.quota_charged.v1").
+		Scan(&done).Error; err != nil {
+		return fmt.Errorf("check quota_charged migration: %w", err)
+	}
+	if done > 0 {
+		return nil
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.File{}).
+			Where("quota_charged IS NULL OR quota_charged = ?", false).
+			Update("quota_charged", true).Error; err != nil {
+			return fmt.Errorf("backfill quota_charged: %w", err)
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&model.Setting{
+			Key:         "migration.quota_charged.v1",
+			Value:       "1",
+			Description: "Existing file rows marked as quota-charged; adopted rows stay uncharged",
+		}).Error
+	})
 }
 
 // migrateFilePathUniqueness makes one live row per path, and enforces it.

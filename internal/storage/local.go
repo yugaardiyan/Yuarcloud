@@ -148,7 +148,12 @@ func safePathElement(raw string) string {
 func (ls *LocalStorage) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	fullPath := ls.resolvePath(path)
 
-	info, err := os.Stat(fullPath)
+	// Lstat, not Stat: a symlink has to be reported as a link. Following it
+	// here would let the adoption path copy metadata from whatever the link
+	// points at, possibly outside the storage root, and then create a row for
+	// it. Callers that need the target can still Read through the link; the
+	// importer deliberately refuses these entries.
+	info, err := os.Lstat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrNotFound
@@ -158,12 +163,13 @@ func (ls *LocalStorage) Stat(ctx context.Context, path string) (*FileInfo, error
 
 	// No checksum here, and deliberately so — see the note on FileInfo.
 	return &FileInfo{
-		Name:     info.Name(),
-		Path:     path,
-		Size:     info.Size(),
-		MimeType: getMimeType(info.Name(), info.IsDir()),
-		IsDir:    info.IsDir(),
-		ModTime:  info.ModTime(),
+		Name:      info.Name(),
+		Path:      path,
+		Size:      info.Size(),
+		MimeType:  getMimeType(info.Name(), info.IsDir()),
+		IsDir:     info.IsDir(),
+		IsSymlink: info.Mode()&os.ModeSymlink != 0,
+		ModTime:   info.ModTime(),
 	}, nil
 }
 
@@ -198,12 +204,13 @@ func (ls *LocalStorage) List(ctx context.Context, path string) ([]*FileInfo, err
 		relPath = strings.TrimPrefix(relPath, "/")
 
 		files = append(files, &FileInfo{
-			Name:     entry.Name(),
-			Path:     relPath,
-			Size:     info.Size(),
-			MimeType: getMimeType(entry.Name(), entry.IsDir()),
-			IsDir:    entry.IsDir(),
-			ModTime:  info.ModTime(),
+			Name:      entry.Name(),
+			Path:      relPath,
+			Size:      info.Size(),
+			MimeType:  getMimeType(entry.Name(), entry.IsDir()),
+			IsDir:     entry.IsDir(),
+			IsSymlink: entry.Type()&os.ModeSymlink != 0,
+			ModTime:   info.ModTime(),
 		})
 	}
 

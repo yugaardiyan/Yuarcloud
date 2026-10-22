@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/yuarcloud/yuarcloud/internal/model"
+	"github.com/yuarcloud/yuarcloud/internal/storage"
 )
 
 // cleanSharePath normalises the `path` parameter on a public share request.
@@ -54,6 +55,15 @@ func (h *ShareHandler) shareTarget(c *gin.Context, root *model.File) (*model.Fil
 		return nil, false
 	}
 
+	// A deep link can name a folder or file whose row does not exist yet
+	// because nobody has browsed to it. Adopt the chain below the shared root
+	// before looking it up. A symlink or a missing path is treated exactly
+	// like a missing row.
+	if _, err := adoptPathFrom(h.db, h.storage, root.UserID, root.Path, root, p); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file is no longer available"})
+		return nil, false
+	}
+
 	var target model.File
 	if err := h.db.Where("user_id = ? AND path = ? AND is_trashed = ?", root.UserID, p, false).
 		First(&target).Error; err != nil {
@@ -67,10 +77,10 @@ func (h *ShareHandler) shareTarget(c *gin.Context, root *model.File) (*model.Fil
 // ListSharedFolder returns the direct children of a shared folder (or of a
 // folder inside it) to a visitor with no account.
 //
-// Only the database is consulted: every user file has a row, the row carries
-// the owner's id and the path, and the path pattern keeps the result to the
-// requested level. Reading the storage directory instead would list other
-// accounts' trees as well, and each one would have to be filtered back out.
+// The storage directory is listed first so files that already existed on disk
+// can be adopted into rows owned by the link's creator. The SQL query is still
+// path-scoped to the folder, which is what keeps other trees out; the owner
+// filter then matches the rows adoption creates.
 func (h *ShareHandler) ListSharedFolder(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -93,6 +103,28 @@ func (h *ShareHandler) ListSharedFolder(c *gin.Context) {
 	if !folder.IsDir {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "this path is not a folder"})
 		return
+	}
+
+	// A shared folder is often the first place someone points at a library
+	// that already existed on disk. Its children need rows before the query
+	// below can return them, and the visitor has no account to own those rows;
+	// the link's owner does, just as for an upload through the share.
+	if h.storage != nil {
+		entries, err := h.storage.List(ctx, folder.Path)
+		if err != nil {
+			if err == storage.ErrNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "folder is no longer available"})
+				return
+			}
+			c.Error(err) //nolint:errcheck
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list folder"})
+			return
+		}
+		if err := adoptDirectoryEntries(h.db, root.UserID, folder.Path, folder, entries); err != nil {
+			c.Error(err) //nolint:errcheck
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to index folder"})
+			return
+		}
 	}
 
 	pattern, nested := childPathPatterns(folder.Path)

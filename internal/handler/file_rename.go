@@ -336,6 +336,21 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 
 	newPath := cleanPath(path.Join(targetParentPath, newName))
 
+	// A copy charges every byte it produces, so the source has to have a row
+	// for every byte first. Walking only the lazy levels that happen to have
+	// been browsed would leave unimported descendants free in the copy and
+	// invisible in the destination.
+	if file.IsDir {
+		// Unowned source bytes belong to the source folder's owner, not to the
+		// person making the copy; the destination rows below are charged to the
+		// copier, as with any other write.
+		if err := adoptTree(context.Background(), h.db, h.storage, file.UserID, file.Path, file); err != nil {
+			c.Error(err) //nolint:errcheck
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare folder for copy"})
+			return
+		}
+	}
+
 	// How much this copy will add, decided before any of it exists.
 	//
 	// The root's own bytes count: descendantsOf only matches rows strictly
@@ -381,18 +396,21 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 		return
 	}
 
-	// Create the copied root record.
+	// Create the copied root record. The copy is new data and is charged even
+	// when the source was adopted from disk and carried no quota.
+	charged := true
 	newFile := &model.File{
-		UserID:      userID,
-		ParentID:    targetParentID,
-		Name:        newName,
-		Path:        newPath,
-		Size:        file.Size,
-		MimeType:    file.MimeType,
-		IsDir:       file.IsDir,
-		Checksum:    file.Checksum,
-		StorageType: file.StorageType,
-		StoragePath: newPath,
+		UserID:       userID,
+		ParentID:     targetParentID,
+		Name:         newName,
+		Path:         newPath,
+		Size:         file.Size,
+		QuotaCharged: &charged,
+		MimeType:     file.MimeType,
+		IsDir:        file.IsDir,
+		Checksum:     file.Checksum,
+		StorageType:  file.StorageType,
+		StoragePath:  newPath,
 	}
 	// The root's own bytes were counted above, before anything was written.
 	// Without that the loop below never ran for a plain file, the total stayed
@@ -425,6 +443,10 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 			clone := d
 			clone.ID = uuid.UUID{}
 			clone.UserID = userID // the copy belongs to whoever made it
+			// A cloned adopted row must not stay uncharged: the copy handler
+			// adds every copied byte to used_bytes, so its rows have to be
+			// releasable later.
+			clone.QuotaCharged = &charged
 			clone.Path = newPath + strings.TrimPrefix(d.Path, file.Path)
 			clone.StoragePath = clone.Path
 			clone.OriginalPath = ""
