@@ -175,8 +175,9 @@ export const fileApi = {
   previewToken: (id) => api.post(`/files/${id}/preview-token`),
 
   // Ceilings the uploader has to respect. Read once and cached by upload.js:
-  // the admin can change max_chunk_size at runtime, and a client that guessed
-  // its own chunk size would start failing uploads as soon as it did.
+  // the admin can change max_chunk_size or the parallel-upload count at
+  // runtime, and a client that guessed its own values would start failing
+  // uploads or run a different pool size as soon as it did.
   getUploadLimits: () => api.get('/files/upload-limits'),
 
   // Inline streaming URL for <img>/<video>/<audio>/<iframe>. Takes the file

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { fileApi, apiError } from '../utils/api'
-import { uploadFilesSequentially } from '../utils/upload'
+import { resolveConcurrentUploads, uploadFilesWithConcurrency } from '../utils/upload'
 import { createSpeedTracker, etaFromRate } from '../utils/uploadSpeed'
 import toast from 'react-hot-toast'
 
@@ -504,6 +504,11 @@ export function FileProvider({ children }) {
     const uploadable = list.filter((file) => !underFailedDir(dirOf(file)))
     if (!uploadable.length) return { results: [], failures: [] }
 
+    // Fetch the admin's concurrency setting while the tray rows are being
+    // built. It shares the uploader's cached limits with the chunk-size probe,
+    // so this does not add a second round trip.
+    const concurrencyPromise = resolveConcurrentUploads()
+
     const jobs = uploadable.map((file, i) => ({
       // Not crypto.randomUUID(): that is [SecureContext], so it is undefined on
       // plain HTTP over a LAN address — which is exactly how a self-hosted
@@ -542,7 +547,9 @@ export function FileProvider({ children }) {
     const speed = speedTrackerRef.current
     jobs.forEach((job) => speed.reset(job.id))
 
-    const { results, failures } = await uploadFilesSequentially(uploadable, {
+    const concurrency = await concurrencyPromise
+    const { results, failures } = await uploadFilesWithConcurrency(uploadable, {
+      concurrency,
       parentIdFor: (file) => dirId.get(dirOf(file)) ?? baseParentId,
       onUpdate: ({ index, progress, loaded, status, message }) => {
         const id = jobIdAt(index)

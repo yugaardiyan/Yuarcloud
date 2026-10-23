@@ -489,9 +489,14 @@ function Drive() {
         </div>
 
         <div className="status-bar-meta">
-          <span>
-            {items.length} item{items.length === 1 ? '' : 's'}
-            {selected.size > 0 && ` · ${selected.size} selected`}
+          <span className="status-item-count">
+            <span>{items.length} item{items.length === 1 ? '' : 's'}</span>
+            {selected.size > 0 && (
+              <>
+                <span className="status-item-sep" aria-hidden="true">·</span>
+                <span className="status-item-selected">{selected.size} selected</span>
+              </>
+            )}
           </span>
           <span>
             {user?.quota_bytes > 0 && (

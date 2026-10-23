@@ -670,7 +670,12 @@ const set = (key) => (e) => {
 }
 
 function ChunkedConfigTab({ config }) {
-  const [formData, setFormData] = useState({ max_chunk_size_mb: 10, max_file_size_gb: 10, cleanup_interval: '1h' })
+  const [formData, setFormData] = useState({
+    max_chunk_size_mb: 10,
+    max_file_size_gb: 10,
+    max_concurrent_uploads: 3,
+    cleanup_interval: '1h',
+  })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -678,6 +683,7 @@ function ChunkedConfigTab({ config }) {
       setFormData({
         max_chunk_size_mb: Math.round(config.max_chunk_size / 1048576),
         max_file_size_gb: Math.round(config.max_file_size / 1073741824),
+        max_concurrent_uploads: config.max_concurrent_uploads ?? 3,
         cleanup_interval: cleanupOptionValue(config.cleanup_interval),
       })
     }
@@ -692,11 +698,12 @@ function ChunkedConfigTab({ config }) {
       await adminApi.updateChunkedConfig({
         max_chunk_size: formData.max_chunk_size_mb * 1048576,
         max_file_size: formData.max_file_size_gb * 1073741824,
+        max_concurrent_uploads: formData.max_concurrent_uploads,
         cleanup_interval: formData.cleanup_interval,
       })
       toast.success('Chunked upload configuration saved')
-      // The uploader caches the server's chunk size; without this it would
-      // keep using the old ceiling until the page was reloaded.
+      // The uploader caches the server's chunk size and concurrency; without
+      // this it would keep using the old values until the page was reloaded.
       resetUploadLimits()
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to save configuration')
@@ -713,9 +720,8 @@ function ChunkedConfigTab({ config }) {
         Chunked Upload Settings
       </h3>
 
-      {/* One row. The three fields are independent of each other and none of
-          them needs the width — they were stacked because a form was written
-          as a column, not because anything about them was sequential. */}
+      {/* Two rows of two. Four independent fields need the width, and a single
+          row of four would wrap every label onto two lines at this page width. */}
       <div className="settings-grid">
         <div>
           <label className="field-label" htmlFor="chunk-size">Max Chunk Size (MB)</label>
@@ -739,6 +745,19 @@ function ChunkedConfigTab({ config }) {
             value={formData.max_file_size_gb}
             onChange={(e) => setFormData({ ...formData, max_file_size_gb: parseInt(e.target.value) || 10 })}
             min={1}
+          />
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="concurrent-uploads">Concurrent Uploads</label>
+          <input
+            id="concurrent-uploads"
+            type="number"
+            className="input input-capsule"
+            value={formData.max_concurrent_uploads}
+            onChange={(e) => setFormData({ ...formData, max_concurrent_uploads: parseInt(e.target.value) || 3 })}
+            min={1}
+            max={10}
           />
         </div>
 
@@ -769,9 +788,10 @@ function ChunkedConfigTab({ config }) {
           timeout, not a cap on how long a transfer may run. */}
       <p className="settings-note">
         5–10 MB per chunk works best behind Cloudflare Tunnel, which caps requests at
-        100 MB. Every chunk received resets the cleanup clock, so this is how long an
-        abandoned upload's chunks sit on disk before being reclaimed — not a limit on
-        how long a transfer may run.
+        100 MB. Concurrent uploads controls how many files a browser sends at once
+        (1–10; three is a good default). Every chunk received resets the cleanup
+        clock, so this is how long an abandoned upload's chunks sit on disk before
+        being reclaimed — not a limit on how long a transfer may run.
       </p>
 
       <button className="btn btn-primary btn-pill" style={{ marginTop: 16 }} onClick={handleSave} disabled={loading}>

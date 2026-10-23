@@ -22,7 +22,23 @@ export const MAX_CHUNK_BYTES = 10 * 1024 * 1024 // 10 MB
 export const SIMPLE_UPLOAD_LIMIT = 16 * 1024 * 1024 // 16 MB
 
 /**
- * The chunk size actually used, resolved against the server.
+ * How many files a browser sends at once.
+ *
+ * The server stores the admin's choice and hands it back with the chunk limits,
+ * so every client agrees on it. Three is enough to keep a batch moving without
+ * turning ten files into ten competing streams over a phone hotspot.
+ */
+export const DEFAULT_CONCURRENT_UPLOADS = 3
+export const MAX_CONCURRENT_UPLOADS = 10
+
+function normalizeConcurrentUploads(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_CONCURRENT_UPLOADS
+  return Math.min(Math.floor(n), MAX_CONCURRENT_UPLOADS)
+}
+
+/**
+ * The upload settings actually used, resolved against the server.
  *
  * This is the fix for "chunk size too large" on every file over
  * SIMPLE_UPLOAD_LIMIT: the client used to send a hard-coded 8 MB while the
@@ -35,11 +51,18 @@ export const SIMPLE_UPLOAD_LIMIT = 16 * 1024 * 1024 // 16 MB
  */
 let limitsPromise = null
 
-export async function resolveChunkSize(explicit) {
-  if (typeof explicit === 'number' && explicit > 0) {
-    return Math.min(explicit, MAX_CHUNK_BYTES)
-  }
+function fetchUploadLimits() {
+  return fileApi.getUploadLimits().then((res) => {
+    const max = Number(res?.data?.max_chunk_size)
+    if (!(max > 0)) throw new Error('server reported no chunk limit')
+    return {
+      maxChunkSize: max,
+      maxConcurrentUploads: normalizeConcurrentUploads(res?.data?.max_concurrent_uploads),
+    }
+  })
+}
 
+function resolveUploadLimits() {
   // Only a probe that actually succeeded is worth keeping.
   //
   // It used to cache whatever came back, failures included: one bad probe —
@@ -51,22 +74,23 @@ export async function resolveChunkSize(explicit) {
   // the session — reintroducing, permanently, the exact failure this function
   // exists to prevent.
   if (!limitsPromise) {
-    limitsPromise = fileApi.getUploadLimits()
-      .then((res) => {
-        const max = Number(res?.data?.max_chunk_size)
-        if (!(max > 0)) throw new Error('server reported no chunk limit')
-        return max
-      })
-      .catch((err) => {
-        // Forget the failure so the next upload probes again.
-        limitsPromise = null
-        throw err
-      })
+    limitsPromise = fetchUploadLimits().catch((err) => {
+      // Forget the failure so the next upload probes again.
+      limitsPromise = null
+      throw err
+    })
+  }
+  return limitsPromise
+}
+
+export async function resolveChunkSize(explicit) {
+  if (typeof explicit === 'number' && explicit > 0) {
+    return Math.min(explicit, MAX_CHUNK_BYTES)
   }
 
   let serverMax = 0
   try {
-    serverMax = await limitsPromise
+    serverMax = (await resolveUploadLimits()).maxChunkSize
   } catch {
     // Fall back to the client default. The server would reject it, but the user
     // gets a real error naming the size rather than a silent zero, and the
@@ -76,6 +100,20 @@ export async function resolveChunkSize(explicit) {
 
   if (!(serverMax > 0)) return MAX_CHUNK_BYTES
   return Math.min(serverMax, MAX_CHUNK_BYTES)
+}
+
+/**
+ * How many files the next batch may upload in parallel.
+ *
+ * A failed probe is not fatal: the batch uses the default pool size, and the
+ * failed probe is not cached, so the next batch asks again.
+ */
+export async function resolveConcurrentUploads() {
+  try {
+    return (await resolveUploadLimits()).maxConcurrentUploads
+  } catch {
+    return DEFAULT_CONCURRENT_UPLOADS
+  }
 }
 
 /** Drops the cached limits; call after changing the chunked-upload settings. */
@@ -251,54 +289,88 @@ export async function uploadFileChunked(file, options = {}) {
 }
 
 /**
- * Upload a list of files sequentially.
+ * Upload a list of files with a bounded number in flight.
  *
- * Sequential (not parallel) on purpose: parallel large files would multiply
- * bandwidth and make a flaky tunnel connection fail all of them at once.
+ * A batch used to run strictly one file at a time. That is safe, but ten small
+ * files spent ten round trips waiting on each other, and the tray looked frozen
+ * between rows. Sending everything at once is worse: ten large files compete
+ * for the same uplink and a flaky tunnel can fail all of them together. The
+ * worker pool keeps the middle ground, with the limit chosen by an admin (and
+ * reported by /upload-limits) rather than hard-coded here.
+ *
+ * Each file's chunks still go out in order. Concurrency is across files, so a
+ * single large file keeps its simple, resumable chunk sequence.
  *
  * @param {File[]} files
  * @param {object} options
+ * @param {number} [options.concurrency]  files to run at once; clamped to 1..10
  * @param {(update:{file:File,index:number,progress:number,loaded:number,status:string})=>void} [options.onUpdate]
  */
-export async function uploadFilesSequentially(files, options = {}) {
-  const { parentId = null, parentIdFor = null, chunkSize, onUpdate, signal } = options
+export async function uploadFilesWithConcurrency(files, options = {}) {
+  const {
+    parentId = null,
+    parentIdFor = null,
+    chunkSize,
+    concurrency = DEFAULT_CONCURRENT_UPLOADS,
+    onUpdate,
+    signal,
+  } = options
   const results = []
   const failures = []
 
-  for (let index = 0; index < files.length; index += 1) {
-    const file = files[index]
-    if (signal?.aborted) break
+  if (!files.length) return { results, failures }
 
-    onUpdate?.({ file, index, progress: 0, status: 'uploading' })
+  const workers = Math.min(
+    files.length,
+    Math.max(1, Math.min(MAX_CONCURRENT_UPLOADS, Math.floor(concurrency) || DEFAULT_CONCURRENT_UPLOADS))
+  )
+  let nextIndex = 0
 
-    try {
-      const record = await uploadFileChunked(file, {
-        parentId,
-        parentIdFor,
-        chunkSize,
-        signal,
-        onProgress: (progress, loaded) => onUpdate?.({ file, index, progress, loaded, status: 'uploading' }),
-        onError: (message) => onUpdate?.({ file, index, progress: 0, status: 'error', message }),
-      })
-      // The index travels with the result. Callers used to match on file.name,
-      // which cannot distinguish two files that share a basename — routine for
-      // a folder pick containing a/report.doc and b/report.doc.
-      results.push({ file, index, record })
-      onUpdate?.({ file, index, progress: 100, loaded: file.size, status: 'done' })
-    } catch (error) {
-      failures.push({ file, index, error })
-      // The chunked path reports its own failures through onError; the simple
-      // path did not, so its row stayed on "uploading" with a frozen progress
-      // bar until the panel was closed.
-      onUpdate?.({
-        file,
-        index,
-        progress: 0,
-        status: 'error',
-        message: error?.message || 'Upload failed',
-      })
+  const worker = async () => {
+    while (nextIndex < files.length) {
+      if (signal?.aborted) return
+      const index = nextIndex
+      nextIndex += 1
+      const file = files[index]
+
+      onUpdate?.({ file, index, progress: 0, status: 'uploading' })
+
+      try {
+        const record = await uploadFileChunked(file, {
+          parentId,
+          parentIdFor,
+          chunkSize,
+          signal,
+          onProgress: (progress, loaded) => onUpdate?.({ file, index, progress, loaded, status: 'uploading' }),
+          onError: (message) => onUpdate?.({ file, index, progress: 0, status: 'error', message }),
+        })
+        // The index travels with the result. Callers used to match on file.name,
+        // which cannot distinguish two files that share a basename — routine for
+        // a folder pick containing a/report.doc and b/report.doc.
+        results.push({ file, index, record })
+        onUpdate?.({ file, index, progress: 100, loaded: file.size, status: 'done' })
+      } catch (error) {
+        failures.push({ file, index, error })
+        // The chunked path reports its own failures through onError; the simple
+        // path did not, so its row stayed on "uploading" with a frozen progress
+        // bar until the panel was closed.
+        onUpdate?.({
+          file,
+          index,
+          progress: 0,
+          status: 'error',
+          message: error?.message || 'Upload failed',
+        })
+      }
     }
   }
+
+  // Completion order is not stable under concurrency, but callers and the
+  // receipt should be: the batch is reported in the order the files were
+  // picked.
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  results.sort((a, b) => a.index - b.index)
+  failures.sort((a, b) => a.index - b.index)
 
   return { results, failures }
 }

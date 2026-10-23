@@ -32,17 +32,42 @@ const maxPreviewSize = 256 << 20 // 256 MiB
 // UploadLimits reports the ceilings an uploader needs to know about.
 //
 // This exists because the browser decides on its own whether to send a file in
-// one request or split it into chunks, and how big those chunks are. Both
-// decisions are only correct if they respect the server's limits — a client
-// that hard-codes a chunk size will start failing the moment an admin tunes
-// max_chunk_size, which is exactly what the Chunked Upload settings page is
-// for. Any signed-in user may read this; it is configuration, not secrets.
+// one request or split it into chunks, how big those chunks are, and how many
+// files to send at once. All three decisions are only correct if they respect
+// the server's configuration — a client that hard-codes a chunk size will start
+// failing the moment an admin tunes max_chunk_size, which is exactly what the
+// Chunked Upload settings page is for. Any signed-in user may read this; it is
+// configuration, not secrets.
 func (h *FileHandler) UploadLimits(c *gin.Context) {
 	limits := h.storage.GetLimits()
 	c.JSON(http.StatusOK, gin.H{
-		"max_chunk_size": limits.MaxChunkSize(),
-		"max_file_size":  limits.MaxFileSize(),
+		"max_chunk_size":         limits.MaxChunkSize(),
+		"max_file_size":          limits.MaxFileSize(),
+		"max_concurrent_uploads": h.maxConcurrentUploads(c.Request.Context()),
 	})
+}
+
+// maxConcurrentUploads reads the admin's parallel-upload choice from settings.
+//
+// The limit is enforced by the browser, not by this process, so it cannot live
+// in the storage limits struct that the upload path reads. Reading the row on
+// each limits request keeps a saved change visible to the next uploader
+// without a restart; the client caches the answer for the session.
+func (h *FileHandler) maxConcurrentUploads(ctx context.Context) int {
+	if h.db == nil {
+		return defaultMaxConcurrentUploads
+	}
+	var setting model.Setting
+	if err := h.db.WithContext(ctx).
+		Select("value").
+		First(&setting, "key = ?", settingKeyMaxConcurrentUploads).Error; err != nil {
+		return defaultMaxConcurrentUploads
+	}
+	v, err := strconv.ParseInt(strings.TrimSpace(setting.Value), 10, 64)
+	if err != nil {
+		return defaultMaxConcurrentUploads
+	}
+	return normalizeConcurrentUploads(v)
 }
 
 // IssuePreviewToken mints the short-lived token the viewer puts in its URL.

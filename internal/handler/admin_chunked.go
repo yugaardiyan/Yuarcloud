@@ -30,12 +30,14 @@ func (h *AdminHandler) GetChunkedUploadConfig(c *gin.Context) {
 	// judged against, so showing anything else risks the page disagreeing with
 	// the behaviour the user is trying to configure.
 	limits := h.storage.GetLimits()
+	concurrency := h.settingInt64(c.Request.Context(), settingKeyMaxConcurrentUploads, defaultMaxConcurrentUploads)
 
 	c.JSON(http.StatusOK, gin.H{
-		"max_chunk_size":   limits.MaxChunkSize(),
-		"max_file_size":    limits.MaxFileSize(),
-		"temp_dir":         defaultTempDir,
-		"cleanup_interval": formatDuration(limits.CleanupInterval()),
+		"max_chunk_size":         limits.MaxChunkSize(),
+		"max_file_size":          limits.MaxFileSize(),
+		"max_concurrent_uploads": normalizeConcurrentUploads(concurrency),
+		"temp_dir":               defaultTempDir,
+		"cleanup_interval":       formatDuration(limits.CleanupInterval()),
 	})
 }
 
@@ -73,9 +75,10 @@ func formatDuration(d time.Duration) string {
 
 func (h *AdminHandler) UpdateChunkedUploadConfig(c *gin.Context) {
 	var req struct {
-		MaxChunkSize    int64  `json:"max_chunk_size"`
-		MaxFileSize     int64  `json:"max_file_size"`
-		CleanupInterval string `json:"cleanup_interval"`
+		MaxChunkSize         int64  `json:"max_chunk_size"`
+		MaxFileSize          int64  `json:"max_file_size"`
+		MaxConcurrentUploads int    `json:"max_concurrent_uploads"`
+		CleanupInterval      string `json:"cleanup_interval"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -93,6 +96,13 @@ func (h *AdminHandler) UpdateChunkedUploadConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "max_file_size must be larger than max_chunk_size"})
 		return
 	}
+	// Zero means the field was absent from an older client, so leave the stored
+	// value alone. A present value has to be inside the range the uploader
+	// enforces rather than silently clamped.
+	if req.MaxConcurrentUploads != 0 && (req.MaxConcurrentUploads < 1 || req.MaxConcurrentUploads > maxAllowedConcurrentUploads) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("max_concurrent_uploads must be between 1 and %d", maxAllowedConcurrentUploads)})
+		return
+	}
 
 	updates := map[string]string{}
 	if req.MaxChunkSize > 0 {
@@ -100,6 +110,9 @@ func (h *AdminHandler) UpdateChunkedUploadConfig(c *gin.Context) {
 	}
 	if req.MaxFileSize > 0 {
 		updates[settingKeyMaxFileSize] = strconv.FormatInt(req.MaxFileSize, 10)
+	}
+	if req.MaxConcurrentUploads > 0 {
+		updates[settingKeyMaxConcurrentUploads] = strconv.Itoa(req.MaxConcurrentUploads)
 	}
 	if req.CleanupInterval != "" {
 		if _, err := time.ParseDuration(req.CleanupInterval); err != nil {
@@ -131,17 +144,34 @@ func (h *AdminHandler) UpdateChunkedUploadConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "chunked upload config updated"})
 }
 
-// Chunked-upload defaults. These mirror configs/config.yaml.example and are
-// used until an admin overrides them from the admin panel.
+// Upload defaults. The chunked ceilings mirror configs/config.yaml.example and
+// are used until an admin overrides them; parallel uploads is a browser-side
+// setting with no YAML equivalent, so three is the floor it starts from.
 const (
-	settingKeyMaxChunkSize    = "storage.chunked.max_chunk_size"
-	settingKeyMaxFileSize     = "storage.chunked.max_file_size"
-	settingKeyCleanupInterval = "storage.chunked.cleanup_interval"
+	settingKeyMaxChunkSize         = "storage.chunked.max_chunk_size"
+	settingKeyMaxFileSize          = "storage.chunked.max_file_size"
+	settingKeyCleanupInterval      = "storage.chunked.cleanup_interval"
+	settingKeyMaxConcurrentUploads = "upload.max_concurrent"
 
-	defaultMaxChunkSize    int64 = 10 * 1024 * 1024
-	defaultCleanupInterval       = "1h"
-	defaultTempDir               = "./data/tmp/chunks"
+	defaultMaxChunkSize         int64 = 10 * 1024 * 1024
+	defaultCleanupInterval            = "1h"
+	defaultTempDir                    = "./data/tmp/chunks"
+	defaultMaxConcurrentUploads       = 3
+	maxAllowedConcurrentUploads       = 10
 )
+
+// normalizeConcurrentUploads keeps a hand-edited setting inside the range the
+// uploader and the admin form both promise. Missing or broken values fall back
+// to the default rather than turning a typo into zero parallel uploads.
+func normalizeConcurrentUploads(v int64) int {
+	if v < 1 {
+		return defaultMaxConcurrentUploads
+	}
+	if v > maxAllowedConcurrentUploads {
+		return maxAllowedConcurrentUploads
+	}
+	return int(v)
+}
 
 // ApplyChunkedConfig pushes the persisted ceilings into the live limits the
 // upload path reads on every request.

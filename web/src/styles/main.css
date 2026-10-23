@@ -1927,6 +1927,19 @@ input.input[type='number'] {
   flex-shrink: 0;
 }
 
+/* Item count and selection. The separator keeps the desktop reading as one
+   phrase; on a phone the two parts stack and the separator is hidden. */
+.status-item-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.status-item-sep {
+  color: var(--text-tertiary);
+}
+
 /* Phone only: the storage figure sits on two short right-aligned lines, which
    lets it be a touch smaller without giving up "used" or the quota total. */
 .status-quota-stacked {
@@ -2638,16 +2651,15 @@ input.input[type='number'] {
   color: var(--text-primary);
 }
 
-/* --- Admin: a row of related settings ----------------------------------- */
-/* Three controls stacked full-width spent 600px of row on every one of them to
-   display "10". They belong on one line, and the prose that explained them
-   belongs in one note under that line rather than a paragraph before each
-   field. `minmax(0, 1fr)` rather than `1fr` so a long option in the select
+/* --- Admin: related upload settings ------------------------------------- */
+/* Four controls. Two columns keep every label on one line at the form's 600px
+   width; four columns wrapped the labels, and one column left most of the row
+   empty. `minmax(0, 1fr)` rather than `1fr` so a long option in the select
    cannot force the column wider and push the row into overflow. */
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 16px;
 }
 
@@ -2659,7 +2671,7 @@ input.input[type='number'] {
 }
 
 /* One column is the phone threshold the rest of the app already uses; below
-   it, three 190px columns would wrap every label onto two lines. */
+   it, two 290px columns would wrap every label onto two lines. */
 @media (max-width: 560px) {
   .settings-grid {
     grid-template-columns: 1fr;
@@ -3284,6 +3296,26 @@ input.input[type='number'] {
   .status-bar-meta {
     flex: 0 0 auto;
     gap: 8px;
+    font-size: 10px;
+  }
+
+  /* A selection suffix used to make the item count one long line: at 320px it
+     grew the meta to 162px and left only 72px for the folder name. Stacking
+     "4 items" and "1 selected" keeps both columns two-line, right-aligned and
+     vertically centred, and hands the path roughly 40px back. min-height
+     matches the quota's two lines so the count itself sits on the bar's
+     centre line even when nothing is selected. */
+  .status-item-count {
+    min-height: 24px;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1px;
+    line-height: 1.15;
+  }
+
+  .status-item-sep {
+    display: none;
   }
 
   .breadcrumb {
