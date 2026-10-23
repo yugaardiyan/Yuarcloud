@@ -43,7 +43,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
 
   const [loading, setLoading] = useState(false)
   const [shares, setShares] = useState([])
-  const [showCreate, setShowCreate] = useState(false)
+  const [loadingShares, setLoadingShares] = useState(true)
   const [formData, setFormData] = useState({
     password: '',
     expiryDays: 7,
@@ -71,12 +71,15 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
     } catch (error) {
       console.error('Failed to load shares:', error)
       setShares([])
+    } finally {
+      setLoadingShares(false)
     }
   }, [fileId])
 
   // After loadShares, not before: a dependency array is evaluated where it is
   // written, so naming a `const` declared further down throws.
   useEffect(() => {
+    setLoadingShares(true)
     loadShares()
   }, [loadShares])
 
@@ -102,7 +105,6 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
         permission: formData.permission,
       })
       toast.success('Share link created')
-      setShowCreate(false)
       setFormData({ password: '', expiryDays: 7, permission: 'read' })
       await loadShares()
       onCreated?.()
@@ -166,8 +168,14 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
           </button>
         </div>
 
-        <div className={`modal-body ${shares.length === 0 && !showCreate ? 'is-placeholder' : ''}`}>
-          {shares.length > 0 && (
+        <div className={`modal-body ${!loadingShares && shares.length > 0 ? 'is-links' : ''}`}>
+          {loadingShares && (
+            <div className="share-loading" role="status">
+              Loading…
+            </div>
+          )}
+
+          {!loadingShares && shares.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <h3 style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                 Existing Links
@@ -177,7 +185,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                 const perm = PERMISSION[share.permission] || PERMISSION.read
                 const PermIcon = perm.icon
                 return (
-                  <div key={share.id} className={`card share-row is-${status.tone}`}>
+                  <div key={share.id} className={`share-row is-${status.tone}`}>
                     <div className="share-row-top">
                       <Link2 size={16} className="share-row-link-icon" />
                       <span className="share-row-url truncate">{share.url}</span>
@@ -229,41 +237,14 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                   </div>
                 )
               })}
-            </div>
-          )}
 
-          {shares.length === 0 && !showCreate && (
-            // Compact, with the action button below it — the same shape as the
-            // create form, where Cancel / Create Share Link close the dialog.
-            // This block used to carry 232px of dead space beneath the button.
-            <div className="share-empty">
-              <Link2 className="share-empty-icon" size={28} />
-              <h3 className="share-empty-title">No share links yet</h3>
-              <p className="share-empty-text">
-                Create a share link to give others access to this {isDir ? 'folder' : 'file'}.
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', margin: '10px 0 0' }}>
+                A share link already exists. Delete it to create a new one.
               </p>
             </div>
           )}
 
-          {shares.length > 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', margin: 0 }}>
-              A share link already exists. Delete it to create a new one.
-            </p>
-          ) : !showCreate ? (
-            // Only the way in. This used to toggle back to "Cancel" once the
-            // form was open, which put two identical buttons on screen at
-            // once; the footer's Cancel is the one that closes it.
-            <button
-              className="btn btn-secondary"
-              onClick={() => setShowCreate(true)}
-              style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}
-            >
-              <Link2 size={16} />
-              Create new share link
-            </button>
-          ) : null}
-
-          {showCreate && shares.length === 0 && (
+          {!loadingShares && shares.length === 0 && (
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
               <div className="share-form-row">
                 <div>
@@ -333,7 +314,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
               </div>
 
               <div className="modal-footer" style={{ padding: 0, border: 'none' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>
+                <button type="button" className="btn btn-secondary" onClick={onClose}>
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={loading}>

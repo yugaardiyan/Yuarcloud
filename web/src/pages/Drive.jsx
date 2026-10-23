@@ -495,10 +495,16 @@ function Drive() {
           </span>
           <span>
             {user?.quota_bytes > 0 && (
-              <span>
-                {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes)}
-                <span className="status-quota-used"> used</span>
-              </span>
+              phone ? (
+                <span className="status-quota-stacked">
+                  <span>{formatBytes(user.used_bytes || 0)} used</span>
+                  <span>of {formatBytes(user.quota_bytes)}</span>
+                </span>
+              ) : (
+                <span>
+                  {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes)} used
+                </span>
+              )
             )}
           </span>
         </div>

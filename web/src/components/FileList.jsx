@@ -197,7 +197,7 @@ function FileList({ onOpen, onDownload, onFile }) {
         <SortHeader label="Name" sortKey="name" className="flex-1" />
         <SortHeader label="Size" sortKey="size" className="file-col-size" />
         <SortHeader label="Modified" sortKey="updated_at" className="file-col-date" />
-        {/* Keeps Modified flush with the dates once the phone-only menu button
+        {/* Keeps Modified flush with the dates once the per-row menu button
             takes its 28px at the end of every row. */}
         <span className="file-menu-head" aria-hidden="true" />
       </div>

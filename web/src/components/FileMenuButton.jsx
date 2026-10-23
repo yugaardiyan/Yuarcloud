@@ -3,9 +3,9 @@ import { MoreVertical } from 'lucide-react'
 import { useContextMenu } from './ContextMenuProvider'
 
 /*
- * A visible way into the file context menu on a touch screen, where a
- * right-click does not exist. The button is hidden by CSS above the phone
- * breakpoint so the desktop card and row keep their current layout.
+ * One way into the file context menu. On a touch screen it stays visible
+ * beside the file; on desktop the surrounding card/row reveals it as part of
+ * its hover animation, so the resting layout stays quiet.
  */
 export default function FileMenuButton({ item, multi = false }) {
   const { openMenu } = useContextMenu()

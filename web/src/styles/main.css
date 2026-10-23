@@ -125,6 +125,10 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  /* Chrome paints a translucent blue block over every tapped control by
+     default. On a phone that block lands on the logo capsule and every toolbar
+     button, reading as a selection state that the app never asked for. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body, #root {
@@ -1014,11 +1018,12 @@ input.input[type='number'] {
   background: var(--bg-selected-hover);
 }
 
-/* A phone has no right-click, so each card and row gets a visible way into the
-   file context menu. Hidden above the phone breakpoint to leave the desktop
-   layout alone. */
+/* Each card and row carries its own way into the file context menu. On a
+   desktop it waits for the row/card hover and fades in beside that animation;
+   on a touch screen it stays visible, with no disc or padding painted behind
+   the dots. The 28px box remains so the target is still easy to hit. */
 .file-menu-btn {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 28px;
@@ -1030,31 +1035,73 @@ input.input[type='number'] {
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-1px) scale(0.92);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    color var(--transition-fast);
 }
 
-.file-menu-btn:hover,
-.file-menu-btn:active {
-  background: var(--bg-hover);
+.file-item:hover .file-menu-btn,
+.file-item:focus-within .file-menu-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.file-menu-btn:hover {
   color: var(--text-primary);
 }
 
 /* The grid tile is a column, so the trigger is pinned to its top-right corner
-   instead of taking a row of its own. The white disc keeps the dots legible
-   where the corner would otherwise sit over the file glyph. */
+   instead of taking a row of its own. No background: on a phone the dots read
+   as part of the tile rather than as a floating white control. */
 .file-card .file-menu-btn {
   position: absolute;
   top: 2px;
   right: 2px;
   z-index: 3;
-  background: var(--bg-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* Matches the button that follows the date in each phone list row, so the
-   Modified header still ends on the same edge as the dates beneath it. */
+/* Matches the button that follows the date in each list row, so Modified ends
+   on the same edge as the dates beneath it on every layout. */
 .file-menu-head {
-  display: none;
+  display: block;
   flex: 0 0 28px;
+}
+
+/* Touch has no hover to reveal the trigger. Keep it on screen, and undo the
+   sticky :hover tint a tap would otherwise leave behind. */
+@media (hover: none) {
+  .file-menu-btn {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  .file-menu-btn:hover {
+    color: var(--text-tertiary);
+  }
+
+  /* A tap leaves :hover latched on touch screens. The row/card should not keep
+     a blue wash after the finger lifts; a selected item keeps its own tint. */
+  .file-item:hover {
+    background: transparent;
+  }
+
+  .file-item.selected:hover {
+    background: var(--bg-selected);
+  }
+
+  .file-card:hover::before {
+    background: transparent;
+  }
+
+  .file-card.selected:hover::before {
+    background: var(--bg-selected);
+  }
 }
 
 /* Selection checkmark — pinned to the top-left corner of the card.
@@ -1878,6 +1925,19 @@ input.input[type='number'] {
   align-items: center;
   gap: 14px;
   flex-shrink: 0;
+}
+
+/* Phone only: the storage figure sits on two short right-aligned lines, which
+   lets it be a touch smaller without giving up "used" or the quota total. */
+.status-quota-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: 10px;
+  line-height: 1.15;
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* .btn-icon carries 8px of padding, which is taller than the bar it now lives
@@ -3186,11 +3246,11 @@ input.input[type='number'] {
   }
 }
 
-/* On a phone the bar stays one line: Back/Forward, the current folder, the
+/* On a phone the bar stays one row: Back/Forward, the current folder, the
    count and the quota. There is no room for ancestors — at 320px the figures
    leave about 110px for the path — so Drive.jsx drops them behind the home
-   ellipsis rather than letting every segment shrink to a letter. Both sides
-   stay on the bar's centre line; this is a row, not two rows. */
+   ellipsis rather than letting every segment shrink to a letter. The quota
+   itself stacks onto two short lines; the bar around it is still one row. */
 @media (max-width: 560px) {
   .status-bar {
     gap: 4px;
@@ -3256,14 +3316,6 @@ input.input[type='number'] {
   }
 }
 
-/* At the very narrow end the "used" suffix costs the folder name more than it
-   explains: the slash already separates the same two numbers. */
-@media (max-width: 360px) {
-  .status-quota-used {
-    display: none;
-  }
-}
-
 /* The tray spans the card's full width on a phone and nowhere else.
  *
  * 560px, and the number is chosen rather than inherited. This was at 768px,
@@ -3306,12 +3358,12 @@ input.input[type='number'] {
 @media (max-width: 560px) {
   .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 
+  /* Phone layout, regardless of what the browser reports for hover. The dots
+     stay visible and carry no painted box even if a stylus is connected. */
   .file-menu-btn {
-    display: inline-flex;
-  }
-
-  .file-menu-head {
-    display: block;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
   }
 
   /* Size goes first on a phone. Modified stays because "when did I last touch
@@ -3566,6 +3618,36 @@ input.input[type='number'] {
 .capsule-btn[data-active] .capsule-avatar {
   background: var(--accent-primary);
   color: #fff;
+}
+
+/* Touch browsers keep :hover on the last-tapped element until something else
+   is tapped. Without this, an inactive toolbar button stayed filled with the
+   light-blue hover wash and the logo capsule kept its raised shadow. The
+   filled and active variants keep the surface they already own. */
+@media (hover: none) {
+  .capsule-btn:hover {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  .capsule-btn[data-active]:hover {
+    background: var(--accent-primary-light);
+    color: var(--accent-primary);
+  }
+
+  .capsule-btn-primary:hover {
+    background: var(--accent-primary);
+    color: #fff;
+  }
+
+  .capsule-btn-danger:hover:not(:disabled) {
+    background: var(--accent-danger);
+    color: #fff;
+  }
+
+  .brand:hover {
+    box-shadow: var(--shadow-sm);
+  }
 }
 
 .capsule-avatar {
@@ -3981,72 +4063,29 @@ input.input[type='number'] {
 }
 
 /*
- * The "No share links yet" placeholder. Deliberately smaller than the generic
- * .empty-state used elsewhere: this one shares its dialog with the create
- * form, and the roomier version left the dialog with a large void and pushed
- * the action button nowhere near the bottom.
- */
-.share-empty {
-  text-align: center;
-}
-
-/*
- * Centre the message in the space the action button leaves it, instead of
- * letting it cling to the top of the panel with the gap all underneath. Only
- * applies in the placeholder state, where the body is the flex column.
- */
-.modal.share-modal .modal-body.is-placeholder .share-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  /* Without this the column stretches its children, and the icon — a replaced
-     element with a definite width — refuses to stretch and falls back to the
-     start edge instead. It ended up flush left while the text under it was
-     centred. text-align cannot fix it: the icon is a block-level flex item. */
-  align-items: center;
-  justify-content: center;
-}
-
-.share-empty-icon {
-  color: var(--text-tertiary);
-  opacity: 0.55;
-  margin-bottom: 8px;
-}
-
-.share-empty-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 4px;
-}
-
-.share-empty-text {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin: 0;
-  line-height: 1.5;
-}
-
-/*
- * One floor for both states. Sized to the create form, which is the taller of
- * the two now that the placeholder is compact — so the placeholder rests on it
- * and the dialog neither resizes nor slides when the form replaces it. The
- * link list still grows the modal past this, which is a change worth seeing.
+ * One floor for the direct-create and existing-links states. Sized to the
+ * create form so the dialog does not jump when the short loading state hands
+ * over to it; a growing list is still allowed to make the modal taller.
  */
 .modal.share-modal .modal-body {
   min-height: 230px;
 }
 
-/*
- * Holding the height steady is not enough on its own: the placeholder's own
- * content is much shorter than the form's, so its button ended up stranded
- * mid-panel while the form's sits near the bottom edge. Spreading the two
- * apart puts the action in the same place in both states.
- */
-.modal.share-modal .modal-body.is-placeholder {
+/* The link list is already as tall as its content needs to be. Keeping the
+   form's floor here left a pocket of empty white under a single link. */
+.modal.share-modal .modal-body.is-links {
+  min-height: 0;
+}
+
+/* The list fetch is normally a single local round-trip. Reserve the body and
+   centre a quiet line instead of flashing an empty state or the create form. */
+.share-loading {
+  min-height: 210px;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 /* Below this the two columns leave the duration value no room next to its
@@ -4094,16 +4133,21 @@ input.input[type='number'] {
   margin-top: 12px !important;
 }
 
+/* Flat rows, not cards. A separator is enough to keep two links apart; the
+   dialog already supplies the outer surface. */
 .share-row {
-  margin-bottom: 6px;
-  padding: 8px 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-color);
   transition: border-color var(--transition-fast);
 }
 
-/* A link that cannot be opened any more is dimmed, not just labelled. */
+.share-row:last-of-type {
+  border-bottom: none;
+}
+
+/* A link that cannot be opened any more is dimmed, not boxed. */
 .share-row.is-danger {
-  border-color: color-mix(in srgb, var(--accent-danger) 35%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-danger) 4%, var(--bg-primary));
+  border-bottom-color: color-mix(in srgb, var(--accent-danger) 35%, var(--border-color));
 }
 
 .share-row.is-muted {
