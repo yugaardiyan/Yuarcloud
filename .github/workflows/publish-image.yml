@@ -15,6 +15,13 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# A stuck or superseded image build used to keep the runner (and the tag) busy
+# for the whole six-hour job ceiling. A newer tag is the more useful build, so
+# cancel the older one and start the replacement immediately.
+concurrency:
+  group: publish-image
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -22,6 +29,7 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
