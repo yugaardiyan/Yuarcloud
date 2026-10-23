@@ -4,6 +4,7 @@ import { useFiles } from '../context/FileContext'
 import { useContextMenu } from './ContextMenuProvider'
 import { formatDate } from '../utils/helpers'
 import { FileIcon, iconClassFor } from './FileIcon'
+import FileMenuButton from './FileMenuButton'
 import { useDragMove } from '../hooks/useDragMove'
 import EmptyState from './EmptyState'
 
@@ -138,6 +139,8 @@ function FileGrid({ onOpen, onDownload, onFile }) {
                 {item.updated_at ? formatDate(item.updated_at) : '—'}
               </div>
             </div>
+
+            <FileMenuButton item={item} multi={active && selected.size > 1} />
           </div>
         )
       })}

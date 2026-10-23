@@ -1014,6 +1014,49 @@ input.input[type='number'] {
   background: var(--bg-selected-hover);
 }
 
+/* A phone has no right-click, so each card and row gets a visible way into the
+   file context menu. Hidden above the phone breakpoint to leave the desktop
+   layout alone. */
+.file-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.file-menu-btn:hover,
+.file-menu-btn:active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* The grid tile is a column, so the trigger is pinned to its top-right corner
+   instead of taking a row of its own. The white disc keeps the dots legible
+   where the corner would otherwise sit over the file glyph. */
+.file-card .file-menu-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 3;
+  background: var(--bg-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Matches the button that follows the date in each phone list row, so the
+   Modified header still ends on the same edge as the dates beneath it. */
+.file-menu-head {
+  display: none;
+  flex: 0 0 28px;
+}
+
 /* Selection checkmark — pinned to the top-left corner of the card.
    Now a direct child of .file-card, so it positions relative to the card itself. */
 .file-card .file-check {
@@ -3262,6 +3305,14 @@ input.input[type='number'] {
 
 @media (max-width: 560px) {
   .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+  .file-menu-btn {
+    display: inline-flex;
+  }
+
+  .file-menu-head {
+    display: block;
+  }
 
   /* Size goes first on a phone. Modified stays because "when did I last touch
      this" is what someone scanning a list on a small screen is usually after,

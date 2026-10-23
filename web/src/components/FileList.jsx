@@ -4,6 +4,7 @@ import { useFiles } from '../context/FileContext'
 import { useContextMenu } from './ContextMenuProvider'
 import { formatBytes, formatDate } from '../utils/helpers'
 import { FileIcon, iconClassFor } from './FileIcon'
+import FileMenuButton from './FileMenuButton'
 import { useDragMove } from '../hooks/useDragMove'
 import EmptyState from './EmptyState'
 
@@ -196,6 +197,9 @@ function FileList({ onOpen, onDownload, onFile }) {
         <SortHeader label="Name" sortKey="name" className="flex-1" />
         <SortHeader label="Size" sortKey="size" className="file-col-size" />
         <SortHeader label="Modified" sortKey="updated_at" className="file-col-date" />
+        {/* Keeps Modified flush with the dates once the phone-only menu button
+            takes its 28px at the end of every row. */}
+        <span className="file-menu-head" aria-hidden="true" />
       </div>
 
       {items.map((item) => {
@@ -239,6 +243,8 @@ function FileList({ onOpen, onDownload, onFile }) {
             <span className="file-name flex-1" title={item.name}>{item.name}</span>
             <span className="file-col-size">{item.is_dir ? '—' : formatBytes(item.size)}</span>
             <span className="file-col-date">{item.updated_at ? formatDate(item.updated_at) : '—'}</span>
+
+            <FileMenuButton item={item} multi={active && selected.size > 1} />
           </div>
         )
       })}

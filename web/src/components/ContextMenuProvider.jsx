@@ -129,8 +129,15 @@ export default function ContextMenuProvider({ children }) {
     const items = rawItems.filter((f) => ids.includes(f.id))
     if (!items.length) return
 
+    // Keyboard activation carries 0,0 rather than a pointer position. Anchor
+    // those openers to their own control so the menu does not jump to the
+    // top-left corner of the viewport. Pointer events already have coordinates.
+    const rect = e.currentTarget?.getBoundingClientRect?.()
+    const x = e.clientX || (rect ? rect.right - 8 : 8)
+    const y = e.clientY || (rect ? rect.bottom : 8)
+
     // The menu repositions itself against the real viewport size once mounted.
-    setMenu({ x: e.clientX, y: e.clientY, visible: true, kind: 'file', ids })
+    setMenu({ x, y, visible: true, kind: 'file', ids })
   }, [selected, rawItems])
 
   // Right-click on blank space: a menu of page-level actions.
