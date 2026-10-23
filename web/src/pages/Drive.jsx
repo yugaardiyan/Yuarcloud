@@ -366,12 +366,12 @@ function Drive() {
   // Breadcrumb segments for the current folder path.
   const driveSegments = view.path ? view.path.split('/').filter(Boolean) : []
 
-  // A phone cannot hold the whole path beside the arrows. Drop the middle
-  // rather than letting every segment shrink to a letter: "… › Proyek 2026 ›
-  // Foto Liburan" is a path you can read, and the leading ellipsis still goes
-  // home. One-level paths keep "My Cloud", because they fit.
-  const compactCrumbs = phone && driveSegments.length > 1
-  const firstCrumbIndex = compactCrumbs ? driveSegments.length - 2 : 0
+  // On a phone the status bar is one line, and the figures leave room for
+  // exactly one folder name. Show the folder you are in, not the ancestors,
+  // and put the home link behind the leading ellipsis. On wider screens the
+  // full path fits and is rendered as before.
+  const compactCrumbs = phone && driveSegments.length > 0
+  const firstCrumbIndex = compactCrumbs ? driveSegments.length - 1 : 0
   const shownSegments = driveSegments.slice(firstCrumbIndex)
 
   return (
@@ -496,7 +496,8 @@ function Drive() {
           <span>
             {user?.quota_bytes > 0 && (
               <span>
-                {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes)} used
+                {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes)}
+                <span className="status-quota-used"> used</span>
               </span>
             )}
           </span>
