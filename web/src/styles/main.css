@@ -3150,14 +3150,32 @@ input.input[type='number'] {
    stay on the bar's centre line; this is a row, not two rows. */
 @media (max-width: 560px) {
   .status-bar {
-    gap: 6px;
-    padding: 0 10px;
+    gap: 4px;
+    padding: 0 8px;
   }
 
   .status-bar-nav {
     flex: 1 1 auto;
     min-width: 0;
-    gap: 2px;
+    gap: 1px;
+  }
+
+  /* The arrows were a 17×25 glyph with no padding: readable, but a small
+     target at the very bottom of a phone. Give each a real 32×32 button and a
+     20px glyph, and take the width back from the gaps and from the folder's
+     padding below, so the bar still stays on one line at 320px. */
+  .status-nav-btn {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 9px;
+    touch-action: manipulation;
+  }
+
+  .status-nav-btn svg {
+    width: 20px;
+    height: 20px;
   }
 
   .status-bar-meta {
@@ -3169,6 +3187,7 @@ input.input[type='number'] {
     /* Only overflows when a long folder name, or a selection suffix, leaves
        less room than the path needs. The auto-scroll in Drive.jsx then keeps
        the current folder in view instead of clipping its right edge. */
+    gap: 1px;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -3179,9 +3198,9 @@ input.input[type='number'] {
 
   .breadcrumb-item {
     flex-shrink: 0;
-    padding: 2px 5px;
+    padding: 2px 3px;
     /* The current folder plus the compact root and separator have to fit in
-       roughly 110px at 320px wide. Scaling the cap with the viewport keeps
+       roughly 107px at 320px wide. Scaling the cap with the viewport keeps
        the common names whole without leaving a 430px phone with needlessly
        clipped ones. */
     max-width: clamp(88px, 28vw, 150px);
@@ -3189,8 +3208,8 @@ input.input[type='number'] {
 
   /* The compact root is one glyph; let it take only that. */
   .breadcrumb-item-compact {
-    padding-left: 3px;
-    padding-right: 3px;
+    padding-left: 2px;
+    padding-right: 2px;
   }
 }
 
