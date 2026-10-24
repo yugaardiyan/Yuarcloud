@@ -1,9 +1,10 @@
+# syntax=docker/dockerfile:1
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/web
 COPY web/package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --progress=false
 
 COPY web/ ./
 RUN npm run build
@@ -15,17 +16,19 @@ RUN apk add --no-cache git gcc musl-dev
 
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
 COPY --from=frontend-builder /app/web/dist ./web/dist
 
 # CGO stays on. gorm's sqlite driver is mattn/go-sqlite3, which is cgo
 # code: with CGO_ENABLED=0 the dependency builds a stub whose Open() returns
-# "Binary was compiled with 'CGO_ENABLED=0'" — so the image started, failed
+# "Binary was compiled with 'Binary was compiled with 'CGO_ENABLED=0''" — so the image started, failed
 # to open the default database, and exited. The runtime is alpine, so the
 # dynamic musl link the builder produces resolves there.
-RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /app/yuarcloud ./cmd/server
+RUN --mount=type=cache,target=/go/build-cache \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux GOCACHE=/root/.cache/go-build go build -ldflags="-s -w" -o /app/yuarcloud ./cmd/server
 
 # Stage 3: Runtime
 FROM alpine:3.19
