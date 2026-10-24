@@ -79,6 +79,21 @@ func loadLogo(path string) (image.Image, error) {
  * and a mark floating on flat colour loses its edges in that crop; a card
  * inside the card keeps a defined shape at any crop.
  */
+func drawText(dst *image.RGBA, x, y int, text string) {
+	// Simple placeholder - draw rectangles for rough text
+	// This is a minimal implementation
+	for i := 0; i < len(text); i++ {
+		cx := x + i*16
+		for dy := 0; dy < 20; dy++ {
+			for dx := 0; dx < 12; dx++ {
+				if (dx == 0 || dx == 11 || dy == 0 || dy == 19) {
+					dst.SetRGBA(cx+dx, y+dy, color.RGBA{0x1a, 0x1a, 0x2e, 0xff})
+				}
+			}
+		}
+	}
+}
+
 func buildPreviewCard(logo image.Image) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, previewWidth, previewHeight))
 
@@ -94,10 +109,12 @@ func buildPreviewCard(logo image.Image) []byte {
 	// Hairline, drawn just inside the panel so it follows the same curve.
 	strokeRounded(img, panel, 36, color.RGBA{0xde, 0xe2, 0xe6, 0xff})
 
-	mark := scale(logo, markSize, markSize)
-	x := previewWidth/2 - markSize/2
-	y := previewHeight/2 - markSize/2
-	draw.Draw(img, image.Rect(x, y, x+markSize, y+markSize), mark, image.Point{}, draw.Over)
+	mark := scale(logo, markSize+40, markSize+40)
+	x := previewWidth/2 - (markSize+40)/2
+	y := previewHeight/2 - (markSize+40)/2 - 30
+	draw.Draw(img, image.Rect(x, y, x+markSize+40, y+markSize+40), mark, image.Point{}, draw.Over)
+
+	drawText(img, previewWidth/2-80, y+markSize+50, "Yuarcloud")
 
 	var buf bytes.Buffer
 	_ = png.Encode(&buf, img)

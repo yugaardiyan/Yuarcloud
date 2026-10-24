@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import {
-  Copy, Scissors, Download, Share2, Info, Pencil,
-  FolderInput, FolderOpen, RotateCcw, Trash, Trash2,
-  Upload, HardDrive, CheckSquare,
+  Copy, Scissors, Download, Share2, Info,
+  FolderInput, FolderOpen, RotateCcw,
 } from 'lucide-react'
-import { NewFolderGlyph } from './icons'
+import { NewFolderGlyph, MyCloudGlyph, TrashGlyph } from './icons'
 import { useFiles, driveHref } from '../context/FileContext'
 import { useNavigate } from 'react-router-dom'
 import ShareModal from './ShareModal'
@@ -318,46 +317,46 @@ export default function ContextMenuProvider({ children }) {
           // Paste appears only once the clipboard holds something. Offering it
           // greyed out beforehand just advertised an action that could not run.
           ...(clipboard.action ? [{ id: 'paste', label: 'Paste here', icon: FolderInput }] : []),
-          { id: 'new-folder', label: 'New folder', icon: NewFolderGlyph },
-          { id: 'upload-file', label: 'Upload file', icon: Upload },
-          { id: 'upload-folder', label: 'Upload folder', icon: HardDrive },
+          { id: 'new-folder', label: 'New folder' },
+          { id: 'upload-file', label: 'Upload file' },
+          { id: 'upload-folder', label: 'Upload folder' },
           { type: 'divider' },
         ]
       : []),
-    { id: 'select-all', label: 'Select all', icon: CheckSquare },
+    { id: 'select-all', label: 'Select all' },
   ]
 
   const trashMenuItems = [
-    { id: 'info', label: 'Get info', icon: Info },
+    { id: 'info', label: 'Get info' },
     { type: 'divider' },
-    { id: 'restore', label: 'Restore', icon: RotateCcw },
-    { id: 'delete-permanent', label: 'Delete forever', icon: Trash, danger: true },
+    { id: 'restore', label: 'Restore' },
+    { id: 'delete-permanent', label: 'Delete forever', danger: true },
   ]
 
   // "Move to…" and "Copy to…" are gone: Copy/Cut then Paste already covers the
   // same ground in one place, so a second entry point for it was redundancy
   // rather than convenience.
   const fileMenuItems = [
-    { id: 'open', label: 'Open', icon: FolderOpen, disabled: isMulti && targetItems.some((f) => !f.is_dir) },
-    { id: 'download', label: 'Download', icon: Download, disabled: isMulti && targetItems.some((f) => f.is_dir) },
+    { id: 'open', label: 'Open', disabled: isMulti && targetItems.some((f) => !f.is_dir) },
+    { id: 'download', label: 'Download', disabled: isMulti && targetItems.some((f) => f.is_dir) },
     { type: 'divider' },
-    { id: 'copy', label: 'Copy', icon: Copy },
-    { id: 'cut', label: 'Cut', icon: Scissors },
+    { id: 'copy', label: 'Copy' },
+    { id: 'cut', label: 'Cut' },
     // Only a folder can receive a paste. On a plain file the old "Paste here"
     // had no destination and no handler behind it, so the click did nothing at
     // all — which read as "paste is broken". On a folder it is a real action:
     // drop the clipboard into that folder.
     ...(clipboard.action && !isMulti && first?.is_dir && view.scope === 'drive'
-      ? [{ id: 'paste-into', label: 'Paste into folder', icon: FolderInput }]
+      ? [{ id: 'paste-into', label: 'Paste into folder' }]
       : []),
     { type: 'divider' },
-    { id: 'rename', label: 'Rename', icon: Pencil, disabled: isMulti },
+    { id: 'rename', label: 'Rename', disabled: isMulti },
     { type: 'divider' },
-    { id: 'share', label: 'Share', icon: Share2, disabled: isMulti },
+    { id: 'share', label: 'Share', disabled: isMulti },
     { type: 'divider' },
-    { id: 'trash', label: 'Move to trash', icon: Trash2, danger: true },
+    { id: 'trash', label: 'Move to trash', danger: true },
     { type: 'divider' },
-    { id: 'info', label: 'Get info', icon: Info, disabled: isMulti },
+    { id: 'info', label: 'Get info', disabled: isMulti },
   ]
 
   const menuItems = menu.kind === 'empty'
@@ -393,10 +392,7 @@ export default function ContextMenuProvider({ children }) {
                 disabled={item.disabled}
                 role="menuitem"
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                  <item.icon size={15} fill={item.filled ? 'currentColor' : 'none'} />
-                  {item.label}
-                </span>
+                {item.label}
               </button>
             )
           )}

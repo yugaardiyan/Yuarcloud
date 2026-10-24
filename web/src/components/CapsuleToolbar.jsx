@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Search, X,
-  Settings, LogOut, Upload, HardDrive,
+  Upload,
 } from 'lucide-react'
 import {
   MyCloudGlyph, NewFolderGlyph, TrashGlyph, GridGlyph, ListGlyph,
@@ -232,7 +232,6 @@ export default function CapsuleToolbar() {
                   role="menuitem"
                   onClick={() => go(() => navigate('/admin'))}
                 >
-                  <Settings size={16} />
                   Settings
                 </button>
               )}
@@ -242,7 +241,6 @@ export default function CapsuleToolbar() {
                 role="menuitem"
                 onClick={() => { setMenu(null); logout() }}
               >
-                <LogOut size={16} />
                 Sign out
               </button>
             </div>
@@ -312,16 +310,13 @@ export default function CapsuleToolbar() {
                   role="menuitem"
                   onClick={() => { setMenu(null); setPromptNewFolder(true) }}
                 >
-                  <NewFolderGlyph size={16} />
                   New folder
                 </button>
                 <div className="capsule-menu-divider" />
                 <button className="capsule-menu-item" role="menuitem" onClick={() => fileInputRef.current?.click()}>
-                  <Upload size={16} />
                   Upload files
                 </button>
                 <button className="capsule-menu-item" role="menuitem" onClick={() => folderInputRef.current?.click()}>
-                  <HardDrive size={16} />
                   Upload folder
                 </button>
               </div>

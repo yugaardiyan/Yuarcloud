@@ -30,6 +30,8 @@ function FileList({ onOpen, onDownload, onFile }) {
   const { openMenu } = useContextMenu()
   const listRef = useRef(null)
   const { itemProps } = useDragMove()
+  const longPressTimer = useRef(null)
+  const longPressTriggered = useRef(false)
 
   // null until the user drags, so the column starts on the responsive behaviour
   // and only pins itself once there is a width of theirs to honour.
@@ -205,6 +207,38 @@ function FileList({ onOpen, onDownload, onFile }) {
       {items.map((item) => {
         const active = isSelected(item.id)
         const drag = itemProps(item)
+        const handleTouchStart = (e) => {
+          longPressTriggered.current = false
+          longPressTimer.current = setTimeout(() => {
+            longPressTriggered.current = true
+            select(item.id, { additive: true })
+            e.preventDefault()
+          }, 500)
+        }
+        const handleTouchMove = () => {
+          if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current)
+            longPressTimer.current = null
+          }
+        }
+        const handleTouchEnd = (e) => {
+          if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current)
+            longPressTimer.current = null
+          }
+          if (longPressTriggered.current) {
+            e.preventDefault()
+            longPressTriggered.current = false
+            return
+          }
+        }
+        const handleTouchCancel = () => {
+          if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current)
+            longPressTimer.current = null
+          }
+          longPressTriggered.current = false
+        }
         return (
           <div
             key={item.id}
@@ -221,12 +255,27 @@ function FileList({ onOpen, onDownload, onFile }) {
             onDragEnter={drag.onDragEnter}
             onDragLeave={drag.onDragLeave}
             onDrop={drag.onDrop}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchCancel}
             onClick={(e) => {
               if (e.detail === 2) return
+              if (longPressTriggered.current) {
+                longPressTriggered.current = false
+                return
+              }
               select(item.id, { additive: e.metaKey || e.ctrlKey, range: e.shiftKey })
             }}
             onDoubleClick={(e) => { e.preventDefault(); activate(item) }}
-            onContextMenu={(e) => openMenu(e, item.id, active && selected.size > 1)}
+            onContextMenu={(e) => {
+              if (longPressTriggered.current) {
+                e.preventDefault()
+                longPressTriggered.current = false
+                return
+              }
+              openMenu(e, item.id, active && selected.size > 1)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(item) }
             }}

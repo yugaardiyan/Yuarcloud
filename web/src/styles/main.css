@@ -33,7 +33,7 @@
      menu's inline 210 both left roughly 70px of empty space to the right of
      every row, which is where the menus looked oversized. 160px fits the
      widest of the two with room to spare. */
-  --capsule-menu-w: 160px;
+  --capsule-menu-w: 140px;
 
   /* One gap for the whole capsule toolbar. The nav row and the pill are two
      separate flex containers, so each kept its own value and the boundary
@@ -520,15 +520,16 @@ input.input[type='number'] {
 .breadcrumb {
   display: flex;
   align-items: center;
-  gap: 2px;
-  flex: 1;
+  gap: 0;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  transform: translateX(-25px);
 }
 .breadcrumb-item {
   background: transparent;
   border: none;
-  padding: 3px 7px;
+  padding: 2px 3px;
   font-size: 12.5px;
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
@@ -537,15 +538,28 @@ input.input[type='number'] {
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: color var(--transition-fast);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  font-variation-settings: 'wght' 500;
+  font-weight: 500;
 }
-.breadcrumb-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
+
+/* The folder names answer like the arrows: a heavier weight on hover, no
+   background pill and no padding shift. Sits after :last-child so the hover
+   weight reliably wins over the 500 it resets to. */
 .breadcrumb-item:last-child {
   color: var(--text-primary);
   font-weight: 500;
+}
+
+/* Hover: thicken and tint blue, the same accent as the back/forward arrows.
+   font-variation-settings animates weight paint-only, so sibling crumbs stay
+   put. */
+.breadcrumb-item:hover {
+  background: transparent;
+  color: var(--accent-primary);
+  font-variation-settings: 'wght' 640;
 }
 .breadcrumb-sep {
   display: flex;
@@ -1290,7 +1304,7 @@ input.input[type='number'] {
      right of every row, which is what read as an oversized box. 128px clears the
      widest by 2px, so the menu still holds one width instead of resizing with
      whatever the longest label happens to be. */
-  min-width: 128px;
+  min-width: 110px;
   /* Backstop: even if repositioning misjudges, the menu can never run past
      the viewport — it scrolls instead. */
   max-height: calc(100vh - 16px);
@@ -1304,9 +1318,9 @@ input.input[type='number'] {
 .context-menu-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 0;
   width: 100%;
-  padding: 6px 9px;
+  padding: 4px 8px;
   font-size: 12.5px;
   line-height: 1.35;
   color: var(--text-primary);
@@ -1898,8 +1912,13 @@ input.input[type='number'] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 16px;
+  gap: 4px;
+  line-height: 1;
+  /* The same gutter as the card above it. The bar used to carry its own 16px
+     padding (8px on a phone), so the rightmost figure sat 4px inside the card
+     on a desktop and 4px past it on a phone; a status bar should read as part
+     of that card, not as a slightly wider strip behind it. */
+  padding: 0 var(--drive-shell-gap);
   /* Also outside the card, so it takes the page grey. Its top rule went with
      that: grey against grey, it only drew a line across the grey gap. The
      card's own rounded bottom already separates the two. */
@@ -1913,7 +1932,7 @@ input.input[type='number'] {
 .status-bar-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   flex: 1;
   min-width: 0;
 }
@@ -1940,26 +1959,64 @@ input.input[type='number'] {
   color: var(--text-tertiary);
 }
 
-/* Phone only: the storage figure sits on two short right-aligned lines, which
-   lets it be a touch smaller without giving up "used" or the quota total. */
-.status-quota-stacked {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  font-size: 10px;
-  line-height: 1.15;
-  text-align: right;
-  white-space: nowrap;
-}
-
 /* .btn-icon carries 8px of padding, which is taller than the bar it now lives
    in, so the vertical padding comes down. The horizontal padding goes to zero:
    the button box already sits flush on the card's left edge, so any side
    padding pushed the arrow itself inboard of that edge and read as a stair. */
 .status-nav-btn {
-  padding: 4px 0;
+  padding: 5px 2px;
+  min-width: 28px;
+  min-height: 28px;
   border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-nav-icon {
+  display: block;
+}
+
+/* No hover background or padding shift on the arrows: a tint plus a bigger
+   pill here would swallow the status bar's bottom row. Only the stroke
+   thickens, a half-step past the resting 2.75. */
+.status-nav-btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.status-nav-btn .status-nav-icon {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* Hover: the glyph thickens and takes the blue accent, same feedback as a
+   folder crumb. The transition runs on width+color so the icon grows
+   smoothly without the bar jittering. */
+.status-nav-btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-primary);
+}
+
+@media (max-width: 560px) {
+  .status-nav-btn-forward {
+    transform: translateX(-4px);
+  }
+}
+
+@media (min-width: 561px) {
+  .status-nav-btn-forward {
+    transform: translateX(-20px);
+  }
+}
+
+/* The new back-arrow path starts further right than lucide's ArrowLeft, so
+   the ink sits well inside the icon box. Nudge the glyph so its visible tip,
+   not its box, lands on the card's left edge. The mobile override in the
+   560px media adjusts for the smaller glyph. */
+.status-nav-btn:first-child .status-nav-icon {
+  transform: translateX(-12px);
 }
 
 .status-bar-scope {
@@ -2652,15 +2709,24 @@ input.input[type='number'] {
 }
 
 /* --- Admin: related upload settings ------------------------------------- */
-/* Four controls. Two columns keep every label on one line at the form's 600px
-   width; four columns wrapped the labels, and one column left most of the row
-   empty. `minmax(0, 1fr)` rather than `1fr` so a long option in the select
-   cannot force the column wider and push the row into overflow. */
+/* Four controls, always two rows of two. Four columns wrapped every label;
+   one column turned the two rows back into a four-row list on a phone.
+   `minmax(0, 1fr)` rather than `1fr` so a long option in the select cannot
+   force the column wider and push the row into overflow. */
 
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 16px;
+}
+
+/* A short explanation under one control. Muted like the form note, but
+   tighter: it sits inside a grid cell rather than after the whole form. */
+.field-hint {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
 }
 
 .settings-note {
@@ -2670,11 +2736,16 @@ input.input[type='number'] {
   color: var(--text-tertiary);
 }
 
-/* One column is the phone threshold the rest of the app already uses; below
-   it, two 290px columns would wrap every label onto two lines. */
-@media (max-width: 560px) {
+/* At 320px the columns are about 125px wide, which leaves the longest label
+   only a few pixels of room at 13px. Step the label down one size and tighten
+   the gap instead of giving up the two-row layout. */
+@media (max-width: 380px) {
   .settings-grid {
-    grid-template-columns: 1fr;
+    gap: 10px 12px;
+  }
+
+  .settings-grid .field-label {
+    font-size: 12px;
   }
 }
 
@@ -2713,7 +2784,7 @@ input.input[type='number'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 0;
   margin-bottom: 22px;
 }
 
@@ -2731,6 +2802,7 @@ input.input[type='number'] {
   font-size: 25px;
   letter-spacing: -0.6px;
   white-space: nowrap;
+  margin-left: -8px;
 }
 
 .login-brand-lead {
@@ -3254,25 +3326,26 @@ input.input[type='number'] {
 
   .status-bar {
     font-size: 11px;
-    padding: 0 12px;
   }
 }
 
-/* On a phone the bar stays one row: Back/Forward, the current folder, the
-   count and the quota. There is no room for ancestors — at 320px the figures
-   leave about 110px for the path — so Drive.jsx drops them behind the home
-   ellipsis rather than letting every segment shrink to a letter. The quota
-   itself stacks onto two short lines; the bar around it is still one row. */
+/* On a phone the bar stays one row: Back/Forward, the last two folders, the
+   count and the quota. There is no room for the whole path, so Drive.jsx hides
+   the ancestors behind the home ellipsis and lets the two visible names
+   ellipsise to fit. The quota is one short "used / total" line; the bar around
+   it is still one row. */
 @media (max-width: 560px) {
   .status-bar {
     gap: 4px;
-    padding: 0 8px;
+    align-items: center;
   }
 
   .status-bar-nav {
     flex: 1 1 auto;
     min-width: 0;
-    gap: 1px;
+    gap: 0;
+    align-items: center;
+    display: flex;
   }
 
   /* The arrows were a 17×25 glyph with no padding: readable, but a small
@@ -3280,31 +3353,48 @@ input.input[type='number'] {
      20px glyph, and take the width back from the gaps and from the folder's
      padding below, so the bar still stays on one line at 320px. */
   .status-nav-btn {
-    flex: 0 0 32px;
-    width: 32px;
-    height: 32px;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
     padding: 0;
     border-radius: 9px;
     touch-action: manipulation;
   }
 
-  .status-nav-btn svg {
-    width: 20px;
-    height: 20px;
+  /* On mobile the 20px glyph sits 6px inboard of the 32px button's left
+     edge, so slide the button back into the gutter. The -6px translate on
+     the back glyph (global -5px plus this -1px) brings its tip to the
+     card's left edge; the tappable box stays 32px. */
+  .status-nav-btn:first-child {
+    margin-left: -18px;
+  }
+
+  .status-nav-btn:first-child .status-nav-icon {
+    transform: translateX(6.5px);
+  }
+
+  .status-nav-icon {
+    width: 22px;
+    height: 22px;
   }
 
   .status-bar-meta {
     flex: 0 0 auto;
-    gap: 8px;
+    /* Both figures share the bar's centre line. The old top alignment put the
+       one-line count at the top of its reserved two-line box, so the whole
+       right side sat a few pixels above the breadcrumb. */
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
     font-size: 10px;
+    display: flex;
   }
 
   /* A selection suffix used to make the item count one long line: at 320px it
      grew the meta to 162px and left only 72px for the folder name. Stacking
-     "4 items" and "1 selected" keeps both columns two-line, right-aligned and
-     vertically centred, and hands the path roughly 40px back. min-height
-     matches the quota's two lines so the count itself sits on the bar's
-     centre line even when nothing is selected. */
+     "4 items" and "1 selected" keeps the count right-aligned and hands the
+     path roughly 40px back. min-height keeps the block the same height with
+     or without a selection, so the quota never shifts between states. */
   .status-item-count {
     min-height: 24px;
     flex-direction: column;
@@ -3322,9 +3412,13 @@ input.input[type='number'] {
     /* Only overflows when a long folder name, or a selection suffix, leaves
        less room than the path needs. The auto-scroll in Drive.jsx then keeps
        the current folder in view instead of clipping its right edge. */
-    gap: 1px;
+    gap: 0;
     overflow-x: auto;
     scrollbar-width: none;
+    transform: translateX(-13px);
+    margin-right: 2px;
+    align-items: center;
+    display: flex;
   }
 
   .breadcrumb::-webkit-scrollbar {
@@ -3332,20 +3426,50 @@ input.input[type='number'] {
   }
 
   .breadcrumb-item {
-    flex-shrink: 0;
-    padding: 2px 3px;
-    /* The current folder plus the compact root and separator have to fit in
-       roughly 107px at 320px wide. Scaling the cap with the viewport keeps
-       the common names whole without leaving a 430px phone with needlessly
-       clipped ones. */
-    max-width: clamp(88px, 28vw, 150px);
+    /* Two names now share the strip, so let them shrink rather than forcing
+       the row to scroll; overflow:hidden above gives each its own ellipsis. */
+    flex: 0 1 auto;
+    min-width: 0;
+    padding: 1px 2px;
+    font-size: 11.5px;
+    /* Scaling the cap with the viewport keeps common names whole at 390px and
+       up without leaving a 430px phone with needlessly clipped ones. */
+    max-width: clamp(110px, 38vw, 200px);
+    /* Paint-only weight change: the variable font lets the hover thicken
+       without nudging the box and pushing the sibling crumbs. */
+    font-variation-settings: 'wght' 500;
   }
 
-  /* The compact root is one glyph; let it take only that. */
+  /* The compact root is one icon; keep it whole while the two folder names
+     beside it shrink and ellipsise. Flex centring puts the icon's dots on the
+     row's centre line, which the "…" glyph could not do: it sat on the text
+     baseline and read a few pixels low. */
   .breadcrumb-item-compact {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
     padding-left: 2px;
     padding-right: 2px;
+    line-height: 1;
   }
+}
+
+/* Desktop: a larger back/forward tap zone reads comfortably beside the full
+   breadcrumb path. */
+@media (min-width: 561px) {
+  .status-nav-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .status-nav-icon {
+    width: 23px;
+    height: 23px;
+  }
+
+  /* The icon and button size are set above; the back-tip nudge comes from the
+     global rule so it stays consistent across breakpoints. */
 }
 
 /* The tray spans the card's full width on a phone and nowhere else.
@@ -3845,9 +3969,9 @@ input.input[type='number'] {
 .capsule-menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0;
   width: 100%;
-  padding: 9px 11px;
+  padding: 6px 9px;
   font-size: 13px;
   font-family: inherit;
   font-weight: 500;
@@ -3882,15 +4006,15 @@ input.input[type='number'] {
    looked too heavy for a header this short. */
 .capsule-menu-head {
   position: relative;
-  padding: 10px 11px 9px;
+  padding: 6px 9px 5px;
   margin-bottom: 4px;
 }
 
 .capsule-menu-head::after {
   content: '';
   position: absolute;
-  left: 11px;
-  right: 11px;
+  left: 9px;
+  right: 9px;
   bottom: 0;
   height: 1px;
   background: var(--border-color);

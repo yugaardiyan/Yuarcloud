@@ -23,10 +23,10 @@ const TABS = [
 ]
 
 const CLEANUP_OPTIONS = [
-  { value: '15m', seconds: 900, label: 'Every 15 minutes' },
-  { value: '1h', seconds: 3600, label: 'Every hour' },
-  { value: '6h', seconds: 21600, label: 'Every 6 hours' },
-  { value: '24h', seconds: 86400, label: 'Every day' },
+  { value: '15m', seconds: 900, label: '15 minutes' },
+  { value: '1h', seconds: 3600, label: '1 hour' },
+  { value: '6h', seconds: 21600, label: '6 hours' },
+  { value: '24h', seconds: 86400, label: '1 day' },
 ]
 
 /**
@@ -720,8 +720,8 @@ function ChunkedConfigTab({ config }) {
         Chunked Upload Settings
       </h3>
 
-      {/* Two rows of two. Four independent fields need the width, and a single
-          row of four would wrap every label onto two lines at this page width. */}
+      {/* Two rows of two, at every width. Four fields in one row would wrap
+          every label; four rows made a short form look long on a phone. */}
       <div className="settings-grid">
         <div>
           <label className="field-label" htmlFor="chunk-size">Max Chunk Size (MB)</label>
@@ -737,7 +737,7 @@ function ChunkedConfigTab({ config }) {
         </div>
 
         <div>
-          <label className="field-label" htmlFor="file-size">Max File Upload (GB)</label>
+          <label className="field-label" htmlFor="file-size">Max File Size (GB)</label>
           <input
             id="file-size"
             type="number"
@@ -749,7 +749,7 @@ function ChunkedConfigTab({ config }) {
         </div>
 
         <div>
-          <label className="field-label" htmlFor="concurrent-uploads">Concurrent Uploads</label>
+          <label className="field-label" htmlFor="concurrent-uploads">Parallel Uploads</label>
           <input
             id="concurrent-uploads"
             type="number"
@@ -758,16 +758,21 @@ function ChunkedConfigTab({ config }) {
             onChange={(e) => setFormData({ ...formData, max_concurrent_uploads: parseInt(e.target.value) || 3 })}
             min={1}
             max={10}
+            aria-describedby="parallel-uploads-hint"
           />
+          <p className="field-hint" id="parallel-uploads-hint">
+            How many files are sent at once (1–10). 3 is a good default.
+          </p>
         </div>
 
         <div>
-          <label className="field-label" htmlFor="cleanup-interval">Cleanup Interval</label>
+          <label className="field-label" htmlFor="cleanup-interval">Cleanup After</label>
           <select
             id="cleanup-interval"
             className="input input-capsule"
             value={formData.cleanup_interval}
             onChange={(e) => setFormData({ ...formData, cleanup_interval: e.target.value })}
+            aria-describedby="cleanup-hint"
           >
             {CLEANUP_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -779,19 +784,18 @@ function ChunkedConfigTab({ config }) {
               <option value={formData.cleanup_interval}>{formData.cleanup_interval}</option>
             )}
           </select>
+          <p className="field-hint" id="cleanup-hint">
+            Chunks from an abandoned upload are deleted after this long.
+          </p>
         </div>
       </div>
 
-      {/* One note instead of a paragraph above and one under each field. The
-          Cloudflare limit was being stated twice, and the part that is not
-          obvious from the label is the second sentence: this is an idle
-          timeout, not a cap on how long a transfer may run. */}
+      {/* One sentence, because the two fields that needed explaining now
+          carry their own hint. What is left is the only fact the labels cannot
+          hold: the chunk size Cloudflare Tunnel is happiest with. */}
       <p className="settings-note">
-        5–10 MB per chunk works best behind Cloudflare Tunnel, which caps requests at
-        100 MB. Concurrent uploads controls how many files a browser sends at once
-        (1–10; three is a good default). Every chunk received resets the cleanup
-        clock, so this is how long an abandoned upload's chunks sit on disk before
-        being reclaimed — not a limit on how long a transfer may run.
+        5–10 MB chunks work best behind Cloudflare Tunnel, which caps each request at
+        100 MB.
       </p>
 
       <button className="btn btn-primary btn-pill" style={{ marginTop: 16 }} onClick={handleSave} disabled={loading}>

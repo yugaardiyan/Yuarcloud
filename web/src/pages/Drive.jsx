@@ -8,12 +8,13 @@ import { previewGroupOf } from '../utils/fileType'
 import { hasInternalDrag } from '../utils/dragItems'
 import { keyboardIsOwned, isTypingTarget } from '../utils/keyboardOwner'
 import { fireAndForget } from '../utils/fireAndForget'
+import { formatBytes } from '../utils/helpers'
 import { useFiles, driveHref } from '../context/FileContext'
 import { useMarqueeSelect } from '../hooks/useMarqueeSelect'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useAuth } from '../context/AuthContext'
 import { useContextMenu } from '../components/ContextMenuProvider'
-import { Folder, RefreshCw, ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react'
+import { Folder, RefreshCw, ChevronRight, Ellipsis } from 'lucide-react'
 
 function Drive() {
   const navigate = useNavigate()
@@ -366,12 +367,12 @@ function Drive() {
   // Breadcrumb segments for the current folder path.
   const driveSegments = view.path ? view.path.split('/').filter(Boolean) : []
 
-  // On a phone the status bar is one line, and the figures leave room for
-  // exactly one folder name. Show the folder you are in, not the ancestors,
-  // and put the home link behind the leading ellipsis. On wider screens the
-  // full path fits and is rendered as before.
+  // On a phone the status bar is one line. Show the last two folders, the way
+  // Explorer does, and put the home link behind the leading ellipsis; the
+  // ancestors above those two would leave no room for the current name. On
+  // wider screens the full path fits and is rendered as before.
   const compactCrumbs = phone && driveSegments.length > 0
-  const firstCrumbIndex = compactCrumbs ? driveSegments.length - 1 : 0
+  const firstCrumbIndex = compactCrumbs ? Math.max(0, driveSegments.length - 2) : 0
   const shownSegments = driveSegments.slice(firstCrumbIndex)
 
   return (
@@ -445,16 +446,40 @@ function Drive() {
                 title="Back"
                 aria-label="Back"
               >
-                <ArrowLeft size={17} strokeWidth={2.5} />
+                <svg
+                  className="status-nav-icon"
+                  viewBox="0 0 24 24"
+                  width="19"
+                  height="19"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <g fill="currentColor">
+                    <path fillRule="evenodd" d="M13.488 4.43a.75.75 0 0 1 .081 1.058L7.988 12l5.581 6.512a.75.75 0 1 1-1.138.976l-6-7a.75.75 0 0 1 0-.976l6-7a.75.75 0 0 1 1.057-.081Z" clipRule="evenodd"/>
+                    <path d="M17.75 5a.75.75 0 0 0-1.32-.488l-6 7a.75.75 0 0 0 0 .976l6 7A.75.75 0 0 0 17.75 19V5Z"/>
+                  </g>
+                </svg>
               </button>
               <button
-                className="btn btn-ghost status-nav-btn"
+                className="btn btn-ghost status-nav-btn status-nav-btn-forward"
                 onClick={goForward}
                 disabled={!canGoForward}
                 title="Forward"
                 aria-label="Forward"
               >
-                <ArrowRight size={17} strokeWidth={2.5} />
+                <svg
+                  className="status-nav-icon"
+                  viewBox="0 0 24 24"
+                  width="19"
+                  height="19"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <g fill="currentColor">
+                    <path fillRule="evenodd" d="M10.512 4.43a.75.75 0 0 0-.081 1.058L16.012 12l-5.581 6.512a.75.75 0 1 0 1.138.976l6-7a.75.75 0 0 0 0-.976l-6-7a.75.75 0 0 0-1.057-.081Z" clipRule="evenodd"/>
+                    <path d="M6.25 5a.75.75 0 0 1 1.32-.488l6 7a.75.75 0 0 1 0 .976l-6 7A.75.75 0 0 1 6.25 19V5Z"/>
+                  </g>
+                </svg>
               </button>
             </>
           )}
@@ -467,7 +492,9 @@ function Drive() {
                 title={compactCrumbs ? 'My Cloud' : undefined}
                 aria-label={compactCrumbs ? 'My Cloud' : undefined}
               >
-                {compactCrumbs ? '…' : 'My Cloud'}
+                {/* An icon, not the "…" glyph: the glyph sits on the text
+                    baseline and reads low next to the folder names. */}
+                {compactCrumbs ? <Ellipsis size={14} aria-hidden="true" /> : 'My Cloud'}
               </button>
               {shownSegments.map((seg, i) => {
                 const segPath = driveSegments.slice(0, firstCrumbIndex + i + 1).join('/')
@@ -498,20 +525,11 @@ function Drive() {
               </>
             )}
           </span>
-          <span>
-            {user?.quota_bytes > 0 && (
-              phone ? (
-                <span className="status-quota-stacked">
-                  <span>{formatBytes(user.used_bytes || 0)} used</span>
-                  <span>of {formatBytes(user.quota_bytes)}</span>
-                </span>
-              ) : (
-                <span>
-                  {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes)} used
-                </span>
-              )
-            )}
-          </span>
+          {user?.quota_bytes > 0 && (
+            <span>
+              {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -530,13 +548,6 @@ function Drive() {
       )}
     </div>
   )
-}
-
-function formatBytes(bytes) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
 export default Drive

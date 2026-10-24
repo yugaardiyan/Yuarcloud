@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useCallback } from 'react'
 import { Check } from 'lucide-react'
 import { useFiles } from '../context/FileContext'
 import { useContextMenu } from './ContextMenuProvider'
@@ -16,6 +16,8 @@ function FileGrid({ onOpen, onDownload, onFile }) {
   const { openMenu } = useContextMenu()
   const gridRef = useRef(null)
   const { itemProps } = useDragMove()
+  const longPressTimer = useRef(null)
+  const longPressTriggered = useRef(false)
 
   // Folders navigate; files open in the viewer when one is wired up, and fall
   // back to downloading when the grid is rendered somewhere without it.
@@ -94,6 +96,39 @@ function FileGrid({ onOpen, onDownload, onFile }) {
       {items.map((item) => {
         const active = isSelected(item.id)
         const drag = itemProps(item)
+        const handleTouchStart = (e) => {
+          longPressTriggered.current = false
+          longPressTimer.current = setTimeout(() => {
+            longPressTriggered.current = true
+            select(item.id, { additive: true })
+            // Prevent context menu on mobile after long press selection
+            e.preventDefault()
+          }, 500)
+        }
+        const handleTouchMove = () => {
+          if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current)
+            longPressTimer.current = null
+          }
+        }
+        const handleTouchEnd = (e) => {
+          if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current)
+            longPressTimer.current = null
+          }
+          if (longPressTriggered.current) {
+            e.preventDefault()
+            longPressTriggered.current = false
+            return
+          }
+        }
+        const handleTouchCancel = () => {
+          if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current)
+            longPressTimer.current = null
+          }
+          longPressTriggered.current = false
+        }
         return (
           <div
             key={item.id}
@@ -109,12 +144,27 @@ function FileGrid({ onOpen, onDownload, onFile }) {
             onDragEnter={drag.onDragEnter}
             onDragLeave={drag.onDragLeave}
             onDrop={drag.onDrop}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchCancel}
             onClick={(e) => {
               if (e.detail === 2) return
+              if (longPressTriggered.current) {
+                longPressTriggered.current = false
+                return
+              }
               select(item.id, { additive: e.metaKey || e.ctrlKey, range: e.shiftKey })
             }}
             onDoubleClick={(e) => { e.preventDefault(); activate(item) }}
-            onContextMenu={(e) => openMenu(e, item.id, active && selected.size > 1)}
+            onContextMenu={(e) => {
+              if (longPressTriggered.current) {
+                e.preventDefault()
+                longPressTriggered.current = false
+                return
+              }
+              openMenu(e, item.id, active && selected.size > 1)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(item) }
             }}
