@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Search, X,
-  Upload,
 } from 'lucide-react'
 import {
   MyCloudGlyph, NewFolderGlyph, TrashGlyph, GridGlyph, ListGlyph,

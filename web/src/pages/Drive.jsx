@@ -32,6 +32,8 @@ function Drive() {
   const folderInputRef = useRef(null)
   const contentRef = useRef(null)
   const breadcrumbRef = useRef(null)
+  const longPressTimer = useRef(null)
+  const longPressAt = useRef(0)
 
   // Rubber-band selection over the listing (grid and list). It owns what a
   // press on the background means, so the click-to-clear handlers that used to
@@ -329,8 +331,49 @@ function Drive() {
   // gaps, the empty state, or the container itself.
   const handleContentContextMenu = (e) => {
     if (e.target.closest('[data-file-id]')) return
+    // A touch long press has just opened this same menu; iOS may still fire
+    // contextmenu afterwards, and letting it through would close the menu the
+    // gesture already opened (the provider closes on any contextmenu).
+    if (Date.now() - longPressAt.current < 800) {
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
     openEmptyMenu(e)
   }
+
+  // Long press on blank space is the phone's right-click. iOS Safari does not
+  // reliably send contextmenu for it, so the gesture is detected here instead;
+  // text selection on the same press is switched off in CSS so the caption
+  // cannot be highlighted under the finger.
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  const handleContentTouchStart = (e) => {
+    cancelLongPress()
+    if (e.touches.length !== 1) return
+    if (e.target.closest('[data-file-id]')) return
+    if (e.target.closest('button, a, input, textarea, select')) return
+    const touch = e.touches[0]
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null
+      longPressAt.current = Date.now()
+      openEmptyMenu({
+        preventDefault() {},
+        stopPropagation() {},
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+      })
+    }, 500)
+  }
+
+  useEffect(() => () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }, [])
 
   // ---------------------------------------------------------------- status text
 
@@ -397,6 +440,10 @@ function Drive() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          onTouchStart={handleContentTouchStart}
+          onTouchMove={cancelLongPress}
+          onTouchEnd={cancelLongPress}
+          onTouchCancel={cancelLongPress}
           onContextMenu={handleContentContextMenu}
         >
         {awaitingFirstLoad ? null : error ? (

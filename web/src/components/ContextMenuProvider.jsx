@@ -1,9 +1,4 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import {
-  Copy, Scissors, Download, Share2, Info,
-  FolderInput, FolderOpen, RotateCcw,
-} from 'lucide-react'
-import { NewFolderGlyph, MyCloudGlyph, TrashGlyph } from './icons'
 import { useFiles, driveHref } from '../context/FileContext'
 import { useNavigate } from 'react-router-dom'
 import ShareModal from './ShareModal'
@@ -61,6 +56,11 @@ export default function ContextMenuProvider({ children }) {
   const menuRef = useRef(null)
   const fileInputRef = useRef(null)
   const folderInputRef = useRef(null)
+  /* When the menu was last opened. A touch long press opens it without an
+     event to stop, so the click iOS synthesises on finger lift arrives right
+     after and would close it again; clicks this soon after opening are the
+     gesture that opened the menu, not a dismissal. */
+  const openedAt = useRef(0)
 
   /*
    * Flip/shift the menu so it always sits fully inside the viewport. This runs
@@ -98,7 +98,13 @@ export default function ContextMenuProvider({ children }) {
   }, [menu.visible, menu.x, menu.y])
 
   useEffect(() => {
-    const onClick = () => closeMenu()
+    const onClick = () => {
+      // A long press opens the menu, and the finger lifting can still produce
+      // a click. Treating that as "clicked elsewhere" would shut the menu
+      // before it could be read.
+      if (Date.now() - openedAt.current < 400) return
+      closeMenu()
+    }
     const onKey = (e) => { if (e.key === 'Escape') closeMenu() }
     const onReflow = () => closeMenu()
 
@@ -136,6 +142,7 @@ export default function ContextMenuProvider({ children }) {
     const y = e.clientY || (rect ? rect.bottom : 8)
 
     // The menu repositions itself against the real viewport size once mounted.
+    openedAt.current = Date.now()
     setMenu({ x, y, visible: true, kind: 'file', ids })
   }, [selected, rawItems])
 
@@ -143,6 +150,7 @@ export default function ContextMenuProvider({ children }) {
   const openEmptyMenu = useCallback((e) => {
     e.preventDefault()
     e.stopPropagation()
+    openedAt.current = Date.now()
     setMenu({ x: e.clientX, y: e.clientY, visible: true, kind: 'empty', ids: [] })
   }, [])
 
@@ -316,7 +324,7 @@ export default function ContextMenuProvider({ children }) {
       ? [
           // Paste appears only once the clipboard holds something. Offering it
           // greyed out beforehand just advertised an action that could not run.
-          ...(clipboard.action ? [{ id: 'paste', label: 'Paste here', icon: FolderInput }] : []),
+          ...(clipboard.action ? [{ id: 'paste', label: 'Paste here' }] : []),
           { id: 'new-folder', label: 'New folder' },
           { id: 'upload-file', label: 'Upload file' },
           { id: 'upload-folder', label: 'Upload folder' },

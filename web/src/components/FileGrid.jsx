@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Check } from 'lucide-react'
 import { useFiles } from '../context/FileContext'
 import { useContextMenu } from './ContextMenuProvider'

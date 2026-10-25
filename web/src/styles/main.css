@@ -144,6 +144,24 @@ body {
   background-color: var(--bg-secondary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* No text selection anywhere. Almost nothing on this surface is meant to be
+     copied by hand — the drive is tiles of names, and on a phone a long press
+     is the context-menu gesture, not "select this word". Safari and Firefox
+     need the -webkit- form to behave the same way, and the callout switch is
+     what stops iOS from raising its own copy bubble over the caption. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* The exception: anything you type into still selects, or the caret, drag-
+   select and double-click-to-select-word stop working in a field. */
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Scrollbar — deliberately slim. At 8px the gutter beside the drive card was
@@ -554,12 +572,14 @@ input.input[type='number'] {
 }
 
 /* Hover: thicken and tint blue, the same accent as the back/forward arrows.
-   font-variation-settings animates weight paint-only, so sibling crumbs stay
-   put. */
+   The thickening is painted with a text stroke rather than a heavier weight:
+   changing font-variation-settings re-measures the glyphs and moves the crumb
+   (and every sibling after it) sideways in Safari, where the system font is a
+   real variable font. A stroke changes no metrics at all. */
 .breadcrumb-item:hover {
   background: transparent;
   color: var(--accent-primary);
-  font-variation-settings: 'wght' 640;
+  -webkit-text-stroke: 0.4px currentColor;
 }
 .breadcrumb-sep {
   display: flex;
@@ -2001,7 +2021,7 @@ input.input[type='number'] {
 
 @media (max-width: 560px) {
   .status-nav-btn-forward {
-    transform: translateX(-4px);
+    transform: translateX(-2px);
   }
 }
 
@@ -2016,7 +2036,7 @@ input.input[type='number'] {
    not its box, lands on the card's left edge. The mobile override in the
    560px media adjusts for the smaller glyph. */
 .status-nav-btn:first-child .status-nav-icon {
-  transform: translateX(-12px);
+  transform: translateX(-13.8px);
 }
 
 .status-bar-scope {
@@ -2802,7 +2822,7 @@ input.input[type='number'] {
   font-size: 25px;
   letter-spacing: -0.6px;
   white-space: nowrap;
-  margin-left: -8px;
+  margin-left: 2px;
 }
 
 .login-brand-lead {
@@ -3349,33 +3369,34 @@ input.input[type='number'] {
   }
 
   /* The arrows were a 17×25 glyph with no padding: readable, but a small
-     target at the very bottom of a phone. Give each a real 32×32 button and a
-     20px glyph, and take the width back from the gaps and from the folder's
-     padding below, so the bar still stays on one line at 320px. */
+     target at the very bottom of a phone. Each is now a 44×38 button — the
+     full height of the bar, so nothing above it moves — with a 30px glyph.
+     The width is the most the row can give at 320px before the breadcrumb
+     stops fitting on one line. */
   .status-nav-btn {
-    flex: 0 0 36px;
-    width: 36px;
-    height: 36px;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 38px;
     padding: 0;
     border-radius: 9px;
     touch-action: manipulation;
   }
 
-  /* On mobile the 20px glyph sits 6px inboard of the 32px button's left
-     edge, so slide the button back into the gutter. The -6px translate on
-     the back glyph (global -5px plus this -1px) brings its tip to the
-     card's left edge; the tappable box stays 32px. */
+  /* The glyph sits inboard of the button's left edge by half the difference
+     between the two, so the button slides back into the gutter: -18px on the
+     box plus +4.5px on the glyph puts the arrow's tip on the card's left edge,
+     with the wider tap area kept intact. */
   .status-nav-btn:first-child {
     margin-left: -18px;
   }
 
   .status-nav-btn:first-child .status-nav-icon {
-    transform: translateX(6.5px);
+    transform: translateX(4.5px);
   }
 
   .status-nav-icon {
-    width: 22px;
-    height: 22px;
+    width: 30px;
+    height: 30px;
   }
 
   .status-bar-meta {
@@ -3435,8 +3456,8 @@ input.input[type='number'] {
     /* Scaling the cap with the viewport keeps common names whole at 390px and
        up without leaving a 430px phone with needlessly clipped ones. */
     max-width: clamp(110px, 38vw, 200px);
-    /* Paint-only weight change: the variable font lets the hover thicken
-       without nudging the box and pushing the sibling crumbs. */
+    /* The weight is fixed: the hover thickening is painted with a text stroke
+       so no crumb is ever re-measured. */
     font-variation-settings: 'wght' 500;
   }
 
@@ -3456,16 +3477,17 @@ input.input[type='number'] {
 }
 
 /* Desktop: a larger back/forward tap zone reads comfortably beside the full
-   breadcrumb path. */
+   breadcrumb path. Height stays at the bar's own 38px so the arrows cannot
+   overflow it; the extra room goes into the width and the glyph. */
 @media (min-width: 561px) {
   .status-nav-btn {
-    width: 38px;
+    width: 44px;
     height: 38px;
   }
 
   .status-nav-icon {
-    width: 23px;
-    height: 23px;
+    width: 28px;
+    height: 28px;
   }
 
   /* The icon and button size are set above; the back-tip nudge comes from the
