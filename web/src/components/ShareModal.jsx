@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Link2, Copy, Calendar, Lock, User, CheckCircle, Eye, Upload } from 'lucide-react'
 import { shareApi, apiError } from '../utils/api'
+import { nextExpiryDelay } from '../utils/shareExpiry'
 import { formatDate } from '../utils/helpers'
 import ConfirmModal from './ConfirmModal'
 import toast from 'react-hot-toast'
@@ -83,6 +84,27 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
     loadShares()
   }, [loadShares])
 
+  /*
+   * A link with a duration stops existing the moment its date passes: the
+   * server leaves expired links out of the list, which is why the settings page
+   * shows them dropping away on its own. This dialog fetches once, though, so a
+   * link that expired while the dialog sat open would stay on screen looking
+   * copyable. Sleep until the soonest expiry and read the list again, so the
+   * row goes away by itself without the owner closing and reopening. A link
+   * with no date is one the owner chose to keep, and never wakes the timer.
+   */
+  useEffect(() => {
+    if (loadingShares) return undefined
+    const delay = nextExpiryDelay(shares)
+    if (delay === null) return undefined
+    const timer = setTimeout(loadShares, delay)
+    return () => clearTimeout(timer)
+  }, [shares, loadingShares, loadShares])
+
+  // The same rule the server enforces, restated where it is drawn: an expired
+  // link is never listed, even if one slips through the response.
+  const visibleShares = shares.filter((share) => share.status !== 'expired')
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setFormErrors({})
@@ -160,27 +182,27 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
     <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
       <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
+          {/* The title states what the dialog is showing. With links already on
+              the file it is a list to review, not a form to fill in, so saying
+              "Share" over a list read as the wrong verb. */}
           <h2 id="share-modal-title" className="modal-title">
-            Share "{fileName}"
+            {visibleShares.length > 0 ? 'Existing Share links' : 'Share'} "{fileName}"
           </h2>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             <X size={15} />
           </button>
         </div>
 
-        <div className={`modal-body ${!loadingShares && shares.length > 0 ? 'is-links' : ''}`}>
+        <div className={`modal-body ${!loadingShares && visibleShares.length > 0 ? 'is-links' : ''}`}>
           {loadingShares && (
             <div className="share-loading" role="status">
               Loading…
             </div>
           )}
 
-          {!loadingShares && shares.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <h3 style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                Existing Links
-              </h3>
-              {shares.map((share) => {
+          {!loadingShares && visibleShares.length > 0 && (
+            <>
+              {visibleShares.map((share) => {
                 const status = STATUS[share.status] || STATUS.active
                 const perm = PERMISSION[share.permission] || PERMISSION.read
                 const PermIcon = perm.icon
@@ -237,14 +259,10 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                   </div>
                 )
               })}
-
-              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', margin: '10px 0 0' }}>
-                A share link already exists. Delete it to create a new one.
-              </p>
-            </div>
+            </>
           )}
 
-          {!loadingShares && shares.length === 0 && (
+          {!loadingShares && visibleShares.length === 0 && (
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
               <div className="share-form-row">
                 <div>
