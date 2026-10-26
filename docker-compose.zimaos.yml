@@ -43,7 +43,7 @@ services:
       TZ: Asia/Jakarta
       # REQUIRED: replace this. The server rejects the placeholder.
       YUAR_AUTH_JWT_SECRET: "PASTE-YOUR-OWN-64-CHARACTER-RANDOM-STRING-HERE"
-    image: ghcr.io/yugaardiyan/yuarcloud:v1.2.10
+    image: ghcr.io/yugaardiyan/yuarcloud:v1.2.11
     labels:
       icon: https://cdn.jsdelivr.net/gh/yugaardiyan/Yuarcloud@v1.2.10/web/public/logo.png
     network_mode: bridge
