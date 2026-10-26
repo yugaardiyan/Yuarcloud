@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useCallback, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FileGrid from '../components/FileGrid'
 import FileList from '../components/FileList'
@@ -31,7 +31,6 @@ function Drive() {
 
   const folderInputRef = useRef(null)
   const contentRef = useRef(null)
-  const breadcrumbRef = useRef(null)
   const longPressTimer = useRef(null)
   const longPressAt = useRef(0)
 
@@ -63,16 +62,11 @@ function Drive() {
 
   const urlPath = params['*'] || ''
 
-  // On a phone the breadcrumb is a horizontal strip (see the 560px status-bar
-  // block in main.css). Keep the newest segment — the folder you are actually
-  // in — in view if an unusually long name makes the strip overflow. On wider
-  // screens the full path is meant to stay left-aligned, so reset any scroll
-  // left over from a rotation.
-  useLayoutEffect(() => {
-    const el = breadcrumbRef.current
-    if (!el) return
-    el.scrollLeft = phone ? el.scrollWidth : 0
-  }, [phone, view.path, view.scope])
+  // Mobile breadcrumb: the ellipsis is a "more locations" trigger, not a
+  // scroll region. The full path list lives in the popup above it; the
+  // breadcrumb strip itself stays two crumbs wide and does not scroll.
+  const [crumbMenuOpen, setCrumbMenuOpen] = useState(false)
+  const crumbMenuRef = useRef(null)
 
   // ---------------------------------------------------------------- history
   //
@@ -414,7 +408,7 @@ function Drive() {
   // Explorer does, and put the home link behind the leading ellipsis; the
   // ancestors above those two would leave no room for the current name. On
   // wider screens the full path fits and is rendered as before.
-  const compactCrumbs = phone && driveSegments.length > 0
+  const compactCrumbs = phone && driveSegments.length > 1
   const firstCrumbIndex = compactCrumbs ? Math.max(0, driveSegments.length - 2) : 0
   const shownSegments = driveSegments.slice(firstCrumbIndex)
 
@@ -479,6 +473,42 @@ function Drive() {
           the counts and the storage figure pushed to the right, sitting beside
           each other rather than at opposite ends. */}
       <div className="status-bar">
+        {compactCrumbs && crumbMenuOpen && (
+          <>
+            <div
+              className="crumb-menu-backdrop"
+              onClick={() => setCrumbMenuOpen(false)}
+              aria-hidden="true"
+            />
+            <div
+              ref={crumbMenuRef}
+              className="crumb-menu"
+              role="menu"
+              aria-label="All locations"
+            >
+            <button
+              className="crumb-menu-item"
+              role="menuitem"
+              onClick={() => { goToBreadcrumb(''); setCrumbMenuOpen(false) }}
+            >
+              My Cloud
+            </button>
+            {driveSegments.slice(0, firstCrumbIndex).map((seg, i) => {
+              const segPath = driveSegments.slice(0, i + 1).join('/')
+              return (
+                <button
+                  key={segPath}
+                  className="crumb-menu-item"
+                  role="menuitem"
+                  onClick={() => { goToBreadcrumb(segPath); setCrumbMenuOpen(false) }}
+                >
+                  {seg}
+                </button>
+              )
+            })}
+          </div>
+          </>
+        )}
         <div className="status-bar-nav">
           {view.scope === 'drive' && (
             <>
@@ -532,17 +562,26 @@ function Drive() {
           )}
 
           {view.scope === 'drive' ? (
-            <nav ref={breadcrumbRef} className="breadcrumb" aria-label="Breadcrumb">
-              <button
-                className={`breadcrumb-item${compactCrumbs ? ' breadcrumb-item-compact' : ''}`}
-                onClick={() => goToBreadcrumb('')}
-                title={compactCrumbs ? 'My Cloud' : undefined}
-                aria-label={compactCrumbs ? 'My Cloud' : undefined}
-              >
-                {/* An icon, not the "…" glyph: the glyph sits on the text
-                    baseline and reads low next to the folder names. */}
-                {compactCrumbs ? <Ellipsis size={14} aria-hidden="true" /> : 'My Cloud'}
-              </button>
+            <nav className="breadcrumb" aria-label="Breadcrumb">
+              <div style={{ position: 'relative', display: 'flex' }}>
+                <button
+                  className={`breadcrumb-item${compactCrumbs ? ' breadcrumb-item-compact' : ''}`}
+                  onClick={() => {
+                    if (compactCrumbs) {
+                      setCrumbMenuOpen(v => !v)
+                      return
+                    }
+                    goToBreadcrumb('')
+                  }}
+                  title={compactCrumbs ? 'My Cloud' : undefined}
+                  aria-label={compactCrumbs ? 'More locations' : undefined}
+                  aria-expanded={compactCrumbs ? crumbMenuOpen : undefined}
+                >
+                  {/* An icon, not the "…" glyph: the glyph sits on the text
+                      baseline and reads low next to the folder names. */}
+                  {compactCrumbs ? <Ellipsis size={14} aria-hidden="true" /> : 'My Cloud'}
+                </button>
+              </div>
               {shownSegments.map((seg, i) => {
                 const segPath = driveSegments.slice(0, firstCrumbIndex + i + 1).join('/')
                 return (

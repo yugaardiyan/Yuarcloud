@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { adminApi, apiError } from '../utils/api'
-import { useMediaQuery } from '../hooks/useMediaQuery'
-import { AlertCircle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 
 /**
  * The audit trail, newest first.
@@ -60,10 +59,6 @@ function AuditTab() {
   const [filter, setFilter] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  // Five columns need 700px. On a phone the old answer was a horizontal
-  // scroll, which put the user and the address off-screen to the right; the
-  // rows stack instead, one line of headline and two of detail.
-  const phone = useMediaQuery('(max-width: 560px)')
 
   const load = useCallback(async (target, action) => {
     setLoading(true)
@@ -85,12 +80,25 @@ function AuditTab() {
 
   useEffect(() => { load(1, filter) }, [filter, load])
 
+  // The capsule's create slot doubles as "Reload" while this tab is open. The
+  // toolbar lives outside this component tree, so it announces itself through
+  // a window event. The current page and filter are kept in a ref so the
+  // listener can reload the exact view that is showing without re-subscribing
+  // on every page change.
+  const reloadRef = useRef(null)
+  reloadRef.current = () => load(page, filter)
+  useEffect(() => {
+    const onReload = () => reloadRef.current()
+    window.addEventListener('yuarcloud:reload-audit', onReload)
+    return () => window.removeEventListener('yuarcloud:reload-audit', onReload)
+  }, [])
+
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const goto = (p) => { if (p >= 1 && p <= pages) { setPage(p); load(p, filter) } }
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="audit-header">
         <span className="users-count">
           {loading ? 'Loading…' : `${total} event${total === 1 ? '' : 's'}`}
         </span>
@@ -111,15 +119,6 @@ function AuditTab() {
             </option>
           ))}
         </select>
-
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => load(page, filter)}
-          disabled={loading}
-          title="Reload"
-        >
-          <RefreshCw size={14} />
-        </button>
       </div>
 
       {error ? (
@@ -134,78 +133,23 @@ function AuditTab() {
         </div>
       ) : (
         <>
-          {/* table-layout:auto, not fixed.
-
-              Fixed pins columns to percentages, and the sum of what these five
-              actually need is wider than a narrow window: measured at a 630px
-              viewport, 574px of table, the timestamp wanted 104px and was given
-              86 — so it clipped to "05:04:3…". SharesTab uses fixed and works
-              because its columns were tuned for it; this table was copied from
-              there and inherited arithmetic that does not transfer.
-
-              Auto sizes each column to its content and wraps the rest. minWidth
-              stops it collapsing into slivers in a narrow desktop window, and
-              the wrapper scrolls rather than clipping. A phone does not get this
-              table at all — see the stacked list above the ternary. */}
-          {phone ? (
-            <div className="admin-list">
-              {logs.map((log) => (
-                <div key={log.id} className="admin-item">
-                  <div className="admin-item-head">
-                    <span className="admin-item-action" title={log.action}>{log.action}</span>
-                    <span className="admin-item-stamp" title={log.created_at}>{when(log.created_at)}</span>
-                  </div>
-                  {/* The detail is the only field with no fixed shape — a whole
-                      sentence for a rename, empty for a sign-in. It gets its own
-                      wrapping line rather than being cut to an ellipsis. */}
-                  {log.details && (
-                    <div className="admin-item-detail" title={log.details}>{log.details}</div>
-                  )}
-                  <div className="admin-item-meta">
-                    <span>{log.username || '—'}</span>
-                    {log.ip_address && <span className="admin-mono">{log.ip_address}</span>}
-                  </div>
+          <div className="admin-list">
+            {logs.map((log) => (
+              <div key={log.id} className="admin-item">
+                <div className="admin-item-head">
+                  <span className="admin-item-action" title={log.action}>{log.action}</span>
+                  <span className="admin-item-stamp" title={log.created_at}>{when(log.created_at)}</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-          <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: 700, borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead style={{ background: 'var(--bg-secondary)' }}>
-              <tr>
-                {['When', 'Action', 'Detail', 'From', 'User'].map((h) => (
-                  <th key={h} style={{ padding: 12, textAlign: 'left', fontSize: 11, textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={log.id} style={{ borderTop: '1px solid var(--border-color)' }}>
-                  {/* table-layout:fixed pins the column widths, so every cell has
-                      to clip its own text. Without overflow:hidden here the
-                      timestamp spills across the next column and lands on top of
-                      the action name — which is what it did. */}
-                  <td style={{ padding: 12, whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={log.created_at}>
-                    {when(log.created_at)}
-                  </td>
-                  <td style={{ padding: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.action}>
-                    <span style={{ fontSize: 12, color: 'var(--accent-primary)' }}>{log.action}</span>
-                  </td>
-                  <td style={{ padding: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.details}>
-                    {log.details || '—'}
-                  </td>
-                  <td style={{ padding: 12, color: 'var(--text-secondary)', fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}>
-                    {log.ip_address || '—'}
-                  </td>
-                  <td style={{ padding: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={log.user_id || ''}>
-                    {log.username || '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                {log.details && (
+                  <div className="admin-item-detail" title={log.details}>{log.details}</div>
+                )}
+                <div className="admin-item-meta">
+                  <span>{log.username || '—'}</span>
+                  {log.ip_address && <span className="admin-mono">{log.ip_address}</span>}
+                </div>
+              </div>
+            ))}
           </div>
-          )}
 
           {pages > 1 && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16 }}>

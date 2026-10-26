@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
-  Users, BarChart3, Plus, Edit2, Trash2, X,
-  HardDrive, Share2, Folder, AlertCircle, Copy, ScrollText, Lock
+  Users, BarChart3, Edit2, X,
+  HardDrive, Share2, AlertCircle, Copy, ScrollText, Lock, CheckCircle
 } from 'lucide-react'
 import { adminApi, fileApi, apiError } from '../utils/api'
-import { useMediaQuery } from '../hooks/useMediaQuery'
+import { TrashGlyph } from '../components/icons'
 import { useAuth } from '../context/AuthContext'
 import AuditTab from './AuditTab'
 import StorageMeter from '../components/StorageMeter'
@@ -224,6 +224,26 @@ function Admin() {
     if (activeTab === 'shares') loadShares()
   }, [activeTab])
 
+  // The create slot in the header capsule doubles as the tab's primary action:
+  // "Add user" on the Users tab and "Save configuration" on the Chunked tab.
+  // It announces itself through a window event rather than a prop — the
+  // toolbar lives outside this page's component tree, and a callback drilled
+  // through the layout would touch components that know nothing about admin.
+  useEffect(() => {
+    const onSettingsAction = (e) => {
+      const { action } = e.detail || {}
+      if (action === 'add-user' && activeTab === 'users') setShowCreateUser(true)
+      if (action === 'save-chunked-config' && activeTab === 'chunked') {
+        window.dispatchEvent(new CustomEvent('yuarcloud:save-chunked-form'))
+      }
+      if (action === 'reload-audit' && activeTab === 'audit') {
+        window.dispatchEvent(new CustomEvent('yuarcloud:reload-audit'))
+      }
+    }
+    window.addEventListener('yuarcloud:settings-action', onSettingsAction)
+    return () => window.removeEventListener('yuarcloud:settings-action', onSettingsAction)
+  }, [activeTab])
+
   return (
     /* Same shell as the drive: the page body sits in one rounded white card
        against the grey, with the header's pills lining up to its edges. The
@@ -234,15 +254,12 @@ function Admin() {
       <div className="drive-shell">
         <div className="app-content">
           <header style={{ marginBottom: 20 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
               Settings
             </h1>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Administration for this Yuarcloud instance.
-            </p>
           </header>
 
-          <div className="tabs" style={{ marginBottom: 24 }}>
+          <div className="tabs" style={{ marginBottom: 8 }}>
             {TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -305,24 +322,25 @@ function Admin() {
 
 function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDelete, showCreateUser, setShowCreateUser, showEditUser, setShowEditUser, loadUsers, currentUser }) {
   const userActions = (user) => (
-    <div className="user-actions">
+    <span className="admin-item-actions">
+      {user.id !== currentUser?.id && (
+        <button
+          className="btn btn-ghost btn-icon btn-sm"
+          style={{ color: 'var(--accent-danger)' }}
+          onClick={() => onDelete(user)}
+          title="Delete"
+        >
+          <TrashGlyph size={16} />
+        </button>
+      )}
       <button
         className="btn btn-ghost btn-icon btn-sm"
         onClick={() => setShowEditUser(user)}
         title="Edit"
       >
-        <Edit2 size={13} />
+        <Edit2 size={14} />
       </button>
-      {user.id !== currentUser?.id && (
-        <button
-          className="btn btn-ghost btn-icon btn-sm"
-          onClick={() => onDelete(user)}
-          title="Delete"
-        >
-          <Trash2 size={13} color="var(--accent-danger)" />
-        </button>
-      )}
-    </div>
+    </span>
   )
 
   return (
@@ -330,10 +348,6 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
       {loading ? (
         <div className="loading-spinner">Loading users…</div>
       ) : loadError ? (
-        // An empty table under a "No users yet" message reads as "the account
-        // list is empty" — and an admin who then deletes something through
-        // another tab has just deleted it for no reason. A failed load has to
-        // look different from an empty result.
         <div className="empty-state">
           <AlertCircle size={28} color="var(--accent-danger)" />
           <p>{loadError}</p>
@@ -341,56 +355,27 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
         </div>
       ) : (
         <>
-          <div className="users-header">
-            <button
-              className="btn btn-primary btn-pill"
-              onClick={() => setShowCreateUser(true)}
-              style={{ flexShrink: 0 }}
-            >
-              <Plus size={14} /> New user
-            </button>
-          </div>
-
-          <div className="admin-list users-list">
-            {users.map((user) => (
-              <div key={user.id} className="admin-item">
-                <div className="user-cell">
-                  <div className="user-avatar">
-                    {user.display_name?.[0]?.toUpperCase() ||
-                      user.username?.[0]?.toUpperCase() ||
-                      'U'}
-                  </div>
-                  <div className="user-id">
-                    <div className="user-name">
+          <div className="admin-list">
+            {users.map((user) => {
+              const quota = `${formatBytes(user.used_bytes || 0)} / ${formatBytes(user.quota_bytes || 0)}`
+              return (
+                <div key={user.id} className="admin-item">
+                  <div className="admin-item-head">
+                    <span className="admin-item-title" title={user.display_name || user.username}>
                       {user.display_name || user.username}
-                      {/* Coloured text, not a chip, on both ends of the
-                          breakpoint. */}
-                      <span
-                        className="user-role-text"
-                        style={{ color: user.role === 'admin' ? '#7048e8' : 'var(--text-secondary)' }}
-                      >
-                        {user.role}
-                      </span>
-                    </div>
-                    <div className="user-email" title={user.email}>{user.email}</div>
+                    </span>
+                    {userActions(user)}
+                  </div>
+                  <div className="admin-item-meta">
+                    {user.email}
+                    {' · '}
+                    {quota}
+                    {' · '}
+                    {user.home_path || 'All files'}
                   </div>
                 </div>
-                <div className="admin-item-meta">
-                  <span className="user-figure">
-                    {formatBytes(user.used_bytes || 0)}{' / '}
-                    {formatBytes(user.quota_bytes || 0)}
-                  </span>
-                  {/* The middot is inside the folder's own span so a wrapping
-                      row never leaves it stranded at the end of a line. */}
-                  <span className="user-folder" title={user.home_path || 'All files'}>
-                    <span className="user-folder-dot" aria-hidden="true">·</span>
-                    <Folder size={10} />
-                    <span>{user.home_path || 'All files'}</span>
-                  </span>
-                </div>
-                {userActions(user)}
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {usersTotal > 20 && (
@@ -670,6 +655,9 @@ const set = (key) => (e) => {
 }
 
 function ChunkedConfigTab({ config }) {
+  // The recommendation ("5–10 MB is best", "1–10, 3 is good") is drawn inside
+  // the capsule as an overlay, not a placeholder, so it stays visible while a
+  // value is typed. The fields therefore no longer need to start empty.
   const [formData, setFormData] = useState({
     max_chunk_size_mb: 10,
     max_file_size_gb: 10,
@@ -689,16 +677,19 @@ function ChunkedConfigTab({ config }) {
     }
   }, [config])
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     // The form starts on defaults while the fetch is in flight. Saving then
     // wrote 10 MB / 10 GB / 1h over whatever the server actually had.
     if (!config) return
+    if (loading) return
     setLoading(true)
     try {
+      const chunkMb = formData.max_chunk_size_mb === '' ? config.max_chunk_size / 1048576 : Number(formData.max_chunk_size_mb)
+      const parallel = formData.max_concurrent_uploads === '' ? config.max_concurrent_uploads : Number(formData.max_concurrent_uploads)
       await adminApi.updateChunkedConfig({
-        max_chunk_size: formData.max_chunk_size_mb * 1048576,
-        max_file_size: formData.max_file_size_gb * 1073741824,
-        max_concurrent_uploads: formData.max_concurrent_uploads,
+        max_chunk_size: chunkMb * 1048576,
+        max_file_size: Number(formData.max_file_size_gb) * 1073741824,
+        max_concurrent_uploads: parallel,
         cleanup_interval: formData.cleanup_interval,
       })
       toast.success('Chunked upload configuration saved')
@@ -710,30 +701,39 @@ function ChunkedConfigTab({ config }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [config, loading, formData])
+
+  const handleSaveRef = useRef(handleSave)
+  useEffect(() => { handleSaveRef.current = handleSave }, [handleSave])
+  // The header capsule fires this event instead of owning the save action —
+  // the form state lives here, so only this component may commit it.
+  useEffect(() => {
+    const onExternalSave = () => handleSaveRef.current()
+    window.addEventListener('yuarcloud:save-chunked-form', onExternalSave)
+    return () => window.removeEventListener('yuarcloud:save-chunked-form', onExternalSave)
+  }, [])
 
   return (
     /* No card of its own: the page shell is already the white rounded surface,
        so an inner one would read as a box floating inside a box. */
     <div style={{ maxWidth: 600 }}>
-      <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: 'var(--text-primary)' }}>
-        Chunked Upload Settings
-      </h3>
-
       {/* Two rows of two, at every width. Four fields in one row would wrap
           every label; four rows made a short form look long on a phone. */}
       <div className="settings-grid">
         <div>
           <label className="field-label" htmlFor="chunk-size">Max Chunk Size (MB)</label>
-          <input
-            id="chunk-size"
-            type="number"
-            className="input input-capsule"
-            value={formData.max_chunk_size_mb}
-            onChange={(e) => setFormData({ ...formData, max_chunk_size_mb: parseInt(e.target.value) || 10 })}
-            min={1}
-            max={100}
-          />
+          <div className="input-wrap">
+            <input
+              id="chunk-size"
+              type="number"
+              className="input input-capsule input-inline-hint"
+              value={formData.max_chunk_size_mb}
+              onChange={(e) => setFormData({ ...formData, max_chunk_size_mb: e.target.value })}
+              min={1}
+              max={100}
+            />
+            <span className="input-hint" aria-hidden="true">5–10 MB is best</span>
+          </div>
         </div>
 
         <div>
@@ -750,29 +750,27 @@ function ChunkedConfigTab({ config }) {
 
         <div>
           <label className="field-label" htmlFor="concurrent-uploads">Parallel Uploads</label>
-          <input
-            id="concurrent-uploads"
-            type="number"
-            className="input input-capsule"
-            value={formData.max_concurrent_uploads}
-            onChange={(e) => setFormData({ ...formData, max_concurrent_uploads: parseInt(e.target.value) || 3 })}
-            min={1}
-            max={10}
-            aria-describedby="parallel-uploads-hint"
-          />
-          <p className="field-hint" id="parallel-uploads-hint">
-            How many files are sent at once (1–10). 3 is a good default.
-          </p>
+          <div className="input-wrap">
+            <input
+              id="concurrent-uploads"
+              type="number"
+              className="input input-capsule input-inline-hint"
+              value={formData.max_concurrent_uploads}
+              onChange={(e) => setFormData({ ...formData, max_concurrent_uploads: e.target.value })}
+              min={1}
+              max={10}
+            />
+            <span className="input-hint" aria-hidden="true">1–10, 3 is good</span>
+          </div>
         </div>
 
         <div>
-          <label className="field-label" htmlFor="cleanup-interval">Cleanup After</label>
+          <label className="field-label" htmlFor="cleanup-interval">Chunk cleanup after</label>
           <select
             id="cleanup-interval"
             className="input input-capsule"
             value={formData.cleanup_interval}
             onChange={(e) => setFormData({ ...formData, cleanup_interval: e.target.value })}
-            aria-describedby="cleanup-hint"
           >
             {CLEANUP_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -784,23 +782,8 @@ function ChunkedConfigTab({ config }) {
               <option value={formData.cleanup_interval}>{formData.cleanup_interval}</option>
             )}
           </select>
-          <p className="field-hint" id="cleanup-hint">
-            Chunks from an abandoned upload are deleted after this long.
-          </p>
         </div>
       </div>
-
-      {/* One sentence, because the two fields that needed explaining now
-          carry their own hint. What is left is the only fact the labels cannot
-          hold: the chunk size Cloudflare Tunnel is happiest with. */}
-      <p className="settings-note">
-        5–10 MB chunks work best behind Cloudflare Tunnel, which caps each request at
-        100 MB.
-      </p>
-
-      <button className="btn btn-primary btn-pill" style={{ marginTop: 16 }} onClick={handleSave} disabled={loading}>
-        {loading ? 'Saving...' : 'Save Configuration'}
-      </button>
     </div>
   )
 }
@@ -825,18 +808,6 @@ function StatsTab({ stats }) {
   return <StorageMeter stats={stats.storage} users={stats.users} />
 }
 
-/* Pin the action buttons to a size that fits the fixed Actions column, rather
-   than letting .btn-sm decide and then overflowing whatever width it lands on. */
-const ACTION_BTN = {
-  width: 30,
-  minWidth: 30,
-  height: 30,
-  padding: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-}
-
 /**
  * Every share link on the instance, newest first.
  *
@@ -859,18 +830,21 @@ function SharesTab({ shares, sharesError, onReload }) {
   const [copied, setCopied] = useState(null)
   const [busyId, setBusyId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
-  // Seven columns do not fit on a phone. At 390px the file column held "In…",
-  // the owner "A…", the expiry date clipped to "10/28/2…" and the status pill
-  // sat on top of the copy button. Below the stylesheet's phone breakpoint the
-  // table is replaced by stacked rows rather than squeezed.
-  const phone = useMediaQuery('(max-width: 560px)')
 
   const copy = async (share) => {
-    if (await copyText(share.url)) {
+    try {
+      await navigator.clipboard.writeText(share.url)
       setCopied(share.id)
-      setTimeout(() => setCopied(null), 1500)
-    } else {
-      toast.error('Could not copy — your browser blocked clipboard access')
+      toast.success('Link copied to clipboard')
+      setTimeout(() => setCopied(null), 2000)
+    } catch {
+      if (await copyText(share.url)) {
+        setCopied(share.id)
+        toast.success('Link copied')
+        setTimeout(() => setCopied(null), 2000)
+      } else {
+        toast.error('Could not copy — your browser blocked clipboard access')
+      }
     }
   }
 
@@ -924,146 +898,59 @@ function SharesTab({ shares, sharesError, onReload }) {
       <button
         type="button"
         className="btn btn-ghost btn-icon btn-sm"
-        style={ACTION_BTN}
-        onClick={() => copy(share)}
-        title={copied === share.id ? 'Copied' : 'Copy link'}
-        aria-label={`Copy link for ${share.file_name}`}
-      >
-        {copied === share.id ? '✓' : <Copy size={14} />}
-      </button>
-      <button
-        type="button"
-        className="btn btn-ghost btn-icon btn-sm"
-        style={{ ...ACTION_BTN, marginLeft: 2, color: 'var(--danger, #e03131)' }}
+        style={{ color: 'var(--accent-danger)' }}
         onClick={() => setPendingDelete(share)}
         disabled={busyId === share.id}
         title="Delete link"
         aria-label={`Delete link for ${share.file_name}`}
       >
-        {busyId === share.id ? '…' : <Trash2 size={14} />}
+        {busyId === share.id ? <span style={{ fontSize: 12, color: 'inherit' }}>…</span> : <TrashGlyph size={16} />}
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost btn-icon btn-sm"
+        onClick={() => copy(share)}
+        title={copied === share.id ? 'Copied!' : 'Copy link'}
+        aria-label={`Copy link for ${share.file_name}`}
+        style={copied === share.id ? { color: 'var(--accent-success)' } : undefined}
+      >
+        {copied === share.id ? <CheckCircle size={14} /> : <Copy size={14} />}
       </button>
     </>
   )
 
-  if (phone) {
-    return (
-      <div>
-        <div className="admin-list">
-          {shares.map((share) => {
-            const warn = warning(share)
-            // One line of facts, in the order the table read them left to
-            // right, written as inline text rather than stacked nodes so it
-            // wraps as a sentence at a space. The padlock is not a fact of its
-            // own — it qualifies the access beside it, which is where the
-            // table puts it too (in the Access column).
-            const perm = share.permission === 'write' ? 'Edit' : 'View'
-            const views = `${share.views}${share.max_views > 0 ? ` / ${share.max_views}` : ''} view${share.views === 1 ? '' : 's'}`
-            const expiry = share.expires_at
-              ? `Expires ${new Date(share.expires_at).toLocaleDateString()}`
-              : 'Never expires'
-
-            return (
-              <div key={share.id} className="admin-item">
-                <div className="admin-item-head">
-                  <span className="admin-item-title" title={share.url}>{share.file_name}</span>
-                  <span className="admin-item-actions">{actions(share)}</span>
-                </div>
-                <div className="admin-item-meta">
-                  {warn && <span className="admin-badge admin-badge-warn">{warn}</span>}
-                  {share.owner || '—'}{' · '}
-                  <span className="admin-perm">
-                    {perm}
-                    {share.has_password && <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />}
-                  </span>
-                  {' · '}{views}{' · '}{expiry}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {pendingDelete && (
-          <ConfirmModal
-            simple
-            danger
-            title={`Delete the share link for "${pendingDelete.file_name}"?`}
-            confirmLabel="Delete"
-            onConfirm={confirmDelete}
-            onCancel={() => setPendingDelete(null)}
-          />
-        )}
-      </div>
-    )
-  }
-
   return (
     <div>
-      {/* Fixed layout, and the actions column is sized in px rather than percent.
-          The two buttons inside it are px-wide, so a percentage column
-          shrinks them out of the card on a narrow window — present in the DOM,
-          unreachable without a scrollbar. Percentages then cover only the
-          text columns, and are trimmed to leave room for it. */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed' }}>
-        <colgroup>
-          {/* No Status column: the shares that need attention carry a marker
-              beside their own name instead. */}
-          {[
-            ['28%', 'File'],
-            ['20%', 'Owner'],
-            ['12%', 'Access'],
-            ['10%', 'Views'],
-            ['16%', 'Expires'],
-            ['74px', 'Actions'],
-          ].map(([w, label]) => (
-            <col key={label} style={{ width: w }} />
-          ))}
-        </colgroup>
-        <thead style={{ background: 'var(--bg-secondary)' }}>
-          <tr>
-            {['File', 'Owner', 'Access', 'Views', 'Expires', ''].map((h, i) => (
-              <th key={h || i} style={{ padding: 12, textAlign: 'left', fontSize: 11, textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {shares.map(share => {
-            const warn = warning(share)
-            return (
-              <tr key={share.id} style={{ borderTop: '1px solid var(--border-color)' }}>
-                <td style={{ padding: 12, whiteSpace: 'nowrap' }} title={share.url}>
-                  {/* No link column — the full URL is in this tooltip and is
-                      what Copy puts on the clipboard. */}
-                  {/* flexWrap so the marker drops to a second line rather than
-                      squeezing the name to "A…" on a narrow window. */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 6px', minWidth: 0 }}>
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'ui-monospace, Menlo, monospace' }}>{share.file_name}</span>
-                    {warn && <span className="admin-badge admin-badge-warn">{warn}</span>}
-                  </div>
-                </td>
-                <td style={{ padding: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={share.owner}>{share.owner || '—'}</td>
-                <td style={{ padding: 12, whiteSpace: 'nowrap' }}>
-                  {share.permission === 'write' ? 'Edit' : 'View'}
-                  {share.has_password && (
-                    <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />
-                  )}
-                </td>
-                <td style={{ padding: 12, whiteSpace: 'nowrap' }}>
-                  {share.views}{share.max_views > 0 ? ` / ${share.max_views}` : ''}
-                </td>
-                <td style={{ padding: 12, whiteSpace: 'nowrap', color: 'var(--text-tertiary)' }}>
-                  {share.expires_at ? new Date(share.expires_at).toLocaleDateString() : 'Never'}
-                </td>
-                <td style={{ padding: '12px 6px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                  {actions(share)}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div className="admin-list">
+        {shares.map((share) => {
+          const warn = warning(share)
+          const perm = share.permission === 'write' ? 'Edit' : 'View'
+          const views = `${share.views}${share.max_views > 0 ? ` / ${share.max_views}` : ''} view${share.views === 1 ? '' : 's'}`
+          const expiry = share.expires_at
+            ? `Expires ${new Date(share.expires_at).toLocaleDateString()}`
+            : 'Never expires'
+
+          return (
+            <div key={share.id} className="admin-item">
+              <div className="admin-item-head">
+                <span className="admin-item-title" title={share.url}>{share.file_name}</span>
+                <span className="admin-item-actions">{actions(share)}</span>
+              </div>
+              <div className="admin-item-meta">
+                {warn && <span className="admin-badge admin-badge-warn">{warn}</span>}
+                {share.owner || '—'}{' · '}
+                <span className="admin-perm">
+                  {perm}
+                  {share.has_password && <Lock size={11} className="admin-lock" role="img" aria-label="Password protected" />}
+                </span>
+                {' · '}{views}{' · '}{expiry}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
       {pendingDelete && (
-        // The same compact dialog the file list uses for "Move to trash",
-        // rather than window.confirm's unstyleable browser block.
         <ConfirmModal
           simple
           danger

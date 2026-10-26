@@ -91,7 +91,20 @@ export default function PromptModal({
     <div className="modal-overlay" onClick={onCancel} role="dialog" aria-modal="true" aria-labelledby="prompt-title">
       <div className="modal sheet compact" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title" id="prompt-title">{title}</h2>
+          <div className="sheet-head">
+            <h2 className="modal-title" id="prompt-title">{title}</h2>
+            {/* The error sits beside the title instead of under the field: it
+                keeps the dialog the same height whether or not the name was
+                rejected, and the message lands where the eye already is. */}
+            <span
+              className="sheet-head-notice"
+              role="alert"
+              aria-live="polite"
+              title={error || undefined}
+            >
+              {error}
+            </span>
+          </div>
           <button className="modal-close" onClick={onCancel} aria-label="Close">
             <X size={15} />
           </button>
@@ -99,24 +112,21 @@ export default function PromptModal({
 
         <form onSubmit={submit}>
           <div className="modal-body">
-            {/* Three call sites pass `label`, and the input below already carries
-                an id for one — but nothing rendered it, so "New name" and
-                "Folder name" were being accepted and dropped. That also left the
-                field with no programmatic name at all. */}
-            <label className="field-label" htmlFor="prompt-input">{label}</label>
+            {/* No visible label: the title already says what the field is for,
+                and a second "New name" line above the input only pushed the
+                rest of the dialog down. The label still names the field for
+                screen readers. */}
             <input
               ref={inputRef}
               id="prompt-input"
               className={`login-input login-input-plain ${error ? 'input-error' : ''}`}
+              aria-label={label}
               placeholder={placeholder}
               value={value}
               onChange={(e) => { setValue(e.target.value); setError('') }}
               autoComplete="off"
               spellCheck={false}
             />
-            <p className="sheet-notice" data-filled={Boolean(error)} role="alert" aria-live="polite">
-              {error}
-            </p>
           </div>
 
           <div className="modal-footer">

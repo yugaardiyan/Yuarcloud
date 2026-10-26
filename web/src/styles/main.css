@@ -384,6 +384,30 @@ input.input[type='number'] {
   cursor: text;
 }
 
+/* A short hint stays visible next to a numeric field even after a value has
+   been typed (placeholders vanish the moment the field has a value). The hint
+   lives in its own inline element so the number stays left-aligned and the
+   recommendation sits snug against the right edge of the capsule. */
+.input-wrap {
+  position: relative;
+}
+
+.input-inline-hint {
+  padding-right: 58px; /* room for the hint on the narrowest column */
+}
+
+.input-hint {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 /* Safari and Chrome both keep spinners on number inputs unless told not to. */
 input.login-input[type='number']::-webkit-outer-spin-button,
 input.login-input[type='number']::-webkit-inner-spin-button,
@@ -640,14 +664,20 @@ input.input[type='number'] {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.03);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
   z-index: 1000;
   animation: fadeIn var(--transition-fast);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .modal-overlay {
+    -webkit-backdrop-filter: blur(1px);
+    backdrop-filter: blur(1px);
+  }
 }
 
 .modal {
@@ -842,8 +872,52 @@ input.input[type='number'] {
    controls. The footer gap likewise matches .modal-footer's 16px. */
 .modal.sheet {
   --sheet-pad: 14px;
-  --sheet-gap: 12px;
+  /* 12px matched .modal-footer's gap, but between a title, a field and a row of
+     buttons it read as a pause rather than a rhythm. 10 is still a gap you can
+     see, and it is the only place in these dialogs with room to give. */
+  --sheet-gap: 10px;
   border-radius: 28px;
+}
+
+/* One title size for every sheet. "New user" was the odd one at 16px because it
+   is not `.compact`, which made switching between Rename and New user look like
+   two different dialogs. A 1.3 line-height is enough for these single-line
+   titles and trims the header without crowding the close button. */
+.modal.sheet .modal-title {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+/* The title row carries the prompt's validation message on the same line, just
+   after the title. `.sheet-head` keeps the close button's corner clear so a
+   long message ellipsises instead of sliding under the ✕. */
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 34px;
+}
+
+.sheet-head .modal-title {
+  flex-shrink: 0;
+}
+
+.sheet-head-notice {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 15px;
+  color: var(--accent-danger);
+}
+
+/* Dialog fields sit 2px shorter than the sign-in pills. 36px is still a
+   comfortable target, and the New user dialog stacks six of them. */
+.modal.sheet .login-input {
+  height: 36px;
 }
 
 /* Desktop separators are chrome; these read tighter without them. */
@@ -884,7 +958,9 @@ input.input[type='number'] {
 }
 
 .modal.sheet .modal-footer {
-  padding: var(--sheet-gap) var(--sheet-pad) var(--sheet-pad);
+  /* 12px under the buttons instead of the full inset: the footer is the last
+     thing in the card, so the bottom edge reads as tight long before it is. */
+  padding: var(--sheet-gap) var(--sheet-pad) 12px;
   justify-content: flex-end;
   margin-top: 0;
 }
@@ -1761,13 +1837,35 @@ input.input[type='number'] {
   box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* The 2px bottom margin is sized for the drive, where a 38px status bar sits
-   below the card and supplies the visual weight. The settings page has no status
-   bar, so the same 2px left the card hugging the bottom of the window while its
-   sides sat 12px in — the card looked pinned down rather than framed. Give it the
-   same gap as its sides. */
+/*
+ * The 2px bottom margin is sized for the drive, where a 38px status bar sits
+ * below the card and supplies the visual weight. The settings page has no status
+ * bar, so the same 2px left the card hugging the bottom of the window while its
+ * sides sat 12px in — the card looked pinned down rather than framed. Give it the
+ * same gap as its sides.
+ */
 .settings-page .drive-shell {
   margin-bottom: var(--drive-shell-gap);
+}
+
+/*
+ * Users and Share Links tabs: bring their lists closer to the tab hairline.
+ * The other tabs (Statistics card, Chunked form, Audit) keep their own
+ * spacing — only these two lists are affected.
+ */
+.settings-page .admin-list,
+.settings-page .admin-list > .admin-item:first-child {
+  padding-top: 0;
+}
+
+/* The Statistics card and Chunked form keep their original top spacing —
+   only the list tabs (Users, Share Links, Audit) move closer to the hairline. */
+.settings-page .card.storage-meter {
+  padding-top: 10px;
+}
+
+.settings-page .settings-grid {
+  padding-top: 10px;
 }
 
 .drive-content {
@@ -1934,6 +2032,7 @@ input.input[type='number'] {
   justify-content: space-between;
   gap: 4px;
   line-height: 1;
+  position: relative;
   /* The same gutter as the card above it. The bar used to carry its own 16px
      padding (8px on a phone), so the rightmost figure sat 4px inside the card
      on a desktop and 4px past it on a phone; a status bar should read as part
@@ -2021,7 +2120,7 @@ input.input[type='number'] {
 
 @media (max-width: 560px) {
   .status-nav-btn-forward {
-    transform: translateX(-2px);
+    transform: translateX(4px);
   }
 }
 
@@ -2728,6 +2827,30 @@ input.input[type='number'] {
   color: var(--text-primary);
 }
 
+/* A label with a short hint on the same line. The hint sits at the far edge of
+   the column so the two read as one header row; on a narrow phone it wraps
+   under the label rather than squeezing the words. */
+/* A label and a plain input keep their old spacing unchanged. */
+.field-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-bottom: 6px;
+}
+
+.field-label-row .field-label {
+  margin-bottom: 0;
+}
+
+.field-note {
+  margin-left: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
 /* --- Admin: related upload settings ------------------------------------- */
 /* Four controls, always two rows of two. Four columns wrapped every label;
    one column turned the two rows back into a four-row list on a phone.
@@ -2738,22 +2861,6 @@ input.input[type='number'] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 16px;
-}
-
-/* A short explanation under one control. Muted like the form note, but
-   tighter: it sits inside a grid cell rather than after the whole form. */
-.field-hint {
-  margin: 5px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--text-tertiary);
-}
-
-.settings-note {
-  margin: 12px 0 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-tertiary);
 }
 
 /* At 320px the columns are about 125px wide, which leaves the longest label
@@ -2951,6 +3058,14 @@ input.input[type='number'] {
   max-width: 380px;
 }
 
+/* The same card as every other dialog on a phone. At 380 the user form was the
+   one sheet that opened wider than Rename or Share on the same screen. */
+@media (max-width: 560px) {
+  .modal.user-modal {
+    max-width: 330px;
+  }
+}
+
 /* The shared pill has a 40px left pad reserved for an icon; dialogs use
    plain inputs, so drop it back to a normal inset. */
 .login-input-plain {
@@ -2958,14 +3073,14 @@ input.input[type='number'] {
 }
 
 .user-field {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .user-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 /* The root-folder row is the last one; the footer closes right under it. */
@@ -2990,6 +3105,19 @@ input.input[type='number'] {
 .users-count {
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+/* Audit tab header row: the count on the left, the filter select on the
+   right. Both the header and the stacked list rows live in the same
+   `--drive-pad-x: 16px` padded `.drive-content` container, so the select's
+   natural right edge already lands flush with the rightmost timestamp
+   character ("M" in "AM") — no extra right margin is needed here. */
+.audit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 /*
@@ -3135,190 +3263,6 @@ input.input[type='number'] {
 }
 
 
-.user-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/*
- * The text stack beside the avatar has to be allowed to shrink below its
- * content width. A flex child defaults to min-width:auto, which makes it
- * refuse to shrink and pushes the row wider than its column — the ellipsis on
- * .user-name never engages and the table overflows instead.
- */
-.user-cell > div:last-child {
-  min-width: 0;
-}
-
-.user-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--accent-primary-light);
-  color: var(--accent-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.user-name {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-email {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-
-.user-role-text {
-  font-size: 10px;
-  font-weight: 600;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-
-.user-role-text.admin {
-  color: #7048e8;
-}
-
-.user-role-text.user {
-  color: var(--text-secondary);
-}
-
-/* One row per person, not a table. Four columns were more scaffolding than a
-   list of names ever needs: the name leads, the quota and the home folder sit
-   together on the right exactly as the phone card puts them, and the buttons
-   close the row. Same markup, two layouts. */
-.users-list .admin-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas: 'user meta actions';
-  align-items: center;
-  gap: 16px;
-  padding: 8px 0;
-}
-
-.users-list .user-cell {
-  grid-area: user;
-}
-
-.users-list .user-actions {
-  grid-area: actions;
-}
-
-/* The quota and the folder read as one fact, so they are one line: the figure
-   first and stable, the path after it giving way with an ellipsis. */
-.users-list .admin-item-meta {
-  grid-area: meta;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 0;
-  white-space: nowrap;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-}
-
-.users-list .admin-item-meta > span + span {
-  margin-left: 0;
-}
-
-.users-list .user-figure {
-  font-variant-numeric: tabular-nums;
-}
-
-.users-list .user-folder {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 30ch;
-}
-
-.users-list .user-folder > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The same row on a phone: the name keeps the top line with the buttons, the
-   quota and folder drop to the second. */
-@media (max-width: 560px) {
-  .users-list .admin-item {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      'user actions'
-      'meta meta';
-    gap: 5px 8px;
-    padding: 10px 0;
-  }
-
-  .users-list .admin-item-meta {
-    white-space: normal;
-    flex-wrap: wrap;
-  }
-
-  .users-list .user-folder {
-    max-width: none;
-    min-width: 0;
-  }
-
-  .users-list .user-folder > span:last-child {
-    white-space: normal;
-    overflow: visible;
-    overflow-wrap: anywhere;
-  }
-
-  /* A column clips; a card can spend a second line instead. At 320px the clip
-     cut the name to "Siti Nurhaliza Ramad…" and the address to the start of
-     its domain. */
-  .users-list .user-name {
-    white-space: normal;
-    overflow: visible;
-    line-height: 1.4;
-  }
-
-  .users-list .user-email {
-    white-space: normal;
-    overflow: visible;
-    overflow-wrap: anywhere;
-  }
-}
-
-.user-actions {
-  display: flex;
-  gap: 2px;
-  justify-content: flex-end;
-}
-
-/* 30px, the same target the share table uses. 23px was the table's old size;
-   inside the card it is too small for a thumb, and two sizes for the same pair
-   of buttons in the same panel reads as an accident. Sized explicitly so
-   .btn-sm's 6px 12px cannot widen them. */
-.user-actions .btn {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-}
-
-
 /* Lives under the card, not inside it. The fixed height reserves its line even
    when empty, so the card above never moves when an error shows. */
 .login-notice {
@@ -3430,20 +3374,15 @@ input.input[type='number'] {
   }
 
   .breadcrumb {
-    /* Only overflows when a long folder name, or a selection suffix, leaves
-       less room than the path needs. The auto-scroll in Drive.jsx then keeps
-       the current folder in view instead of clipping its right edge. */
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    transform: none;
+    margin-left: 4px;
     gap: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    transform: translateX(-13px);
     margin-right: 2px;
     align-items: center;
     display: flex;
-  }
-
-  .breadcrumb::-webkit-scrollbar {
-    display: none;
   }
 
   .breadcrumb-item {
@@ -3473,6 +3412,63 @@ input.input[type='number'] {
     padding-left: 2px;
     padding-right: 2px;
     line-height: 1;
+  }
+
+  /* Backdrop for the "more locations" popup: closes it on tap outside. */
+  .crumb-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: transparent;
+  }
+
+  /* "More locations" popup: lists every path segment so you can jump to one
+     that the compact two-crumb strip hid. Floats above the status bar, aligned
+     with the card's left edge (like a toast). */
+  .crumb-menu {
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: var(--drive-shell-gap);
+    z-index: 200;
+    width: var(--capsule-menu-w);
+    min-width: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+    background: var(--bg-primary);
+    border: var(--border-edge-w) solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-edge);
+    transform-origin: bottom left;
+    animation: crumbMenuIn var(--transition-fast);
+  }
+
+  @keyframes crumbMenuIn {
+    from { opacity: 0; transform: translateY(4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .crumb-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    padding: 6px 9px;
+    font-size: 13px;
+    line-height: 16px;
+    font-family: inherit;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--transition-fast);
+  }
+
+  .crumb-menu-item:hover {
+    background: var(--bg-hover);
   }
 }
 
@@ -3988,6 +3984,11 @@ input.input[type='number'] {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Both menus sit on one vertical grid: an item is 28px, a divider takes 9px
+   (1px rule + 4px either side), and the account head is 33px plus a 4px gap.
+   That makes Account (head + gap + two items) and Create (three items + one
+   divider) both 93px of content, so the two menus are exactly the same height
+   and opening one after the other no longer shifts the bottom edge. */
 .capsule-menu-item {
   display: flex;
   align-items: center;
@@ -3995,6 +3996,7 @@ input.input[type='number'] {
   width: 100%;
   padding: 6px 9px;
   font-size: 13px;
+  line-height: 16px;
   font-family: inherit;
   font-weight: 500;
   color: var(--text-primary);
@@ -4025,10 +4027,11 @@ input.input[type='number'] {
 }
 
 /* Name sits above the items, separated by a thin inset rule — full-bleed
-   looked too heavy for a header this short. */
+   looked too heavy for a header this short. 12px padding plus a 21px line
+   makes the head exactly 33px, the figure the row grid above expects. */
 .capsule-menu-head {
   position: relative;
-  padding: 6px 9px 5px;
+  padding: 6px 9px;
   margin-bottom: 4px;
 }
 
@@ -4046,6 +4049,7 @@ input.input[type='number'] {
 .capsule-menu-name {
   font-size: 13.5px;
   font-weight: 600;
+  line-height: 21px;
   color: var(--text-primary);
   /* The box is now a fixed width, so a long display name would push the menu
      wider than the shared token and the two would stop matching — or overflow
@@ -4231,6 +4235,23 @@ input.input[type='number'] {
   max-width: 420px;
 }
 
+/*
+ * On a phone the share dialog takes the same width as Rename and New folder.
+ * Those are `.modal.sheet.compact` at 330px, and the share dialog was using the
+ * whole screen minus the overlay gutter — 358px on a 390px phone, 420 on a small
+ * tablet — so opening Share right after Rename visibly widened the card under
+ * the eye for no reason the user could name. Both share states follow, because
+ * the width is a property of the dialog, not of what it happens to contain.
+ *
+ * Below ~362px the overlay gutter already makes every dialog narrower than 330,
+ * and both fall to the same figure.
+ */
+@media (max-width: 560px) {
+  .modal.share-modal {
+    max-width: 330px;
+  }
+}
+
 /* Password and expiry share a row — they are one short decision, and stacking
    them made the dialog twice as tall as it needed to be. */
 .share-form-row {
@@ -4255,6 +4276,25 @@ input.input[type='number'] {
   min-height: 0;
 }
 
+/*
+ * The links state has no heading of its own any more — the title is the heading.
+ * That left the header's bottom padding and the body's top padding stacked into
+ * a band of white between the title and the first row, which read as a missing
+ * element rather than as spacing. Pull the list up under the title: the row's
+ * own 9px padding is the gap, the same one that separates the rows from each
+ * other. The form keeps its room — it needs the breathing space above a field.
+ *
+ * :has here is older than the color-mix already used in this file, so it costs
+ * nothing in browser support.
+ */
+.modal.share-modal:has(.modal-body.is-links) .modal-header {
+  padding-bottom: 2px;
+}
+
+.modal.share-modal .modal-body.is-links {
+  padding-top: 0;
+}
+
 /* The list fetch is normally a single local round-trip. Reserve the body and
    centre a quiet line instead of flashing an empty state or the create form. */
 .share-loading {
@@ -4266,15 +4306,21 @@ input.input[type='number'] {
   color: var(--text-tertiary);
 }
 
-/* Below this the two columns leave the duration value no room next to its
-   chevron, so go back to stacking. */
-@media (max-width: 460px) {
+/* Stacking was the answer when the dialog was as wide as the screen: at 390px
+   the two columns left the duration no room beside its chevron. The dialog is a
+   fixed 330 now, so the row measures the same on every phone and 145px holds
+   "No expiry" plus the chevron with room to spare — and stacking cost a whole
+   field's height on the screen where height is scarcest. Only a 320px phone,
+   where the card falls to 288, still splits them. */
+@media (max-width: 360px) {
   .share-form-row {
     grid-template-columns: 1fr;
   }
 }
 .modal.share-modal .modal-header {
-  padding: 12px 14px 10px;
+  /* 6px under the title instead of 10: the body already starts with its own
+     gap, so the two were adding up to a band the eye reads as a missing row. */
+  padding: 12px 14px 6px;
   border-bottom: none;
 }
 .modal.share-modal .modal-title {
@@ -4284,7 +4330,7 @@ input.input[type='number'] {
   padding: 4px;
 }
 .modal.share-modal .modal-body {
-  padding: 6px 14px 14px;
+  padding: 2px 14px 12px;
   max-height: 70vh;
 }
 .modal.share-modal .modal-footer {
@@ -4311,12 +4357,33 @@ input.input[type='number'] {
   margin-top: 12px !important;
 }
 
-/* Flat rows, not cards. A separator is enough to keep two links apart; the
-   dialog already supplies the outer surface. */
+/* Each row is a small grid: the URL gets a line of its own on a phone, and on a
+   wider card it shares the first line with the buttons. The permission chip and
+   the details sit on one wrapping line below, so the row reads as two ideas —
+   where the link goes, and what it does — instead of four stacked fragments. */
 .share-row {
-  padding: 9px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'path path'
+    'info actions';
+  align-items: center;
+  gap: 4px 8px;
+  padding: 7px 0;
   border-bottom: 1px solid var(--border-color);
   transition: border-color var(--transition-fast);
+}
+
+/* The card stops being pinned to the viewport width here, so the URL can share
+   its line with the buttons and still hold the whole address. The details get
+   the full width below: if they shared a column with the buttons, their
+   max-content width would shrink the URL back down to a few characters. */
+@media (min-width: 561px) {
+  .share-row {
+    grid-template-areas:
+      'path actions'
+      'info info';
+  }
 }
 
 .share-row:last-of-type {
@@ -4332,11 +4399,37 @@ input.input[type='number'] {
   opacity: 0.72;
 }
 
-.share-row-top {
+/* Icon and address travel together — the chain is part of the URL, not of the
+   details line. */
+.share-row-path {
+  grid-area: path;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
+  min-width: 0;
+}
+
+/* Permission, expiry, downloads and the password hint are one thought, so they
+   flow together and wrap only when the card actually runs out of room. */
+.share-row-info {
+  grid-area: info;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.share-row-info > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.share-row-info > span.is-locked {
+  color: var(--accent-primary);
 }
 
 .share-row-link-icon {
@@ -4361,11 +4454,6 @@ input.input[type='number'] {
   letter-spacing: 0.2px;
 }
 
-.share-status-ok {
-  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
-  color: var(--accent-success);
-}
-
 .share-status-danger {
   background: color-mix(in srgb, var(--accent-danger) 14%, transparent);
   color: var(--accent-danger);
@@ -4376,7 +4464,7 @@ input.input[type='number'] {
   color: var(--text-secondary);
 }
 
-/* Tiny permission chip sitting next to the status pill on each existing link. */
+/* Access level for the link: View or Edit. */
 .share-perm {
   display: inline-flex;
   align-items: center;
@@ -4391,28 +4479,43 @@ input.input[type='number'] {
 }
 
 .share-row-actions {
+  grid-area: actions;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
 }
 
-.share-row-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-tertiary);
-}
+/* Mobile: the two actions split across the grid rows — the copy button rides
+   on the URL row, the delete button on the info row. Both stay right-aligned,
+   matching the desktop layout where they share one line. */
+@media (max-width: 560px) {
+  .share-row {
+    grid-template-areas:
+      'path copy'
+      'info del';
+  }
 
-.share-row-meta > span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+  .share-row-actions {
+    display: contents;
+  }
 
-.share-row-meta > span.is-locked {
-  color: var(--accent-primary);
+  .share-row-actions > :first-child {
+    grid-area: copy;
+  }
+
+  .share-row-actions > :last-child {
+    grid-area: del;
+  }
+}
+/* `.modal .btn` gives every button in a dialog the 7px/16px capsule padding,
+   which turned these two icon-only actions into 48px-wide pills. They are icons,
+   so they get the same 28x28 circle as the dialog's close button. */
+.modal .share-row-actions .btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
 }
 
 /* Two-option access selector inside the share creation form. */
@@ -4426,7 +4529,7 @@ input.input[type='number'] {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
@@ -4468,11 +4571,6 @@ input.input[type='number'] {
   line-height: 1.3;
 }
 
-@media (max-width: 560px) {
-  .share-row-top { flex-wrap: wrap; }
-  .share-row-url { flex-basis: 100%; order: 3; }
-}
-
 /* --- File viewer -------------------------------------------------------- */
 /* A full-bleed surface rather than a dialog: previews own the whole viewport
    because a spreadsheet or a video has no sensible "compact" size. The shell
@@ -4482,9 +4580,15 @@ input.input[type='number'] {
   inset: 0;
   z-index: 1100; /* above .modal-overlay, so a viewer can never be buried */
   display: flex;
-  background: rgba(12, 14, 20, 0.72);
-  backdrop-filter: blur(6px);
+  background: rgba(12, 14, 20, 0.03);
   animation: fadeIn var(--transition-fast);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .preview-overlay {
+    -webkit-backdrop-filter: blur(1px);
+    backdrop-filter: blur(1px);
+  }
 }
 
 .preview-shell {

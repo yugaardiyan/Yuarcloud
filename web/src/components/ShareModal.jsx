@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { X, Link2, Copy, Calendar, Lock, User, CheckCircle, Eye, Upload } from 'lucide-react'
 import { shareApi, apiError } from '../utils/api'
 import { nextExpiryDelay } from '../utils/shareExpiry'
+import { TrashGlyph } from './icons'
 import { formatDate } from '../utils/helpers'
 import ConfirmModal from './ConfirmModal'
 import toast from 'react-hot-toast'
@@ -208,39 +209,22 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                 const PermIcon = perm.icon
                 return (
                   <div key={share.id} className={`share-row is-${status.tone}`}>
-                    <div className="share-row-top">
+                    <div className="share-row-path">
                       <Link2 size={16} className="share-row-link-icon" />
-                      <span className="share-row-url truncate">{share.url}</span>
+                      <span className="share-row-url truncate" title={share.url}>{share.url}</span>
+                    </div>
 
-                      <span className={`share-status share-status-${status.tone}`}>{status.label}</span>
+                    <div className="share-row-info">
+                      {/* A listed link is live by definition — the server drops
+                          expired ones — so only the exceptional states earn a
+                          badge here. */}
+                      {status.tone !== 'ok' && (
+                        <span className={`share-status share-status-${status.tone}`}>{status.label}</span>
+                      )}
                       <span className="share-perm" title={perm.label}>
                         <PermIcon size={13} />
                         {perm.label}
                       </span>
-
-                      <div className="share-row-actions">
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          onClick={() => copyToClipboard(share.url)}
-                          aria-label={copySuccess === share.url ? 'Copied' : 'Copy link'}
-                          title={copySuccess === share.url ? 'Copied!' : 'Copy link'}
-                          style={copySuccess === share.url ? { color: 'var(--accent-success)' } : undefined}
-                        >
-                          {copySuccess === share.url ? <CheckCircle size={16} /> : <Copy size={16} />}
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          onClick={() => requestDeleteShare(share.id)}
-                          title="Delete share link"
-                          aria-label="Delete share link"
-                          style={{ color: 'var(--accent-danger)' }}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="share-row-meta">
                       <span>
                         <Calendar size={12} />
                         {share.expires_at ? `Expires ${formatDate(share.expires_at)}` : 'Never expires'}
@@ -256,6 +240,27 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                         </span>
                       )}
                     </div>
+
+                    <div className="share-row-actions">
+                      <button
+                        className="btn btn-ghost btn-icon btn-sm"
+                        onClick={() => copyToClipboard(share.url)}
+                        aria-label={copySuccess === share.url ? 'Copied' : 'Copy link'}
+                        title={copySuccess === share.url ? 'Copied!' : 'Copy link'}
+                        style={copySuccess === share.url ? { color: 'var(--accent-success)' } : undefined}
+                      >
+                        {copySuccess === share.url ? <CheckCircle size={16} /> : <Copy size={16} />}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-icon btn-sm"
+                        onClick={() => requestDeleteShare(share.id)}
+                        title="Delete share link"
+                        aria-label="Delete share link"
+                        style={{ color: 'var(--accent-danger)' }}
+                      >
+                        <TrashGlyph size={18} />
+                      </button>
+                    </div>
                   </div>
                 )
               })}
@@ -266,7 +271,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
               <div className="share-form-row">
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--text-primary)' }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--text-primary)' }}>
                     Password (optional)
                   </label>
                   <input
@@ -279,7 +284,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--text-primary)' }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--text-primary)' }}>
                     Duration
                   </label>
                   <select
@@ -298,7 +303,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--text-primary)' }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--text-primary)' }}>
                   Access
                 </label>
                 <div className="share-perm-picker" role="radiogroup" aria-label="Access permission">

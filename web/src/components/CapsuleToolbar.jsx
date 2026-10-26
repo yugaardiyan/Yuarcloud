@@ -4,7 +4,7 @@ import {
   Search, X,
 } from 'lucide-react'
 import {
-  MyCloudGlyph, NewFolderGlyph, TrashGlyph, GridGlyph, ListGlyph,
+  MyCloudGlyph, NewFolderGlyph, AddUserGlyph, SaveConfigGlyph, ReloadGlyph, TrashGlyph, GridGlyph, ListGlyph,
 } from './icons'
 import { useAuth } from '../context/AuthContext'
 import { useFiles } from '../context/FileContext'
@@ -126,6 +126,18 @@ export default function CapsuleToolbar() {
   // the account button, which is what opened it.
   const onSettings = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
   const driveTabActive = view.scope === 'drive' && !onSettings
+
+  // Which Settings tab is up decides what the far-right slot does. The slot
+  // keeps its position either way; only the glyph and the action change.
+  const settingsTab = onSettings
+    ? (['users', 'chunked', 'stats', 'shares', 'audit'].includes(location.pathname.split('/')[2])
+      ? location.pathname.split('/')[2]
+      : 'users')
+    : null
+
+  const fireSettingsAction = (action) => {
+    window.dispatchEvent(new CustomEvent('yuarcloud:settings-action', { detail: { action } }))
+  }
 
   const handlePickFiles = (e) => {
     const picked = Array.from(e.target.files || [])
@@ -266,19 +278,47 @@ export default function CapsuleToolbar() {
             Emptying is permanent and there is no undo, so it asks first —
             same guard as every other destructive action in the app. */}
         {onSettings ? (
-          // Settings has no folder of its own, so there is nothing here to
-          // create inside. Before this, the segment still worked and filed the
-          // folder into whichever folder was last open — the same silent
-          // wrong-destination the trash segment already refuses. It keeps its
-          // slot, inert, rather than vanishing and shifting the pill.
-          <button
-            className="capsule-btn capsule-btn-primary"
-            disabled
-            title="Files are created in My Cloud"
-            aria-label="Create new — available in My Cloud"
-          >
-            <NewFolderGlyph />
-          </button>
+          // The slot keeps its place on Settings; the action follows the tab
+          // that is open. Users offers Add user, Chunked Upload offers the
+          // save action for that form. The other tabs have nothing to create
+          // or commit here, so the slot goes inert like it used to.
+          settingsTab === 'users' ? (
+            <button
+              className="capsule-btn capsule-btn-primary"
+              onClick={() => fireSettingsAction('add-user')}
+              title="Add user"
+              aria-label="Add user"
+            >
+              <AddUserGlyph />
+            </button>
+          ) : settingsTab === 'chunked' ? (
+            <button
+              className="capsule-btn capsule-btn-primary"
+              onClick={() => fireSettingsAction('save-chunked-config')}
+              title="Save configuration"
+              aria-label="Save configuration"
+            >
+              <SaveConfigGlyph />
+            </button>
+          ) : settingsTab === 'audit' ? (
+            <button
+              className="capsule-btn capsule-btn-primary"
+              onClick={() => fireSettingsAction('reload-audit')}
+              title="Reload audit log"
+              aria-label="Reload audit log"
+            >
+              <ReloadGlyph />
+            </button>
+          ) : (
+            <button
+              className="capsule-btn capsule-btn-primary"
+              disabled
+              title="No action in this tab"
+              aria-label="No create action in this Settings tab"
+            >
+              <NewFolderGlyph />
+            </button>
+          )
         ) : view.scope === 'trash' ? (
           <button
             className="capsule-btn capsule-btn-danger"
@@ -369,7 +409,7 @@ export default function CapsuleToolbar() {
         <PromptModal
           title="New folder"
           label="Folder name"
-          placeholder="e.g. Documents"
+          placeholder="Folder name"
           confirmLabel="Create"
           onConfirm={createFolder}
           onCancel={() => setPromptNewFolder(false)}

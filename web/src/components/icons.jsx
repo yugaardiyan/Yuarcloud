@@ -58,6 +58,34 @@ export function NewFolderGlyph({ size = 19 }) {
   )
 }
 
+/**
+ * Add user: a person with a plus, used by the capsule create slot while the
+ * Users tab of Settings is open. The plus sits in the gap left by the head
+ * circle, the same place the new-folder cross occupies.
+ */
+export function AddUserGlyph({ size = 19 }) {
+  return (
+    <svg {...attrs(size, { strokeLinejoin: 'round' })}>
+      <path d="M12.125 14.719c-3.6 0-7.62 2.928-7.62 6.526m7.62-9.785a4.362 4.362 0 0 0 4.035-2.683a4.355 4.355 0 0 0-3.17-5.948a4.362 4.362 0 0 0-5.215 4.274a4.356 4.356 0 0 0 4.35 4.357" />
+      <path strokeMiterlimit="10" d="M16.488 14.983v5.997m-2.993-2.992h6" />
+    </svg>
+  )
+}
+
+/**
+ * Save configuration: the same folder-plus artwork the create slot wears,
+ * reused while the Chunked Upload tab is open because saving that form is
+ * the tab's only producing action — the icon says "commit this".
+ */
+export function SaveConfigGlyph({ size = 19 }) {
+  return (
+    <svg {...attrs(size)}>
+      <path d="M21.25 9.16v7.987a4.1 4.1 0 0 1-1.204 2.901a4.113 4.113 0 0 1-2.906 1.202H6.86a4.113 4.113 0 0 1-2.906-1.202a4.1 4.1 0 0 1-1.204-2.901V6.853a4.1 4.1 0 0 1 1.204-2.901A4.113 4.113 0 0 1 6.86 2.75h8.35a3.004 3.004 0 0 1 2.25.998l3 3.415c.501.545.783 1.256.79 1.997" />
+      <path d="M7 21.22v-5.241a1.995 1.995 0 0 1 2-1.997h6a2.002 2.002 0 0 1 2 1.997v5.241M15.8 2.81v4.183a1.526 1.526 0 0 1-1.52 1.528H9.72A1.531 1.531 0 0 1 8.2 6.993V2.75m1.946 15.108h3.708" />
+    </svg>
+  )
+}
+
 /** Trash: a lidded bin. */
 export function TrashGlyph({ size = 19 }) {
   return (
@@ -88,6 +116,21 @@ export function ListGlyph({ size = 19 }) {
   return (
     <svg {...attrs(size, { strokeMiterlimit: 10 })}>
       <path d="M4.5 12h15m-15 5.77h15M4.5 6.23h15" />
+    </svg>
+  )
+}
+
+/**
+ * Reload: a half-arc with an arrowhead at each end, the familiar circular
+ * refresh mark.
+ */
+export function ReloadGlyph({ size = 19 }) {
+  return (
+    <svg {...attrs(size, { strokeMiterlimit: 10 })}>
+      <path d="M18.024 7.043A8.374 8.374 0 0 0 3.74 12.955" />
+      <path d="m17.35 2.75l.832 3.372a1.123 1.123 0 0 1-.854 1.382l-3.372.843" />
+      <path d="M5.976 16.957a8.374 8.374 0 0 0 14.285-5.912" />
+      <path d="m6.65 21.25l-.832-3.372a1.124 1.124 0 0 1 .855-1.382l3.371-.843" />
     </svg>
   )
 }

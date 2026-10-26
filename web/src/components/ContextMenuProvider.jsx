@@ -436,7 +436,7 @@ export default function ContextMenuProvider({ children }) {
         <PromptModal
           title="New folder"
           label="Folder name"
-          placeholder="e.g. Documents"
+          placeholder="Folder name"
           confirmLabel="Create"
           onConfirm={(name) => createFolder(name)}
           onCancel={() => setNewFolderOpen(false)}
