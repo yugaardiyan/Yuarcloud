@@ -19,10 +19,13 @@ import { formatBytes } from '../utils/helpers'
 export default function StorageMeter({ stats, users = {} }) {
   if (!stats) return null
 
-  const used = stats.total_size || 0
-  const quota = stats.total_quota || 0
+  // Prefer the real server disk capacity (filebrowser-style) when the backend
+  // reports it; fall back to the sum of user quotas otherwise.
+  const hasDisk = stats.disk_total > 0
+  const used = hasDisk ? stats.disk_used : (stats.total_size || 0)
+  const quota = hasDisk ? stats.disk_total : (stats.total_quota || 0)
   const percent = quota > 0 ? Math.min(100, (used / quota) * 100) : 0
-  const free = Math.max(0, quota - used)
+  const free = hasDisk ? stats.disk_free : Math.max(0, quota - used)
 
   const tone = percent >= 90 ? 'critical' : percent >= 70 ? 'warning' : 'normal'
 

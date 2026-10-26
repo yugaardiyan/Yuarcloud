@@ -309,6 +309,11 @@ type StorageStats struct {
 	// TotalQuota is the sum of every user's storage allowance, so the admin
 	// view can show a meaningful used/total bar.
 	TotalQuota int64 `json:"total_quota"`
+	// Disk usage of the storage root (used/free/total bytes), so the admin
+	// view can show the real server capacity the way filebrowser does.
+	DiskUsed  int64 `json:"disk_used"`
+	DiskFree  int64 `json:"disk_free"`
+	DiskTotal int64 `json:"disk_total"`
 }
 
 type UserStats struct {

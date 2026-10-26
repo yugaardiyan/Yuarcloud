@@ -51,6 +51,16 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 		return
 	}
 
+	// Disk usage of the storage root, so the admin view can show the real
+	// server capacity (used / total) the way filebrowser does, instead of
+	// only the sum of user quotas which may be smaller than the actual disk.
+	diskUsed, diskFree, diskErr := h.storage.GetDiskUsage(ctx, "")
+	if diskErr == nil {
+		storageStats.DiskUsed = diskUsed
+		storageStats.DiskFree = diskFree
+		storageStats.DiskTotal = diskUsed + diskFree
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"users":   userStats,
 		"storage": storageStats,
