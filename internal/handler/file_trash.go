@@ -317,7 +317,12 @@ func (h *FileHandler) RestoreFromTrash(c *gin.Context) {
 	}
 
 	var file model.File
-	if err := h.db.First(&file, "id = ? AND user_id = ? AND is_trashed = ?", fileID, userID, true).Error; err != nil {
+	// Trashing is gated by scope, so a row that reached the trash was already
+	// inside the caller's subtree. The destination check below re-confirms the
+	// original path is still inside the caller's home. Filtering on user_id
+	// here would hide a peer's trashed rows in a shared home — precisely the
+	// case the shared-folder design admits.
+	if err := h.db.First(&file, "id = ? AND is_trashed = ?", fileID, true).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "trashed item not found"})
 		return
 	}
@@ -440,7 +445,7 @@ func (h *FileHandler) DeletePermanently(c *gin.Context) {
 	}
 
 	var file model.File
-	if err := h.db.First(&file, "id = ? AND user_id = ? AND is_trashed = ?", fileID, userID, true).Error; err != nil {
+	if err := h.db.First(&file, "id = ? AND is_trashed = ?", fileID, true).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "trashed item not found"})
 		return
 	}

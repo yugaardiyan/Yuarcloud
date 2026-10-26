@@ -55,8 +55,15 @@ func (h *ShareHandler) CreateShare(c *gin.Context) {
 	// went on serving the folder from the trash to anyone holding it — public
 	// access to bytes the owner believed they had put away. Restore put the
 	// folder back and the link silently started serving the live tree too.
+	//
+	// No owner filter: a member of a shared home may offer a link to any live
+	// file inside it, the way every action on a shared drive does. The scope
+	// confines the lookup to the caller's own subtree — a file outside it (or
+	// a trashed one) comes back as not found, which is the same answer a
+	// non-owner used to get.
 	var file model.File
-	if err := h.db.First(&file, "id = ? AND user_id = ? AND is_trashed = ?", req.FileID, userID, false).Error; err != nil {
+	if err := scoped(reqScope(c), h.db).
+		First(&file, "id = ? AND is_trashed = ?", req.FileID, false).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
 	}

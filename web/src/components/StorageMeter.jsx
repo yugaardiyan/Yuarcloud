@@ -85,6 +85,10 @@ export default function StorageMeter({ stats, users = {} }) {
         <span className="storage-meter-sep" aria-hidden="true">·</span>
         <span>{formatBytes(free)} free</span>
       </p>
+
+      {/* No per-user quota list here — the Users tab already shows
+          used / quota for every account, and duplicating it on the
+          statistics card would be the same number read twice. */}
     </section>
   )
 }

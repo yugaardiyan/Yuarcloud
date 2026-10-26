@@ -90,8 +90,16 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	if req.Role == "" {
 		req.Role = "user"
 	}
-	if req.QuotaBytes == 0 {
-		req.QuotaBytes = 10737418240 // 10GB default
+	// A quota of 0 means unlimited — the upload path already treats it that
+	// way (see quotaExceeded in file_quota.go), so the create endpoint has to
+	// store it as-is rather than snapping it to a default. The admin form
+	// always sends a concrete value, so there is no "unset" case to fall back
+	// on: 0 is a deliberate choice, not an absence.
+	//
+	// A negative value is not a valid quota; clamp it to 0 (unlimited) rather
+	// than letting it reach the database and break the used/quota math.
+	if req.QuotaBytes < 0 {
+		req.QuotaBytes = 0
 	}
 
 	homePath, ok := h.resolveHomePath(c, req.HomePath)
@@ -383,21 +391,36 @@ func (h *AdminHandler) UpdateUserQuota(c *gin.Context) {
 	}
 
 	var req struct {
-		QuotaBytes int64 `json:"quota_bytes" binding:"required,gte=0"`
+		// A *pointer is deliberate: the "required" tag would refuse a 0, and 0
+		// is a valid quota (unlimited). The pointer lets an absent field be
+		// told apart from an explicit 0; both are accepted here, but the
+		// absent case is the one that should not overwrite a stored value.
+		QuotaBytes *int64 `json:"quota_bytes" binding:"gte=0"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// The quota endpoint exists to set a value, so an omitted field is not a
+	// no-op: it is an error the admin cannot recover from without re-reading
+	// the user. Refuse it rather than silently keeping the old quota.
+	if req.QuotaBytes == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "quota_bytes is required"})
+		return
+	}
 
 	ctx := c.Request.Context()
-	if err := h.adminService.UpdateUserQuota(ctx, parsed, req.QuotaBytes); err != nil {
+	if err := h.adminService.UpdateUserQuota(ctx, parsed, *req.QuotaBytes); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update quota"})
 		return
 	}
 
 	currentUserID, _ := middleware.GetUserID(c)
-	logAudit(h.db, c, currentUserID, "admin_update_quota", "user", &parsed, fmt.Sprintf("Quota set to %d bytes", req.QuotaBytes))
+	label := "unlimited"
+	if *req.QuotaBytes > 0 {
+		label = fmt.Sprintf("%d bytes", *req.QuotaBytes)
+	}
+	logAudit(h.db, c, currentUserID, "admin_update_quota", "user", &parsed, "Quota set to "+label)
 
 	c.JSON(http.StatusOK, gin.H{"message": "quota updated"})
 }

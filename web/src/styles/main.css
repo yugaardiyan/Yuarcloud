@@ -3208,6 +3208,21 @@ input.input[type='number'] {
   margin-left: 8px;
 }
 
+/* Unlimited quota: the infinity glyph and the word sit inline in the meta line. */
+.user-quota-unlimited {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-tertiary);
+}
+
+/* The infinity glyph renders slightly high in the text baseline; nudge it
+   down 0.5px so it sits centred against the surrounding digits. */
+.user-quota-unlimited svg {
+  position: relative;
+  top: 0.5px;
+}
+
 .admin-item-detail {
   margin-top: 3px;
   font-size: 12px;

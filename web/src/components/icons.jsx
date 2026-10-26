@@ -135,3 +135,15 @@ export function ReloadGlyph({ size = 19 }) {
   )
 }
 
+/**
+ * Unlimited: the infinity mark, used wherever a 0-byte quota reads as
+ * "no limit" rather than "nothing allowed".
+ */
+export function UnlimitedGlyph({ size = 19 }) {
+  return (
+    <svg {...attrs(size, { strokeLinejoin: 'round' })}>
+      <path d="M10.18 9.32C9.36 8.19 8.05 7.45 6.54 7.45C4.03 7.45 1.99 9.49 1.99 12C1.99 14.51 4.03 16.55 6.54 16.55C8.23 16.55 9.8 15.66 10.67 14.21L12 12L13.32 9.79C14.19 8.34 15.76 7.45 17.45 7.45C19.96 7.45 22 9.49 22 12C22 14.51 19.96 16.55 17.45 16.55C15.95 16.55 14.64 15.81 13.81 14.68" />
+    </svg>
+  )
+}
+

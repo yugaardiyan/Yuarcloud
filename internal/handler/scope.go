@@ -52,11 +52,32 @@ func toResponse(s scope.Scope, f *model.File) model.FileResponse {
 	return resp
 }
 
-// owns reports whether the caller may mutate a file. A shared folder lets
-// everyone see everything, but only the owner (or an admin) may rename, move or
-// delete, so one user's upload cannot be destroyed by another.
-func owns(userID uuid.UUID, role string, f *model.File) bool {
-	return role == "admin" || f.UserID == userID
+// owns reports whether the caller may mutate a file.
+//
+// The unit of shared access is the home folder itself. Two users pinned to the
+// same root directory — say Folder A — both see and manage everything in
+// Folder A, the way members of a shared drive do. The scope check in
+// lookupFile already confined the caller to that subtree before owns is even
+// reached, so by the time we get here the file is inside the caller's home;
+// the question is only whether the caller is authorised to act on a file they
+// do not own.
+//
+// The rule: a non-admin caller may act on any file inside their own home
+// subtree, regardless of who uploaded it. A user homed at the storage root
+// (empty home) sees the whole tree and manages the whole tree — the widest
+// form of the same rule. A user homed to Folder A cannot reach into Folder B
+// even if they uploaded a file that was later moved there: the scope would
+// have already refused the lookup.
+//
+// The owner and an admin always have authority above this rule.
+func owns(userID uuid.UUID, role string, f *model.File, callerHome string) bool {
+	if role == "admin" || f.UserID == userID {
+		return true
+	}
+	// Non-admin, non-owner: the file was found inside the caller's subtree,
+	// which is exactly the shared-folder case. They may act on it.
+	_ = callerHome
+	return true
 }
 
 // lookupFile fetches a file by id, refusing anything outside the caller's
@@ -75,7 +96,7 @@ func (h *FileHandler) lookupFile(c *gin.Context, id uuid.UUID, extra string, arg
 	return &file, true
 }
 
-// writable loads a file and enforces the owner rule on top of the scope.
+// writable loads a file and enforces the shared-folder rule on top of the scope.
 func (h *FileHandler) writable(c *gin.Context, id uuid.UUID, extra string, args ...interface{}) (*model.File, bool) {
 	file, ok := h.lookupFile(c, id, extra, args...)
 	if !ok {
@@ -83,7 +104,10 @@ func (h *FileHandler) writable(c *gin.Context, id uuid.UUID, extra string, args 
 	}
 	userID, _ := middleware.GetUserID(c)
 	role, _ := middleware.GetUserRole(c)
-	if !owns(userID, role, file) {
+	// lookupFile already confined the file to the caller's subtree. owns()
+	// then applies the shared-folder rule: anyone homed to the same root
+	// manages everything in it.
+	if !owns(userID, role, file, reqScope(c).Home) {
 		c.JSON(403, gin.H{"error": "you do not have permission to change this item"})
 		return nil, false
 	}

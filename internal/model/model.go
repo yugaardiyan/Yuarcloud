@@ -32,7 +32,7 @@ type User struct {
 	DisplayName  string `gorm:"size:100" json:"display_name"`
 	AvatarURL    string `gorm:"size:500" json:"avatar_url"`
 	Role         string `gorm:"size:20;default:'user'" json:"role"`     // admin, user
-	QuotaBytes   int64  `gorm:"default:10737418240" json:"quota_bytes"` // 10GB default
+	QuotaBytes   int64  `gorm:"default:21474836480" json:"quota_bytes"` // 20GB default; 0 = unlimited
 	UsedBytes    int64  `gorm:"default:0" json:"used_bytes"`
 	// HomePath confines the user to a subtree of the storage root, the way
 	// FileBrowser scopes a user to a home directory. Empty means the storage

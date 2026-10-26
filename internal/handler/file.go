@@ -467,8 +467,9 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 	// permanent=true bypasses the trash; otherwise the item is recoverable.
 	permanent := c.Query("permanent") == "true"
 
-	// Visible inside the home, and only the owner (or an admin) may remove it —
-	// a shared folder must not let one user delete another's work.
+	// Visible inside the home. The shared-folder rule decides who may remove
+	// it: a member homed to the same root manages everything in it, so a peer's
+	// file is no more off-limits than the peer's own.
 	var file *model.File
 	var ok bool
 	if permanent {

@@ -51,6 +51,9 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 		return
 	}
 
+	// Per-user quota breakdown is shown in the Users tab; the statistics
+	// view only reports the aggregate figures above.
+
 	// Disk usage of the storage root, so the admin view can show the real
 	// server capacity (used / total) the way filebrowser does, instead of
 	// only the sum of user quotas which may be smaller than the actual disk.

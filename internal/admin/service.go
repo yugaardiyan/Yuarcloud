@@ -152,6 +152,10 @@ func (s *AdminService) GetStats(ctx context.Context) (*model.UserStats, error) {
 	return &stats, nil
 }
 
+// GetStorageStats returns aggregate file counts and the sum of user quotas.
+//
+// Disk capacity of the storage root is layered on top by the handler, which
+// has access to the StorageBackend; the service only reads the database.
 func (s *AdminService) GetStorageStats(ctx context.Context) (*model.StorageStats, error) {
 	var stats model.StorageStats
 

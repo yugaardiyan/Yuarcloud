@@ -5,7 +5,7 @@ import {
   HardDrive, Share2, AlertCircle, Copy, ScrollText, Lock, CheckCircle
 } from 'lucide-react'
 import { adminApi, fileApi, apiError } from '../utils/api'
-import { TrashGlyph } from '../components/icons'
+import { TrashGlyph, UnlimitedGlyph } from '../components/icons'
 import { useAuth } from '../context/AuthContext'
 import AuditTab from './AuditTab'
 import StorageMeter from '../components/StorageMeter'
@@ -28,6 +28,20 @@ const CLEANUP_OPTIONS = [
   { value: '6h', seconds: 21600, label: '6 hours' },
   { value: '24h', seconds: 86400, label: '1 day' },
 ]
+
+// Quota presets the admin picks from in the user dialog. The value is the byte
+// count sent to the server; 0 means unlimited (the upload path treats 0 as no
+// limit). 20 GB is the default for a new account.
+const QUOTA_OPTIONS = [
+  { value: 21474836480, label: '20 GB' },    // default
+  { value: 53687091200, label: '50 GB' },
+  { value: 107374182400, label: '100 GB' },
+  { value: 214748364800, label: '200 GB' },
+  { value: 536870912000, label: '500 GB' },
+  { value: 0, label: 'Unlimited' },
+]
+
+const DEFAULT_QUOTA_BYTES = 21474836480 // 20 GB
 
 /**
  * Reads a Go duration string back as seconds.
@@ -357,7 +371,10 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
         <>
           <div className="admin-list">
             {users.map((user) => {
-              const quota = `${formatBytes(user.used_bytes || 0)} / ${formatBytes(user.quota_bytes || 0)}`
+              const isUnlimited = !user.quota_bytes || user.quota_bytes === 0
+              const quota = isUnlimited
+                ? <span className="user-quota-unlimited">{formatBytes(user.used_bytes || 0)} <span aria-hidden="true">/</span> <UnlimitedGlyph size={14} /></span>
+                : `${formatBytes(user.used_bytes || 0)} / ${formatBytes(user.quota_bytes)}`
               return (
                 <div key={user.id} className="admin-item">
                   <div className="admin-item-head">
@@ -436,17 +453,20 @@ function UsersTab({ users, usersTotal, page, setPage, loading, loadError, onDele
 function UserModal({ user, onClose, onSuccess }) {
   const editing = Boolean(user)
 
-  // The quota the form starts from, expressed the way the form expresses it.
+  // The quota the form starts from. The dropdown offers a fixed set of presets,
+  // so a stored value that is not one of them (an old 10 GB, say) lands on the
+  // first option at or above it; 0 (unlimited) maps to the Unlimited option.
   //
-  // The field is edited in whole gigabytes, so a quota set to something the
-  // field cannot represent -- 1.5 GB, say -- comes back as 2. Comparing the
-  // submitted bytes against the raw stored value would then always report a
-  // change and quietly round the quota up on every save. Both the initial state
-  // and the change test below have to start from the same rounded number.
-  const DEFAULT_QUOTA_BYTES = 10737418240
-  const initialQuotaBytes = Math.round(
-    (user?.quota_bytes ?? DEFAULT_QUOTA_BYTES) / 1073741824
-  ) * 1073741824
+  // The option the form *opened* on is captured in state (initialQuotaRef) so
+  // the "has the admin changed the quota?" test below compares against a stable
+  // value rather than the live select, which would make the test circular.
+  const storedQuota = user?.quota_bytes ?? DEFAULT_QUOTA_BYTES
+  const initialQuotaOption = QUOTA_OPTIONS.find((o) => o.value === storedQuota)
+    ?? (storedQuota === 0
+      ? QUOTA_OPTIONS.find((o) => o.value === 0)
+      : QUOTA_OPTIONS.find((o) => o.value > storedQuota)
+        ?? QUOTA_OPTIONS[QUOTA_OPTIONS.length - 1])
+  const [initialQuotaRef] = useState(initialQuotaOption)
 
   const [formData, setFormData] = useState({
     username: user?.username || '',
@@ -454,7 +474,7 @@ function UserModal({ user, onClose, onSuccess }) {
     display_name: user?.display_name || '',
     password: '',
     role: user?.role || 'user',
-    quota_gb: initialQuotaBytes / 1073741824,
+    quota: initialQuotaOption.value,
     home_path: user?.home_path || '',
   })
   const [loading, setLoading] = useState(false)
@@ -483,7 +503,9 @@ const folderOptions = missingHome
 
 const set = (key) => (e) => {
     const value = e.target.value
-    setFormData((prev) => ({ ...prev, [key]: key === 'quota_gb' ? parseInt(value) || 0 : value }))
+    // The quota dropdown carries byte counts as strings from the select; turn
+    // them back into numbers so the submit handler can compare them directly.
+    setFormData((prev) => ({ ...prev, [key]: key === 'quota' ? Number(value) : value }))
     setError('')
   }
 
@@ -536,8 +558,12 @@ const set = (key) => (e) => {
         // An empty password must never blank the hash.
         if (formData.password) patch.password = formData.password
 
-        const quotaBytes = formData.quota_gb * 1073741824
-        const quotaChanged = quotaBytes !== initialQuotaBytes
+        // Compare against the option the form *opened* on, not the live select
+        // value. An off-preset account (say 10 GB) opens on "20 GB"; if the
+        // admin changes nothing and saves, no quota PATCH goes out. Only a
+        // deliberate pick of a different option travels to the server.
+        const quotaBytes = formData.quota
+        const quotaChanged = quotaBytes !== initialQuotaRef.value
 
         if (!Object.keys(patch).length && !quotaChanged) {
           toast('No changes to save')
@@ -554,7 +580,7 @@ const set = (key) => (e) => {
           password: formData.password,
           display_name: formData.display_name,
           role: formData.role,
-          quota_bytes: formData.quota_gb * 1073741824,
+          quota_bytes: formData.quota,
           home_path: formData.home_path,
         })
         toast.success('User created')
@@ -603,15 +629,13 @@ const set = (key) => (e) => {
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
               </select>
-              <input
-                type="number"
-                className="login-input login-input-plain"
-                placeholder="Quota (GB)"
-                value={formData.quota_gb}
-                onChange={set('quota_gb')}
-                min={0}
-                aria-label="Quota in gigabytes"
-              />
+              <select className="login-input login-input-plain" value={String(formData.quota)} onChange={set('quota')} aria-label="Storage quota">
+                {QUOTA_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="user-field">
