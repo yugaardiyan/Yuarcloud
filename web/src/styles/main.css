@@ -4692,15 +4692,13 @@ input.input[type='number'] {
   inset: 0;
   z-index: 1100; /* above .modal-overlay, so a viewer can never be buried */
   display: flex;
-  background: rgba(12, 14, 20, 0.03);
+  /* An opaque surface instead of a 3%-tint over a full-viewport
+     backdrop-filter. The blur is recomputed while the viewer is open — and the
+     image viewer repaints on every pan and pinch — which is exactly the
+     "laggy" feel on a phone. At 3% opacity it was barely visible anyway, and
+     this is the same colour as the page it used to sit on. */
+  background: var(--bg-secondary);
   animation: fadeIn var(--transition-fast);
-}
-
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .preview-overlay {
-    -webkit-backdrop-filter: blur(1px);
-    backdrop-filter: blur(1px);
-  }
 }
 
 .preview-shell {
@@ -4828,6 +4826,14 @@ input.input[type='number'] {
   user-select: none;
   transform-origin: center center;
   transition: transform 90ms ease-out;
+}
+
+/* Once there is something to pan, keep the picture on its own compositor layer
+   so a drag moves it instead of repainting the decoded bitmap every frame. It
+   is scoped to the zoomed state: at fit the image never moves, and promoting a
+   full-resolution photo to a layer it does not need only costs memory. */
+.preview-image-stage.is-zoomed .preview-image {
+  will-change: transform;
 }
 
 .preview-audio {

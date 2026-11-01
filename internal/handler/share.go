@@ -430,7 +430,7 @@ func (h *ShareHandler) PreviewSharedFile(c *gin.Context) {
 		return
 	}
 
-	serveInline(c, h.storage, target)
+	serveInline(c, h.storage, target, false)
 }
 
 // streamBundleZip streams every item of a multi-item link as one archive.

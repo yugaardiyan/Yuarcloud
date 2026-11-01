@@ -152,11 +152,17 @@ func (h *FileHandler) PreviewFile(c *gin.Context) {
 		return
 	}
 
-	serveInline(c, h.storage, file)
+	serveInline(c, h.storage, file, true)
 }
 
 // serveInline writes file to c with inline disposition and Range handling.
-func serveInline(c *gin.Context, store storage.StorageBackend, file *model.File) {
+//
+// cacheable asks for a Cache-Control the browser may reuse. It is the caller's
+// decision because the URL carries the credential: the authenticated preview
+// is backed by a five-minute token, so a cached copy cannot outlive the access
+// it was granted for. A public share link can be revoked at any moment, so the
+// share route does not opt in.
+func serveInline(c *gin.Context, store storage.StorageBackend, file *model.File, cacheable bool) {
 	if file.IsDir {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot preview a folder"})
 		return
@@ -221,6 +227,7 @@ func serveInline(c *gin.Context, store storage.StorageBackend, file *model.File)
 			length := end - start + 1
 			c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
 			c.Header("Content-Length", strconv.FormatInt(length, 10))
+			allowClientCache(c, cacheable)
 			c.Status(http.StatusPartialContent)
 			if c.Request.Method == http.MethodHead {
 				return
@@ -251,11 +258,32 @@ func serveInline(c *gin.Context, store storage.StorageBackend, file *model.File)
 	defer reader.Close() //nolint:errcheck
 
 	c.Header("Content-Length", strconv.FormatInt(size, 10))
+	allowClientCache(c, cacheable)
 	c.Status(http.StatusOK)
 	if c.Request.Method == http.MethodHead {
 		return
 	}
 	io.Copy(c.Writer, reader) //nolint:errcheck
+}
+
+// allowClientCache marks a successful preview as reusable by the browser.
+//
+// Without a Cache-Control (and with no Last-Modified or ETag to fall back on)
+// a browser has nothing to hold on to, so closing and reopening an image
+// downloaded the whole original again and re-decoded it. The URL is stable
+// while its preview token lives, so the copy is safe for exactly that long;
+// `private` keeps it out of any shared cache on the way. The header is added
+// only on the success paths, so a 416, a 413 or a storage error is never
+// remembered as the answer for that file.
+func allowClientCache(c *gin.Context, enabled bool) {
+	if !enabled {
+		return
+	}
+	c.Header("Cache-Control", "private, max-age=300")
+	// The preview endpoint is reachable both with a query token and with an
+	// Authorization header (the parsed viewers use the latter). Keep the two
+	// apart in any cache that keys by URL alone.
+	c.Header("Vary", "Authorization")
 }
 
 // parseRange understands the single-range forms a browser media element

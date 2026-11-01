@@ -24,8 +24,9 @@ import { TextViewer, SheetViewer, DocViewer, UnsupportedPreview } from './previe
  *     media player's own shortcuts all live in the same document, so keys are
  *     swallowed only when the viewer is open and only when nothing inside
  *     wants them (a text selection, a focused control).
- *   - The media URL is rebuilt whenever the item changes rather than cached,
- *     because the access token behind it can be rotated at any moment.
+ *   - The media URL changes when the item changes, but not on every open: a
+ *     preview token is kept for the file it was minted for, so reopening an
+ *     image reuses the same URL and the browser's copy of the bytes.
  */
 
 // Moved above the component: it is read inside a useMemo, so the runtime was
@@ -41,6 +42,44 @@ const KIND_LABEL = {
   [KIND.DOC]: 'Document',
   [KIND.ARCHIVE]: 'Archive',
   [KIND.BINARY]: 'File',
+}
+
+// A preview token is minted per file and is good for five minutes. Holding on
+// to it for that window is what makes a reopen instant: the URL is unchanged,
+// so the browser can answer from its cache instead of downloading the original
+// again. The safety margin stops a token being used right up to the edge, where
+// a slow request would turn into a 401.
+const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000
+const PREVIEW_TOKEN_SAFETY_MS = 45 * 1000
+const previewTokenCache = new Map()
+
+function cachedPreviewToken(fileId) {
+  if (!fileId) return null
+  const entry = previewTokenCache.get(fileId)
+  if (!entry) return null
+  if (entry.expiresAt - Date.now() <= PREVIEW_TOKEN_SAFETY_MS) {
+    previewTokenCache.delete(fileId)
+    return null
+  }
+  return entry.token
+}
+
+function rememberPreviewToken(fileId, token, expiresIn) {
+  const seconds = Number(expiresIn)
+  const ttl = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : PREVIEW_TOKEN_TTL_MS
+  previewTokenCache.set(fileId, { token, expiresAt: Date.now() + ttl })
+}
+
+// Fetch a token before its file is opened. Failures are silent: this is only
+// an optimisation, and the real request will surface any error.
+function warmPreviewToken(fileId) {
+  if (!fileId || cachedPreviewToken(fileId)) return
+  fileApi.previewToken(fileId)
+    .then((res) => {
+      const token = res.data?.token
+      if (token) rememberPreviewToken(fileId, token, res.data?.expires_in)
+    })
+    .catch(() => {})
 }
 
 export default function PreviewModal({
@@ -61,8 +100,23 @@ export default function PreviewModal({
   // Media elements need a real URL in the src attribute, but the session token
   // must not travel there. Exchange it for a five-minute, single-file preview
   // token first; until that lands there is nothing to put in the src.
-  const [previewToken, setPreviewToken] = useState(null)
+  //
+  // The token is remembered per file rather than discarded with the viewer.
+  // Re-minting one on every open added a round trip before the image could
+  // even start loading, and it changed the URL, so the browser could not reuse
+  // the bytes it already had.
+  const [tokenState, setTokenState] = useState(null) // { id, token }
   const [tokenError, setTokenError] = useState(null)
+
+  // Reading the cache during render means a reopened file has its URL on the
+  // first paint instead of flashing "Loading..." while an effect asks for a
+  // token it already holds. The id check also stops the previous file's token
+  // from being paired with the new file for a frame.
+  const previewToken = useMemo(() => {
+    if (!needsPreviewToken || !item?.id) return null
+    if (tokenState && tokenState.id === item.id) return tokenState.token
+    return cachedPreviewToken(item.id)
+  }, [item?.id, needsPreviewToken, tokenState])
 
   // Claim the keyboard for as long as the viewer is on screen.
   //
@@ -78,18 +132,27 @@ export default function PreviewModal({
 
   useEffect(() => {
     if (!needsPreviewToken || !item?.id) {
-      setPreviewToken(null)
+      setTokenError(null)
+      return undefined
+    }
+
+    const fileId = item.id
+    // Already in hand: asking again would only add latency and move the URL.
+    if (cachedPreviewToken(fileId)) {
       setTokenError(null)
       return undefined
     }
 
     let cancelled = false
-    setPreviewToken(null)
     setTokenError(null)
 
-    fileApi.previewToken(item.id)
+    fileApi.previewToken(fileId)
       .then((res) => {
-        if (!cancelled) setPreviewToken(res.data.token)
+        if (cancelled) return
+        const token = res.data?.token
+        if (!token) return
+        rememberPreviewToken(fileId, token, res.data?.expires_in)
+        setTokenState({ id: fileId, token })
       })
       .catch((err) => {
         if (cancelled) return
@@ -98,6 +161,17 @@ export default function PreviewModal({
 
     return () => { cancelled = true }
   }, [item?.id, needsPreviewToken])
+
+  // Paging through a series should not pay a token round trip per file. Warm
+  // the neighbours while the current one is on screen; each is a small request
+  // and the cache keeps it from repeating until it nears expiry.
+  useEffect(() => {
+    if (!needsPreviewToken || !item?.id || !items || items.length < 2) return
+    const at = items.findIndex((f) => f.id === item.id)
+    if (at < 0) return
+    warmPreviewToken(items[at - 1]?.id)
+    warmPreviewToken(items[at + 1]?.id)
+  }, [item?.id, items, needsPreviewToken])
 
   const meta = useMemo(() => ({
     name: item?.name,
