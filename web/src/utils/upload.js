@@ -269,7 +269,7 @@ async function waitForTusCompletion(uploadId, fileSize, signal, onProgress) {
       throw new Error('the server is still finalising this upload; try again later')
     }
 
-    onProgress?.(99, fileSize)
+    onProgress?.(99, fileSize, fileSize)
     await sleep(COMPLETION_POLL_INTERVAL_MS)
   }
 }
@@ -334,7 +334,9 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
 
   if (offset > 0) {
     // Resuming: show what the server already has rather than restarting at 0.
-    onProgress?.(Math.min(99, Math.round((offset * 100) / file.size)), offset)
+    // The same offset is the first acknowledged data point for the speed
+    // tracker, so a resumed upload is not measured as if it began at zero.
+    onProgress?.(Math.min(99, Math.round((offset * 100) / file.size)), offset, offset)
   }
 
   try {
@@ -356,7 +358,10 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
         const response = await fileApi.tusPatch(uploadId, start, blob, (loaded) => {
           const capped = Math.min(Math.max(Number(loaded) || 0, 0), blob.size)
           const overall = Math.min(file.size, start + capped)
-          onProgress?.(Math.min(99, Math.round((overall * 100) / file.size)), overall)
+          // The third argument is the last offset the server acknowledged, not
+          // the bytes counted here. Those are still only in the socket buffer;
+          // the tracker measures a tus upload from what the server has taken.
+          onProgress?.(Math.min(99, Math.round((overall * 100) / file.size)), overall, start)
         })
         const next = Number(headerValue(response.headers, 'upload-offset'))
         if (!Number.isFinite(next) || next <= start) {
@@ -364,6 +369,10 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
         }
         offset = Math.min(next, file.size)
         attempt = 0
+        // Record the acknowledgement now that the response is in hand, so the
+        // reported speed and remaining time are based on bytes that actually
+        // arrived rather than on how fast the browser could hand them over.
+        onProgress?.(Math.min(99, Math.round((offset * 100) / file.size)), offset, offset)
       } catch (error) {
         if (signal?.aborted) throw new Error('upload cancelled')
 
@@ -388,10 +397,10 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
       }
     }
 
-    onProgress?.(99, file.size)
+    onProgress?.(99, file.size, file.size)
     const record = await waitForTusCompletion(uploadId, file.size, signal, onProgress)
     localStorage.removeItem(fingerprint)
-    onProgress?.(100, file.size)
+    onProgress?.(100, file.size, file.size)
     return record
   } catch (error) {
     if (signal?.aborted) {
@@ -417,9 +426,11 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
  * @param {(file:File)=>string|null} [options.parentIdFor]  per-file destination,
  *        used by a folder pick where each file has its own place in the tree
  * @param {number} [options.chunkSize]        override; still clamped to the server
- * @param {(pct:number, loaded:number)=>void} options.onProgress  overall progress 0-100,
+ * @param {(pct:number, loaded:number, confirmed?:number)=>void} options.onProgress  overall progress 0-100,
  *        plus the bytes actually sent so far — the percentage alone cannot say
- *        whether a slow transfer is moving
+ *        whether a slow transfer is moving — and, for a resumable upload, the
+ *        offset the server has acknowledged, which is the only honest basis for
+ *        a speed reading
  * @param {(msg:string)=>void} options.onError
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<object>} the created file record
@@ -520,7 +531,8 @@ export async function uploadFilesWithConcurrency(files, options = {}) {
           parentIdFor,
           chunkSize,
           signal,
-          onProgress: (progress, loaded) => onUpdate?.({ file, index, progress, loaded, status: 'uploading' }),
+          onProgress: (progress, loaded, confirmed) =>
+            onUpdate?.({ file, index, progress, loaded, confirmed, status: 'uploading' }),
           onError: (message) => onUpdate?.({ file, index, progress: 0, status: 'error', message }),
         })
         // The index travels with the result. Callers used to match on file.name,

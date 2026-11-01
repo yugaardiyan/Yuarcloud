@@ -557,10 +557,16 @@ export function FileProvider({ children }) {
     const { results, failures } = await uploadFilesWithConcurrency(uploadable, {
       concurrency,
       parentIdFor: (file) => dirId.get(dirOf(file)) ?? baseParentId,
-      onUpdate: ({ index, progress, loaded, status, message }) => {
+      onUpdate: ({ index, progress, loaded, confirmed, status, message }) => {
         const id = jobIdAt(index)
         const job = jobs.find((j) => j.id === id)
-        const bytesPerSec = status === 'uploading' && loaded != null ? speed.push(id, loaded) : null
+        const bytesPerSec =
+          status === 'uploading' && loaded != null ? speed.push(id, loaded, confirmed) : null
+        // The remaining time is divided from the acknowledged offset, not the
+        // optimistic one, for the same reason the rate is: bytes counted in the
+        // socket buffer are not yet on the server, and an ETA built on them is
+        // one the transfer cannot honour.
+        const accounted = confirmed ?? loaded ?? job?.loaded ?? 0
         setUploads((prev) =>
           prev.map((j) =>
             j.id === id
@@ -573,7 +579,7 @@ export function FileProvider({ children }) {
                   bytesPerSec: status === 'uploading' ? bytesPerSec : null,
                   etaSec:
                     status === 'uploading' && bytesPerSec
-                      ? etaFromRate(bytesPerSec, loaded ?? j.loaded, job?.size ?? 0)
+                      ? etaFromRate(bytesPerSec, accounted, job?.size ?? 0)
                       : null,
                   status,
                   error: message || null,
