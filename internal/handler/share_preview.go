@@ -112,6 +112,10 @@ func shareStillOpen(s *model.ShareLink, now time.Time) bool {
 // folder tree into every chat the link is forwarded to, which is more than
 // "here is a file" should cost.
 func describeShare(s *model.ShareLink) (title, description string) {
+	if len(s.Items) > 1 {
+		return fmt.Sprintf("%d items", len(s.Items)),
+			fmt.Sprintf("%d items were shared with you on %s.", len(s.Items), SiteName)
+	}
 	name := s.File.Name
 	if name == "" {
 		return SiteName, "A file was shared with you on " + SiteName + "."

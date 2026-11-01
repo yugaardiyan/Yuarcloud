@@ -23,9 +23,9 @@ export default function ContextMenuProvider({ children }) {
   const navigate = useNavigate()
   const {
     rawItems, view, selected, clipboard,
-    downloadItem, renameItem, removeItems, restoreItems,
+    downloadItem, downloadSelectedAsZip, renameItem, removeItems, restoreItems,
     cutItems, copyToClipboard, pasteInto,
-    createFolder, uploadFiles, selectAll,
+    createFolder, uploadFiles, selectAll, toggleSelectMode, selectMode, exitSelectMode, clearSelection,
   } = files
 
   // `kind` is 'file' (right-clicked an item) or 'empty' (right-clicked
@@ -179,6 +179,39 @@ export default function ContextMenuProvider({ children }) {
         case 'select-all':
           selectAll()
           break
+        case 'select':
+          // Tapping "Select" from the context menu starts pick-one-at-a-time
+          // mode. A plain tap on any file then toggles it into the selection
+          // instead of opening it; the file tiles themselves change hands
+          // between "open" and "toggle" based on this flag.
+          toggleSelectMode()
+          break
+        case 'cancel-select':
+          // Exit select mode and clear selection
+          exitSelectMode()
+          clearSelection()
+          break
+        case 'download':
+          // Blank-space "Download" targets the current selection, not a file:
+          // when several are picked they go out as one zip.
+          if (selected.size > 1) downloadSelectedAsZip(selected)
+          else if (selected.size === 1) {
+            const item = rawItems.find((f) => selected.has(f.id))
+            if (item) downloadItem(item)
+          }
+          break
+        case 'share': {
+          // Same batch the capsule offers: one link for everything marked.
+          const picked = rawItems.filter((f) => selected.has(f.id))
+          if (picked.length > 1) {
+            setShareTarget({
+              ids: picked.map((item) => item.id),
+              name: `${picked.length} items`,
+              isDir: false,
+            })
+          }
+          break
+        }
         case 'paste':
           // Same destination the existing file-menu paste resolves to.
           pasteInto(view.scope === 'drive' ? view.folderId : null, view.scope === 'drive' ? view.path : '')
@@ -198,7 +231,9 @@ export default function ContextMenuProvider({ children }) {
         break
 
       case 'download':
-        for (const item of targetItems) downloadItem(item)
+        // Single item downloads itself; multiple items go out as one zip.
+        if (targetItems.length > 1) downloadSelectedAsZip(ids)
+        else downloadItem(targetItems[0])
         break
 
       case 'copy':
@@ -221,7 +256,16 @@ export default function ContextMenuProvider({ children }) {
       }
 
       case 'share':
-        if (!isMulti && first) setShareTarget({ id: first.id, name: first.name, isDir: !!first.is_dir })
+        // Share covers the whole marked set. One link opens a page listing
+        // every item, so a multi-selection is sent as ids rather than being
+        // reduced to the item that was right-clicked.
+        if (first) {
+          setShareTarget({
+            ids: targetItems.map((item) => item.id),
+            name: isMulti ? `${targetItems.length} items` : first.name,
+            isDir: !isMulti && !!first.is_dir,
+          })
+        }
         break
 
       case 'trash': {
@@ -305,6 +349,24 @@ export default function ContextMenuProvider({ children }) {
     return () => window.removeEventListener('yuar:rename', onRename)
   }, [])
 
+  // The header capsule's Share button raises this. The modal lives here, where
+  // every other file dialog does, so the capsule does not carry a second copy
+  // of the share flow.
+  useEffect(() => {
+    const onShare = (e) => {
+      const wanted = Array.isArray(e.detail?.ids) ? e.detail.ids : []
+      const items = rawItems.filter((f) => wanted.includes(f.id))
+      if (!items.length) return
+      setShareTarget({
+        ids: items.map((item) => item.id),
+        name: items.length > 1 ? `${items.length} items` : items[0].name,
+        isDir: items.length === 1 && !!items[0].is_dir,
+      })
+    }
+    window.addEventListener('yuar:share', onShare)
+    return () => window.removeEventListener('yuar:share', onShare)
+  }, [rawItems])
+
   const handlePickFiles = (e) => {
     const picked = Array.from(e.target.files || [])
     if (picked.length) fireAndForget(uploadFiles(picked))
@@ -319,20 +381,35 @@ export default function ContextMenuProvider({ children }) {
 
   // The blank-space menu: page-level actions. Folder creation and upload only
   // make sense inside the real drive tree, so they are hidden elsewhere.
-  const emptyMenuItems = [
-    ...(view.scope === 'drive'
-      ? [
-          // Paste appears only once the clipboard holds something. Offering it
-          // greyed out beforehand just advertised an action that could not run.
-          ...(clipboard.action ? [{ id: 'paste', label: 'Paste here' }] : []),
-          { id: 'new-folder', label: 'New folder' },
-          { id: 'upload-file', label: 'Upload file' },
-          { id: 'upload-folder', label: 'Upload folder' },
-          { type: 'divider' },
-        ]
-      : []),
-    { id: 'select-all', label: 'Select all' },
-  ]
+  // Build empty-space menu dynamically.
+  // In select mode with files selected: show "Cancel" and "Download as zip"
+  // In select mode without selection: show "Cancel" and "Select all"
+  // Normal mode: show "Select" and "Select all"
+  const buildEmptyMenuItems = () => {
+    const items = []
+    if (view.scope === 'drive' && !selectMode) {
+      if (clipboard.action) items.push({ id: 'paste', label: 'Paste here' })
+      items.push({ id: 'new-folder', label: 'New folder' })
+      items.push({ id: 'upload-file', label: 'Upload file' })
+      items.push({ id: 'upload-folder', label: 'Upload folder' })
+      items.push({ type: 'divider' })
+    }
+    if (selectMode) {
+      items.push({ id: 'cancel-select', label: 'Cancel' })
+      items.push({ id: 'select-all', label: 'Select all' })
+      if (selected.size > 1) {
+        items.push({ type: 'divider' })
+        items.push({ id: 'download', label: 'Download' })
+        items.push({ id: 'share', label: 'Share' })
+      }
+    } else {
+      items.push({ id: 'select', label: 'Select' })
+      items.push({ id: 'select-all', label: 'Select all' })
+    }
+    return items
+  }
+
+  const emptyMenuItems = buildEmptyMenuItems()
 
   const trashMenuItems = [
     { id: 'info', label: 'Get info' },
@@ -341,37 +418,76 @@ export default function ContextMenuProvider({ children }) {
     { id: 'delete-permanent', label: 'Delete forever', danger: true },
   ]
 
-  // "Move to…" and "Copy to…" are gone: Copy/Cut then Paste already covers the
-  // same ground in one place, so a second entry point for it was redundancy
-  // rather than convenience.
-  const fileMenuItems = [
-    { id: 'open', label: 'Open', disabled: isMulti && targetItems.some((f) => !f.is_dir) },
-    { id: 'download', label: 'Download', disabled: isMulti && targetItems.some((f) => f.is_dir) },
-    { type: 'divider' },
-    { id: 'copy', label: 'Copy' },
-    { id: 'cut', label: 'Cut' },
-    // Only a folder can receive a paste. On a plain file the old "Paste here"
-    // had no destination and no handler behind it, so the click did nothing at
-    // all — which read as "paste is broken". On a folder it is a real action:
-    // drop the clipboard into that folder.
-    ...(clipboard.action && !isMulti && first?.is_dir && view.scope === 'drive'
-      ? [{ id: 'paste-into', label: 'Paste into folder' }]
-      : []),
-    { type: 'divider' },
-    { id: 'rename', label: 'Rename', disabled: isMulti },
-    { type: 'divider' },
-    { id: 'share', label: 'Share', disabled: isMulti },
-    { type: 'divider' },
-    { id: 'trash', label: 'Move to trash', danger: true },
-    { type: 'divider' },
-    { id: 'info', label: 'Get info', disabled: isMulti },
-  ]
+  // Build file menu dynamically based on selection state and select mode.
+  // Items that cannot run on the current selection are marked `disabled` here
+  // and then removed by compactMenuItems — the menu never shows a greyed-out
+  // button, only actions that actually do something.
+  const buildFileMenuItems = () => {
+    const items = []
+    // Open only makes sense for one item (or a set of folders); with a mixed
+    // selection there is no single target to open.
+    items.push({
+      id: 'open',
+      label: 'Open',
+      disabled: isMulti && targetItems.some((f) => !f.is_dir),
+    })
+    items.push({ id: 'download', label: 'Download' })
+    items.push({ type: 'divider' })
+    // Copy/Cut — always active, shown in both modes.
+    items.push({ id: 'copy', label: 'Copy' })
+    items.push({ id: 'cut', label: 'Cut' })
+    // Paste into folder: a single folder only.
+    if (clipboard.action && !isMulti && first?.is_dir && view.scope === 'drive') {
+      items.push({ id: 'paste-into', label: 'Paste into folder' })
+    }
+    // Rename acts on exactly one item. This is why the per-row ⋯ menu still
+    // offers it in select mode: that menu always targets its own item, not the
+    // batch.
+    if (!isMulti) {
+      items.push({ type: 'divider' })
+      items.push({ id: 'rename', label: 'Rename' })
+      items.push({ type: 'divider' })
+      items.push({ id: 'share', label: 'Share' })
+    } else {
+      // Share is meaningful for a batch: one generated link opens a list of
+      // everything that was marked, the way a shared folder would.
+      items.push({ type: 'divider' })
+      items.push({ id: 'share', label: 'Share' })
+    }
+    items.push({ type: 'divider' })
+    items.push({ id: 'trash', label: 'Move to trash', danger: true })
+    items.push({ type: 'divider' })
+    items.push({ id: 'info', label: 'Get info', disabled: isMulti })
+    return items
+  }
 
-  const menuItems = menu.kind === 'empty'
-    ? emptyMenuItems
-    : inTrash
-      ? trashMenuItems
-      : fileMenuItems
+  // Drop any entry that cannot run and collapse the dividers it leaves behind
+  // (leading, trailing, or doubled). Applied to every menu, so the rule is the
+  // same in select mode and in ordinary multi-selection.
+  const compactMenuItems = (items) => {
+    const kept = []
+    for (const item of items) {
+      if (item.type === 'divider') {
+        if (!kept.length || kept[kept.length - 1].type === 'divider') continue
+        kept.push(item)
+        continue
+      }
+      if (item.disabled) continue
+      kept.push(item)
+    }
+    while (kept.length && kept[kept.length - 1].type === 'divider') kept.pop()
+    return kept
+  }
+
+  const fileMenuItems = buildFileMenuItems()
+
+  const menuItems = compactMenuItems(
+    menu.kind === 'empty'
+      ? emptyMenuItems
+      : inTrash
+        ? trashMenuItems
+        : fileMenuItems,
+  )
 
   const value = { openMenu, openEmptyMenu, closeMenu }
 
@@ -413,7 +529,8 @@ export default function ContextMenuProvider({ children }) {
 
       {shareTarget && (
         <ShareModal
-          fileId={shareTarget.id}
+          fileId={shareTarget.ids[0]}
+          fileIds={shareTarget.ids}
           fileName={shareTarget.name}
           isDir={shareTarget.isDir}
           onClose={() => setShareTarget(null)}

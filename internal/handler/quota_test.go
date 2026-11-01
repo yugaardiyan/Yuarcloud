@@ -50,7 +50,7 @@ func quotaTestHandler(t *testing.T) (*FileHandler, *gorm.DB) {
 	if err != nil {
 		t.Fatalf("open in-memory db: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.File{}, &model.AuditLog{}, &model.UploadSession{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.File{}, &model.AuditLog{}, &model.UploadSession{}, &model.TusUpload{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return NewFileHandler(db, nil, nil), db

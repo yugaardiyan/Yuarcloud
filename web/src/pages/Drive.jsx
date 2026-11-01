@@ -9,6 +9,7 @@ import { hasInternalDrag } from '../utils/dragItems'
 import { keyboardIsOwned, isTypingTarget } from '../utils/keyboardOwner'
 import { fireAndForget } from '../utils/fireAndForget'
 import { formatBytes } from '../utils/helpers'
+import { UnlimitedGlyph } from '../components/icons'
 import { useFiles, driveHref } from '../context/FileContext'
 import { useMarqueeSelect } from '../hooks/useMarqueeSelect'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -26,7 +27,8 @@ function Drive() {
 
   const {
     items, view, loading, error, viewMode, setViewMode,
-    refresh, removeItems, renameItem, downloadItem, clearSelection, selected
+    refresh, removeItems, renameItem, downloadItem, clearSelection, selected,
+    selectMode, exitSelectMode,
   } = files
 
   const folderInputRef = useRef(null)
@@ -44,7 +46,13 @@ function Drive() {
   // themselves, and neither could tell a Ctrl-drag from a plain press.
   useEffect(() => {
     const onDown = (e) => {
-      if (contentRef.current && !contentRef.current.contains(e.target)) clearSelection()
+      if (!contentRef.current || contentRef.current.contains(e.target)) return
+      // The capsule and dialogs are how a marked batch is acted on, not a way
+      // out of it. Dropping the selection on their mousedown re-rendered the
+      // pressed button into its navigation twin before the click landed, so
+      // "Move to trash" navigated to Trash and Download never fired at all.
+      if (e.target.closest('.capsule, .modal-overlay')) return
+      clearSelection()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
@@ -439,6 +447,14 @@ function Drive() {
           onTouchEnd={cancelLongPress}
           onTouchCancel={cancelLongPress}
           onContextMenu={handleContentContextMenu}
+          onClick={(e) => {
+            // Clicking empty space while in select mode exits select mode
+            if (!selectMode) return
+            if (e.target.closest('[data-file-id]')) return
+            if (e.target.closest('button, a, input, textarea, select')) return
+            exitSelectMode()
+            clearSelection()
+          }}
         >
         {awaitingFirstLoad ? null : error ? (
             <div className="empty-state">
@@ -611,9 +627,17 @@ function Drive() {
               </>
             )}
           </span>
-          {user?.quota_bytes > 0 && (
-            <span>
-              {formatBytes(user.used_bytes || 0)} / {formatBytes(user.quota_bytes)}
+          {user && (
+            <span className="status-storage">
+              {formatBytes(user.used_bytes || 0)}
+              <span className="status-storage-sep" aria-hidden="true">/</span>
+              {user.quota_bytes > 0 ? (
+                formatBytes(user.quota_bytes)
+              ) : (
+                <span className="status-unlimited" role="img" aria-label="Unlimited storage">
+                  <UnlimitedGlyph size={14} />
+                </span>
+              )}
             </span>
           )}
         </div>

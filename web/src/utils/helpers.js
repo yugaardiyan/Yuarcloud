@@ -7,19 +7,29 @@ export function formatBytes(bytes, decimals = 1) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
 }
 
-export function formatDate(dateString) {
+export function formatDate(dateString, overrides = {}) {
   const date = new Date(dateString)
   if (Number.isNaN(date.getTime())) return '—'
 
   const now = new Date()
   const diff = now - date
 
+  // Callers that want a fixed clock style (the grid asks for 24 hours) pass it
+  // here rather than reimplementing the date/year rules around it.
+  const stamp = {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...overrides,
+  }
+
   // Dates in the future (share expiry, for one) must always carry the date.
   // Folding them into a bare clock time made "Expires: 05:37 PM" ambiguous —
   // that reads as a time today, not a date a week out.
   if (diff < 0) {
     return -diff < 24 * 60 * 60 * 1000
-      ? date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      ? date.toLocaleString([], stamp)
       : date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
@@ -33,7 +43,7 @@ export function formatDate(dateString) {
   //
   // The year stays only when it is not the current one. Dropping it from a file
   // last touched in 2024 would make it look like it was touched this month.
-  const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+  const options = { ...stamp }
   if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric'
   return date.toLocaleString([], options)
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +23,11 @@ type FileHandler struct {
 	storage storage.StorageBackend
 	// Only used to mint the short-lived preview tokens — see preview.go.
 	authService *auth.AuthService
+	// tusLocks serialises PATCH and completion for one tus upload. The storage
+	// layer also locks the file itself; this lock additionally covers the
+	// database status transition, which has to happen in the same critical
+	// section as the offset check or two PATCHes can both pass it.
+	tusLocks sync.Map
 }
 
 func NewFileHandler(db *gorm.DB, storage storage.StorageBackend, authService *auth.AuthService) *FileHandler {
@@ -305,6 +311,10 @@ func (h *FileHandler) CreateFolder(c *gin.Context) {
 func (h *FileHandler) UploadFile(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
+	// The body can take minutes on a slow uplink; the server's 30s request
+	// deadlines are for API calls, not for a file.
+	liftTransferDeadlines(c)
+
 	// Single file upload (non-chunked)
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -425,6 +435,10 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 }
 
 func (h *FileHandler) DownloadFile(c *gin.Context) {
+	// A download is one long response; the 30s write deadline would cut it off
+	// mid-body and the browser would report a broken file, not a timeout.
+	liftTransferDeadlines(c)
+
 	sc := reqScope(c)
 	fileID := c.Param("id")
 
@@ -450,10 +464,20 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 	}
 	defer reader.Close()
 
+	// The size recorded on the row can be stale — an adopted file, an old
+	// migration, a copy that predates the size fix. Declaring that number as
+	// Content-Length makes the server abort the moment the body runs longer
+	// ("wrote more than the declared Content-Length"), which reaches the
+	// browser as an empty reply with no status at all. The bytes on disk are
+	// the authority here.
+	size := file.Size
+	if info, statErr := h.storage.Stat(context.Background(), file.Path); statErr == nil && !info.IsDir {
+		size = info.Size
+	}
+
 	c.Header("Content-Disposition", contentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.MimeType)
-	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
-	c.DataFromReader(http.StatusOK, file.Size, file.MimeType, reader, nil)
+	c.DataFromReader(http.StatusOK, size, file.MimeType, reader, nil)
 }
 
 func (h *FileHandler) DeleteFile(c *gin.Context) {

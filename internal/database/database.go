@@ -222,8 +222,10 @@ func autoMigrate(db *gorm.DB) error {
 		&model.User{},
 		&model.File{},
 		&model.ShareLink{},
+		&model.ShareLinkItem{},
 		&model.Setting{},
 		&model.UploadSession{},
+		&model.TusUpload{},
 		&model.AuditLog{},
 	); err != nil {
 		return err

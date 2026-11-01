@@ -40,11 +40,30 @@ const maxPreviewSize = 256 << 20 // 256 MiB
 // configuration, not secrets.
 func (h *FileHandler) UploadLimits(c *gin.Context) {
 	limits := h.storage.GetLimits()
+	parallelChunks := h.maxParallelChunks(c.Request.Context())
 	c.JSON(http.StatusOK, gin.H{
 		"max_chunk_size":         limits.MaxChunkSize(),
 		"max_file_size":          limits.MaxFileSize(),
 		"max_concurrent_uploads": h.maxConcurrentUploads(c.Request.Context()),
+		"max_parallel_chunks":    parallelChunks,
 	})
+}
+
+func (h *FileHandler) maxParallelChunks(ctx context.Context) int {
+	if h.db == nil {
+		return defaultMaxParallelChunks
+	}
+	var setting model.Setting
+	if err := h.db.WithContext(ctx).
+		Select("value").
+		First(&setting, "key = ?", settingKeyMaxParallelChunks).Error; err != nil {
+		return defaultMaxParallelChunks
+	}
+	v, err := strconv.ParseInt(strings.TrimSpace(setting.Value), 10, 64)
+	if err != nil {
+		return defaultMaxParallelChunks
+	}
+	return normalizeParallelChunks(v)
 }
 
 // maxConcurrentUploads reads the admin's parallel-upload choice from settings.
@@ -116,6 +135,10 @@ func (h *FileHandler) IssuePreviewToken(c *gin.Context) {
 // Reachable with a preview token in the query as well as an Authorization
 // header, because <img>/<video>/<audio> cannot send headers.
 func (h *FileHandler) PreviewFile(c *gin.Context) {
+	// Video and audio previews stream for as long as the viewer watches; the
+	// response deadline must not end them.
+	liftTransferDeadlines(c)
+
 	fileID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})

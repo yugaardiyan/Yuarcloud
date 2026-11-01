@@ -31,11 +31,13 @@ func (h *AdminHandler) GetChunkedUploadConfig(c *gin.Context) {
 	// the behaviour the user is trying to configure.
 	limits := h.storage.GetLimits()
 	concurrency := h.settingInt64(c.Request.Context(), settingKeyMaxConcurrentUploads, defaultMaxConcurrentUploads)
+	parallelChunks := h.settingInt64(c.Request.Context(), settingKeyMaxParallelChunks, defaultMaxParallelChunks)
 
 	c.JSON(http.StatusOK, gin.H{
 		"max_chunk_size":         limits.MaxChunkSize(),
 		"max_file_size":          limits.MaxFileSize(),
 		"max_concurrent_uploads": normalizeConcurrentUploads(concurrency),
+		"max_parallel_chunks":    normalizeParallelChunks(parallelChunks),
 		"temp_dir":               defaultTempDir,
 		"cleanup_interval":       formatDuration(limits.CleanupInterval()),
 	})
@@ -78,6 +80,7 @@ func (h *AdminHandler) UpdateChunkedUploadConfig(c *gin.Context) {
 		MaxChunkSize         int64  `json:"max_chunk_size"`
 		MaxFileSize          int64  `json:"max_file_size"`
 		MaxConcurrentUploads int    `json:"max_concurrent_uploads"`
+		MaxParallelChunks    int    `json:"max_parallel_chunks"`
 		CleanupInterval      string `json:"cleanup_interval"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -103,6 +106,10 @@ func (h *AdminHandler) UpdateChunkedUploadConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("max_concurrent_uploads must be between 1 and %d", maxAllowedConcurrentUploads)})
 		return
 	}
+	if req.MaxParallelChunks != 0 && (req.MaxParallelChunks < 1 || req.MaxParallelChunks > maxAllowedParallelChunks) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("max_parallel_chunks must be between 1 and %d", maxAllowedParallelChunks)})
+		return
+	}
 
 	updates := map[string]string{}
 	if req.MaxChunkSize > 0 {
@@ -113,6 +120,9 @@ func (h *AdminHandler) UpdateChunkedUploadConfig(c *gin.Context) {
 	}
 	if req.MaxConcurrentUploads > 0 {
 		updates[settingKeyMaxConcurrentUploads] = strconv.Itoa(req.MaxConcurrentUploads)
+	}
+	if req.MaxParallelChunks > 0 {
+		updates[settingKeyMaxParallelChunks] = strconv.Itoa(req.MaxParallelChunks)
 	}
 	if req.CleanupInterval != "" {
 		if _, err := time.ParseDuration(req.CleanupInterval); err != nil {
@@ -152,12 +162,15 @@ const (
 	settingKeyMaxFileSize          = "storage.chunked.max_file_size"
 	settingKeyCleanupInterval      = "storage.chunked.cleanup_interval"
 	settingKeyMaxConcurrentUploads = "upload.max_concurrent"
+	settingKeyMaxParallelChunks    = "upload.max_parallel_chunks"
 
 	defaultMaxChunkSize         int64 = 10 * 1024 * 1024
 	defaultCleanupInterval            = "1h"
 	defaultTempDir                    = "./data/tmp/chunks"
 	defaultMaxConcurrentUploads       = 3
+	defaultMaxParallelChunks          = 3
 	maxAllowedConcurrentUploads       = 10
+	maxAllowedParallelChunks          = 10
 )
 
 // normalizeConcurrentUploads keeps a hand-edited setting inside the range the
@@ -169,6 +182,16 @@ func normalizeConcurrentUploads(v int64) int {
 	}
 	if v > maxAllowedConcurrentUploads {
 		return maxAllowedConcurrentUploads
+	}
+	return int(v)
+}
+
+func normalizeParallelChunks(v int64) int {
+	if v < 1 {
+		return defaultMaxParallelChunks
+	}
+	if v > maxAllowedParallelChunks {
+		return maxAllowedParallelChunks
 	}
 	return int(v)
 }

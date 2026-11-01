@@ -74,6 +74,7 @@ func (h *AdminHandler) GetShares(c *gin.Context) {
 		if owner == "" {
 			owner = s.User.Username
 		}
+		displayName, _ := shareDisplayName(s)
 		url := h.shareService.ShareURL(s.Token, c.Request)
 		out = append(out, entry{
 			ID:    s.ID,
@@ -87,7 +88,7 @@ func (h *AdminHandler) GetShares(c *gin.Context) {
 			// host is already visible in the address bar.
 			Path:       share.URLPath + s.Token,
 			Owner:      owner,
-			FileName:   s.File.Name,
+			FileName:   displayName,
 			FileID:     s.FileID,
 			Active:     s.IsActive,
 			HasPass:    s.PasswordHash != "",

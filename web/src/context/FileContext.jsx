@@ -105,6 +105,12 @@ export function FileProvider({ children }) {
   }, [])
 
   const [selected, setSelected] = useState(() => new Set())
+  // When true, a plain tap/click toggles selection instead of activating the
+  // item. Started from the context menu's "Select" entry so a phone user can
+  // pick several files one at a time without holding anything down.
+  const [selectMode, setSelectMode] = useState(false)
+  const toggleSelectMode = useCallback(() => setSelectMode(prev => !prev), [])
+  const exitSelectMode = useCallback(() => setSelectMode(false), [])
   const [clipboard, setClipboard] = useState({ action: null, ids: [] })
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
 
@@ -741,6 +747,29 @@ export function FileProvider({ children }) {
     }
   }, [])
 
+  // Download multiple selected files/folders as a single zip archive via the
+  // batch endpoint. A single pick goes through downloadItem instead.
+  const downloadSelectedAsZip = useCallback(async (idsOverride) => {
+    const ids = idsOverride ? Array.from(idsOverride) : Array.from(selected)
+    if (ids.length < 2) return
+    try {
+      const response = await fetch(fileApi.batchZipUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({ ids }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      triggerDownload(URL.createObjectURL(blob), 'selection.zip', true)
+      toast.success(`Downloading ${ids.length} items as zip`)
+    } catch {
+      toast.error('Failed to download selection as zip')
+    }
+  }, [selected])
+
   const value = {
     items: sortedItems,
     rawItems: items,
@@ -752,6 +781,9 @@ export function FileProvider({ children }) {
     setViewMode,
     selected,
     selectedItems,
+    selectMode,
+    toggleSelectMode,
+    exitSelectMode,
     select,
     selectMany,
     selectAll,
@@ -783,6 +815,7 @@ export function FileProvider({ children }) {
     moveItems,
     copyItems,
     downloadItem,
+    downloadSelectedAsZip,
   }
 
   return <FileContext.Provider value={value}>{children}</FileContext.Provider>

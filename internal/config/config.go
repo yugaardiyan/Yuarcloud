@@ -232,7 +232,12 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("cors.allowed_origins", []string{"*"})
 	v.SetDefault("cors.allowed_methods", []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
-	v.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Authorization", "X-Requested-With"})
+	v.SetDefault("cors.allowed_headers", []string{
+		"Origin", "Content-Type", "Authorization", "X-Requested-With",
+		// tus clients send the protocol headers on a cross-origin preflight.
+		"Tus-Resumable", "Upload-Length", "Upload-Offset", "Upload-Metadata",
+		"Upload-Defer-Length", "Upload-Concat",
+	})
 	v.SetDefault("cors.allow_credentials", true)
 	v.SetDefault("cors.max_age", "12h")
 }

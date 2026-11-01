@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
-  Search, X,
+  Search, X, Download, Copy, Scissors, Share2,
 } from 'lucide-react'
 import {
   MyCloudGlyph, NewFolderGlyph, AddUserGlyph, SaveConfigGlyph, ReloadGlyph, TrashGlyph, GridGlyph, ListGlyph,
@@ -26,12 +26,15 @@ export default function CapsuleToolbar() {
     view, viewMode, setViewMode,
     searchQuery, setSearchQuery, showSearch, showDrive, showTrash,
     createFolder, uploadFiles, items, emptyTrash, loading,
+    exitSelectMode, selected, rawItems,
+    downloadItem, downloadSelectedAsZip, copyToClipboard, cutItems, removeItems,
   } = useFiles()
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [menu, setMenu] = useState(null) // 'account' | 'create' | null
   const [promptNewFolder, setPromptNewFolder] = useState(false)
   const [emptyTrashOpen, setEmptyTrashOpen] = useState(false)
+  const [confirmTrashMarked, setConfirmTrashMarked] = useState(false)
 
   const accountRef = useRef(null)
   const createRef = useRef(null)
@@ -153,6 +156,39 @@ export default function CapsuleToolbar() {
     setMenu(null)
   }
 
+  // ---- marked-file actions ------------------------------------------------
+  //
+  // Once more than one file is marked the four right-hand slots stop being
+  // navigation and become the batch actions: Download, Copy, Cut and Move to
+  // trash. A single marked item needs none of this — its own ⋯ button already
+  // carries the per-item actions — so the pill only switches for a batch.
+  // Each action takes over the exact slot (and therefore the position) of
+  // New folder, Account, view toggle and Trash, so nothing shifts under the
+  // pointer; dropping back to one item (or none) restores the original pill.
+  const markedIds = Array.from(selected)
+  const marking = markedIds.length > 1 && view.scope !== 'trash'
+
+  useEffect(() => {
+    if (marking) setMenu(null)
+  }, [marking])
+
+  const downloadMarked = () => {
+    if (markedIds.length === 1) {
+      const item = rawItems.find((f) => f.id === markedIds[0])
+      if (item) downloadItem(item)
+      return
+    }
+    downloadSelectedAsZip(markedIds)
+  }
+
+  const copyMarked = () => copyToClipboard(markedIds)
+  const cutMarked = () => cutItems(markedIds)
+  // The share dialog lives in ContextMenuProvider, beside every other file
+  // dialog. The capsule only raises the request with the marked set.
+  const shareMarked = () => {
+    window.dispatchEvent(new CustomEvent('yuar:share', { detail: { ids: markedIds } }))
+  }
+
   // ---- pill --------------------------------------------------------------
 
   return (
@@ -172,42 +208,86 @@ export default function CapsuleToolbar() {
           <Search size={19} />
         </button>
 
-        <button
-          className="capsule-btn"
-          data-active={driveTabActive || undefined}
-          onClick={() => go(() => gotoDrive(showDrive))}
-          title="My Cloud"
-          aria-label="My Cloud"
-          aria-pressed={driveTabActive}
-        >
-          <MyCloudGlyph />
-        </button>
+        {marking ? (
+          <button
+            className="capsule-btn capsule-btn-primary"
+            onClick={shareMarked}
+            title="Share"
+            aria-label="Share"
+          >
+            <Share2 size={19} />
+          </button>
+        ) : (
+          <button
+            className="capsule-btn"
+            data-active={driveTabActive || undefined}
+            onClick={() => go(() => gotoDrive(showDrive))}
+            title="My Cloud"
+            aria-label="My Cloud"
+            aria-pressed={driveTabActive}
+          >
+            <MyCloudGlyph />
+          </button>
+        )}
 
 
 
-        <button
-          className="capsule-btn"
-          data-active={view.scope === 'trash' || undefined}
-          onClick={() => go(() => gotoDrive(showTrash))}
-          title="Trash"
-          aria-label="Trash"
-          aria-pressed={view.scope === 'trash'}
-        >
-          <TrashGlyph />
-        </button>
+        {marking ? (
+          <button
+            className="capsule-btn capsule-btn-primary"
+            onClick={() => setConfirmTrashMarked(true)}
+            title="Move to trash"
+            aria-label="Move to trash"
+          >
+            <TrashGlyph />
+          </button>
+        ) : (
+          <button
+            className="capsule-btn"
+            data-active={view.scope === 'trash' || undefined}
+            onClick={() => go(() => gotoDrive(showTrash))}
+            title="Trash"
+            aria-label="Trash"
+            aria-pressed={view.scope === 'trash'}
+          >
+            <TrashGlyph />
+          </button>
+        )}
 
-        <button
-          className="capsule-btn"
-          onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-          title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view (${viewMode === 'grid' ? '⌘2' : '⌘1'})`}
-          aria-label={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
-        >
-          {viewMode === 'grid' ? <ListGlyph /> : <GridGlyph />}
-        </button>
+        {marking ? (
+          <button
+            className="capsule-btn capsule-btn-primary"
+            onClick={cutMarked}
+            title="Cut"
+            aria-label="Cut"
+          >
+            <Scissors size={19} />
+          </button>
+        ) : (
+          <button
+            className="capsule-btn"
+            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view (${viewMode === 'grid' ? '⌘2' : '⌘1'})`}
+            aria-label={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
+          >
+            {viewMode === 'grid' ? <ListGlyph /> : <GridGlyph />}
+          </button>
+        )}
       </div>
 
-      {/* Account */}
+      {/* Account — in select mode the same slot becomes Copy. */}
       <div className={`capsule-dropdown ${searchOpen ? 'capsule-collapsed' : ''}`} ref={accountRef}>
+        {marking ? (
+          <button
+            className="capsule-btn capsule-btn-primary"
+            onClick={copyMarked}
+            title="Copy"
+            aria-label="Copy"
+          >
+            <Copy size={19} />
+          </button>
+        ) : (
+          <>
           <button
             className="capsule-btn"
             onClick={() => {
@@ -256,7 +336,9 @@ export default function CapsuleToolbar() {
               </button>
             </div>
           )}
-        </div>
+          </>
+        )}
+      </div>
 
         {/* Create / Empty trash — on the far right.
             In the regular scope this is a "+" menu with New folder +
@@ -277,7 +359,18 @@ export default function CapsuleToolbar() {
 
             Emptying is permanent and there is no undo, so it asks first —
             same guard as every other destructive action in the app. */}
-        {onSettings ? (
+        {marking ? (
+          // The far-right slot becomes Download for the marked batch. It keeps
+          // the primary styling so the pill's shape and emphasis are unchanged.
+          <button
+            className="capsule-btn capsule-btn-primary"
+            onClick={downloadMarked}
+            title="Download"
+            aria-label="Download"
+          >
+            <Download size={19} />
+          </button>
+        ) : onSettings ? (
           // The slot keeps its place on Settings; the action follows the tab
           // that is open. Users offers Add user, Chunked Upload offers the
           // save action for that form. The other tabs have nothing to create
@@ -424,6 +517,21 @@ export default function CapsuleToolbar() {
           danger
           onConfirm={() => { setEmptyTrashOpen(false); emptyTrash() }}
           onCancel={() => setEmptyTrashOpen(false)}
+        />
+      )}
+
+      {confirmTrashMarked && (
+        <ConfirmModal
+          simple
+          title={`Move ${markedIds.length > 1 ? 'items' : 'item'} to trash?`}
+          confirmLabel="Move to trash"
+          danger
+          onConfirm={() => {
+            fireAndForget(removeItems(markedIds))
+            exitSelectMode()
+            setConfirmTrashMarked(false)
+          }}
+          onCancel={() => setConfirmTrashMarked(false)}
         />
       )}
     </div>

@@ -137,6 +137,12 @@ func main() {
 		log.Printf("Warning: failed to apply chunked upload settings: %v", err)
 	}
 
+	// Tus sessions survive a restart, so the first thing to do after the limits
+	// are known is remove any partial file whose row did not survive, and start
+	// the reclaim loop for abandoned ones.
+	fileHandler.ReconcileTus()
+	fileHandler.StartTusSweeper()
+
 	// Setup Gin router
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -193,8 +199,25 @@ func main() {
 	router.Use(cors.New(corsConfig))
 
 	// Rate limiting
+	//
+	// Upload endpoints are exempt. Chunked upload is one request per chunk by
+	// design (a 4 GB file is 410), so counting it against 120 requests/minute
+	// stopped every large file part-way through with a 429 — a 2 GB test died
+	// at chunk 118. Auth, the per-chunk body limit, max_file_size and the
+	// user's quota are what bound an upload; the bucket does not.
+	isFileTransfer := func(c *gin.Context) bool {
+		path := c.Request.URL.Path
+		return path == "/api/files/upload" ||
+			strings.HasPrefix(path, "/api/files/upload/chunked") ||
+			path == "/api/files/tus" ||
+			strings.HasPrefix(path, "/api/files/tus/")
+	}
 	if cfg.RateLimit.Enabled {
-		router.Use(middleware.RateLimitMiddleware(cfg.RateLimit.RequestsPerMinute, len(cfg.Server.TrustedProxies) > 0))
+		router.Use(middleware.RateLimitMiddleware(
+			cfg.RateLimit.RequestsPerMinute,
+			len(cfg.Server.TrustedProxies) > 0,
+			isFileTransfer,
+		))
 	}
 
 	// Health check
@@ -229,6 +252,12 @@ func main() {
 		{
 			preview.GET("/:id/preview", fileHandler.PreviewFile)
 		}
+
+		// tus discovery is unauthenticated on purpose: a client asks what the
+		// server supports before it has a session, and the answer contains no
+		// user data. The upload itself still requires the bearer token.
+		api.OPTIONS("/files/tus", fileHandler.TusOptions)
+		api.OPTIONS("/files/tus/:uploadId", fileHandler.TusOptions)
 
 		// Protected routes
 		protected := api.Group("")
@@ -270,6 +299,10 @@ func main() {
 					middleware.BodyLimitFunc(fileBodyLimit),
 					fileHandler.UploadFile)
 				files.GET("/:id/download", fileHandler.DownloadFile)
+				// Batch: download any number of files/folders as one zip. Takes a
+				// JSON body of ids — a comma-separated path param would hit the
+				// single-id routes above first.
+				files.POST("/download-zip", fileHandler.DownloadFilesZip)
 				files.GET("/upload-limits", fileHandler.UploadLimits)
 				files.POST("/:id/preview-token", fileHandler.IssuePreviewToken)
 				files.GET("/:id/download-zip", fileHandler.DownloadFolder)
@@ -295,6 +328,17 @@ func main() {
 				files.POST("/upload/chunked/:uploadId/complete", fileHandler.CompleteChunkedUpload)
 				files.GET("/upload/chunked/:uploadId/status", fileHandler.GetUploadStatus)
 				files.DELETE("/upload/chunked/:uploadId", fileHandler.CancelUpload)
+
+				// tus 1.0: resumable uploads that survive a refresh or restart.
+				// PATCH is capped like a chunk rather than a whole file, because
+				// the transport still crosses Cloudflare's request-body limit.
+				files.POST("/tus", fileHandler.TusCreate)
+				files.HEAD("/tus/:uploadId", fileHandler.TusHead)
+				files.PATCH("/tus/:uploadId",
+					middleware.BodyLimitFunc(chunkBodyLimit),
+					fileHandler.TusPatch)
+				files.GET("/tus/:uploadId/status", fileHandler.TusStatus)
+				files.DELETE("/tus/:uploadId", fileHandler.TusDelete)
 			}
 
 			// Trash (collection-level)

@@ -176,6 +176,11 @@ export default function ShareView() {
   // File shown in the viewer. The share root and any row inside a browsed
   // folder both land here; the URL is built from .path, not from a boolean.
   const [previewFile, setPreviewFile] = useState(null)
+  // A share can cover several files/folders. `bundleItems` is that set as the
+  // access response returned it; `isBundle` tells the page to render a list
+  // instead of a single item card.
+  const [bundleItems, setBundleItems] = useState([])
+  const [isBundle, setIsBundle] = useState(false)
   // Folder browsing. `trail` is the path walked from the shared root, so the
   // back button is a matter of dropping the last entry, and the breadcrumb
   // never has to be recomputed from strings.
@@ -245,6 +250,8 @@ export default function ShareView() {
         // token for them — a request that can only be refused.
         setShare(null)
         setFile(null)
+        setBundleItems([])
+        setIsBundle(false)
         setContents([])
         setTrail([])
         setContentsError(null)
@@ -261,6 +268,8 @@ export default function ShareView() {
         next = {
           share: response.data.share,
           file: response.data.file,
+          items: response.data.items || [],
+          bundle: !!response.data.bundle,
           error: null,
           needsPassword: false,
           passwordError: false,
@@ -314,6 +323,8 @@ export default function ShareView() {
         if (next.share) {
           setShare(next.share)
           setFile(next.file)
+          setBundleItems(next.items || [])
+          setIsBundle(!!next.bundle)
           setFileToken(token)
           // Every download, preview and upload sends this password. Restoring
           // the unlock without restoring this would reopen the card and then
@@ -362,8 +373,12 @@ export default function ShareView() {
     const item = target || file
     if (!item) return
     const link = document.createElement('a')
-    link.href = shareApi.downloadUrl(token, password, item.path)
-    link.download = item.is_dir ? `${item.name}.zip` : item.name
+    link.href = shareApi.downloadUrl(token, password, target ? item.path : (isBundle ? '' : item.path))
+    // A bundle with no target is the whole set: the server streams one zip of
+    // every item. The name is only a hint; Content-Disposition decides.
+    link.download = isBundle && !target
+      ? 'shared-items.zip'
+      : (item.is_dir ? `${item.name}.zip` : item.name)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -419,6 +434,7 @@ export default function ShareView() {
   // a new file object, from re-fetching contents twice. The token guard is what
   // keeps it from firing against the wrong link while a move is in flight.
   useEffect(() => {
+    if (isBundle) return
     if (!file?.is_dir) return
     if (fileToken !== token) return
     setContents([])
@@ -438,7 +454,26 @@ export default function ShareView() {
     }
     setTrail([])
     openFolder(file.path, file.name)
-  }, [file?.id, file?.path, file?.name, file?.is_dir, fileToken, token, openFolder])
+  }, [file?.id, file?.path, file?.name, file?.is_dir, fileToken, token, isBundle, openFolder])
+
+  // A multi-item link opens on its list, not on the first item. A `?path=`
+  // copied from a folder inside the set still lands there, which is what a
+  // visitor who reloaded while browsing expects.
+  useEffect(() => {
+    if (!isBundle) return
+    if (fileToken !== token) return
+    setContents([])
+    rootPathRef.current = null
+    const raw = typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('path')
+    const wanted = raw ? raw.trim().replace(/\/+$/, '') : ''
+    if (!wanted) {
+      setTrail([])
+      return
+    }
+    openFolder(wanted, wanted.slice(wanted.lastIndexOf('/') + 1))
+  }, [isBundle, fileToken, token, openFolder])
 
   // Walks the list from the height it had to the height its rows now need.
   // The rows themselves do not move: the list is top-aligned, so only its
@@ -498,6 +533,14 @@ export default function ShareView() {
   }
 
   const goBack = () => {
+    // Inside a bundle the level above the first folder is the list of shared
+    // items, which has no path of its own.
+    if (isBundle && trail.length <= 1) {
+      setTrail([])
+      setContents([])
+      rememberFolder(null, null, false)
+      return
+    }
     if (trail.length < 2) return
     const parent = trail[trail.length - 2]
     openFolder(parent.path, parent.name)
@@ -524,7 +567,7 @@ export default function ShareView() {
     else toast.error('Could not copy — select the address bar instead')
   }
 
-  const canUpload = !!file && !!file.is_dir && share?.permission === 'write'
+  const canUpload = !!file && !isBundle && !!file.is_dir && share?.permission === 'write'
 
   const updateUpload = (id, patch) =>
     setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)))
@@ -640,9 +683,19 @@ export default function ShareView() {
     )
   }
 
-  const isWrite = share?.permission === 'write'
+  const isWrite = !isBundle && share?.permission === 'write'
   const PermIcon = isWrite ? Upload : Lock
   const trailLabel = trail.length ? trail.map((entry) => entry.name).join(' / ') : file.name
+  // A bundle's top level is its list of shared items, not a folder. Everything
+  // below that is an ordinary folder listing, so the same rows and back
+  // control can serve both kinds of share.
+  const bundleAtRoot = isBundle && trail.length === 0
+  const visibleItems = bundleAtRoot ? bundleItems : contents
+  const listLoading = !bundleAtRoot && contentsLoading
+  const listError = bundleAtRoot ? null : contentsError
+  const listLabel = bundleAtRoot ? 'Shared items' : trailLabel
+  const showBack = isBundle ? trail.length > 0 : trail.length > 1
+  const bundleName = `${bundleItems.length} shared item${bundleItems.length === 1 ? '' : 's'}`
 
   return (
     <div className="centered-page">
@@ -650,17 +703,19 @@ export default function ShareView() {
         <ShareBrand />
         <div key="card" className="card share-file-card share-view">
           <div className="share-file-head">
-            <div className={`file-icon share-icon ${iconClassFor(file)}`}>
-              <FileIcon item={file} />
+            <div className={`file-icon share-icon ${isBundle ? 'folder' : iconClassFor(file)}`}>
+              {isBundle ? <FolderOpen size={22} /> : <FileIcon item={file} />}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <h1 className="share-file-name">
-                {file.name}
+                {isBundle ? bundleName : file.name}
               </h1>
               <div className="share-file-meta">
                 {/* A folder is already a folder from its icon and the Download
                     hint, so the word said nothing the row did not. */}
-                {!file.is_dir && <span>{formatBytes(file.size)}</span>}
+                {isBundle
+                  ? <span>{bundleItems.length} item{bundleItems.length === 1 ? '' : 's'}</span>
+                  : !file.is_dir && <span>{formatBytes(file.size)}</span>}
                 {share?.expires_at && <span>Expires {formatDate(share.expires_at)}</span>}
                 {share?.max_views > 0 && (
                   <span>{share.view_count} / {share.max_views} downloads</span>
@@ -684,13 +739,13 @@ export default function ShareView() {
           <div className="share-actions">
             <button
               className="btn btn-primary"
-              onClick={() => handleDownload(file)}
-              title={file.is_dir ? 'Download the folder as a ZIP archive' : undefined}
+              onClick={() => handleDownload(isBundle ? null : file)}
+              title={isBundle ? 'Download every shared item as a ZIP archive' : file.is_dir ? 'Download the folder as a ZIP archive' : undefined}
             >
               <Download size={14} />
-              Download
+              {isBundle ? 'Download all' : 'Download'}
             </button>
-            {!file.is_dir && canPreview(file) && (
+            {!isBundle && !file.is_dir && canPreview(file) && (
               <button className="btn btn-secondary" onClick={() => setPreviewFile(file)}>
                 <Eye size={14} />
                 Preview
@@ -699,7 +754,7 @@ export default function ShareView() {
             <button className="btn btn-secondary" onClick={copyLink}>
               <Copy size={14} /> Copy link
             </button>
-            {file.is_dir && (
+            {!isBundle && file.is_dir && (
               <button
                 className="btn btn-secondary"
                 onClick={toggleContents}
@@ -710,10 +765,10 @@ export default function ShareView() {
             )}
           </div>
 
-          {file.is_dir && showContents && (
+          {(isBundle || (file.is_dir && showContents)) && (
             <div className="share-contents">
               <div className="share-contents-head">
-                {trail.length > 1 ? (
+                {showBack ? (
                   <button
                     className="share-contents-back"
                     onClick={goBack}
@@ -724,13 +779,13 @@ export default function ShareView() {
                 ) : (
                   <span className="share-contents-back is-placeholder" aria-hidden="true" />
                 )}
-                <span className="share-contents-path" title={trailLabel}>
-                  {trailLabel}
+                <span className="share-contents-path" title={listLabel}>
+                  {listLabel}
                 </span>
                 <span className="share-contents-count">
-                  {contentsLoading
+                  {listLoading
                     ? ''
-                    : `${contents.length} item${contents.length === 1 ? '' : 's'}`}
+                    : `${visibleItems.length} item${visibleItems.length === 1 ? '' : 's'}`}
                 </span>
               </div>
 
@@ -740,21 +795,23 @@ export default function ShareView() {
                   is a flash where the list used to be. */}
               <div
                 className="share-contents-list"
-                key={contentsPaint}
+                key={bundleAtRoot ? 'bundle' : contentsPaint}
                 ref={contentsListRef}
-                style={{ opacity: contentsLoading ? 0.55 : 1, transition: 'opacity 140ms ease' }}
+                style={{ opacity: listLoading ? 0.55 : 1, transition: 'opacity 140ms ease' }}
               >
-                {contentsError ? (
-                  <div className="share-contents-empty share-contents-error">{contentsError}</div>
-                ) : contents.length === 0 ? (
+                {listError ? (
+                  <div className="share-contents-empty share-contents-error">{listError}</div>
+                ) : visibleItems.length === 0 ? (
                   // An empty result is only empty once a result has arrived. On
                   // a cold load the box holds nothing, rather than asserting
                   // "This folder is empty." while the folder is on its way.
-                  contentsLoading ? null : (
-                    <div className="share-contents-empty">This folder is empty.</div>
+                  listLoading ? null : (
+                    <div className="share-contents-empty">
+                      {bundleAtRoot ? 'This share is empty.' : 'This folder is empty.'}
+                    </div>
                   )
                 ) : (
-                  contents.slice(0, CONTENT_RENDER_CAP).map((item) => (
+                  visibleItems.slice(0, CONTENT_RENDER_CAP).map((item) => (
                     <button
                       key={item.id}
                       className="share-contents-row"
@@ -777,10 +834,10 @@ export default function ShareView() {
                     </button>
                   ))
                 )}
-                {!contentsLoading && !contentsError && contents.length > CONTENT_RENDER_CAP && (
+                {!listLoading && !listError && visibleItems.length > CONTENT_RENDER_CAP && (
                   <div className="share-contents-empty">
-                    Showing the first {CONTENT_RENDER_CAP} of {contents.length} items — download the
-                    folder to get the rest.
+                    Showing the first {CONTENT_RENDER_CAP} of {visibleItems.length} items — download the
+                    set to get the rest.
                   </div>
                 )}
               </div>

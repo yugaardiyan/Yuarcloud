@@ -67,10 +67,24 @@ func quotaExceeded(db *gorm.DB, userID uuid.UUID, additional, inflight int64) (b
 // of their own remaining quota until the cleanup tick lands.
 func inflightUploadBytes(db *gorm.DB, userID uuid.UUID) int64 {
 	var total int64
+	// "completing" counts too. A large upload now assembles in the background
+	// after the client has sent its last chunk, and those bytes are still
+	// promised but not yet charged to used_bytes. Leaving the status out would
+	// let the same user open a second upload during that window and exceed the
+	// quota by the size of the first.
 	db.Model(&model.UploadSession{}).
-		Where("user_id = ? AND status = ? AND expires_at > ?", userID, "uploading", time.Now()).
+		Where("user_id = ? AND status IN ? AND expires_at > ?", userID, []string{"uploading", "completing"}, time.Now()).
 		Select("COALESCE(SUM(total_size), 0)").Scan(&total)
-	return total
+
+	// Tus uploads promise the same bytes and have to count in the same window.
+	// Without this, a user at their quota could open a tus upload alongside a
+	// chunked one and briefly hold twice the storage the quota allows.
+	var tusTotal int64
+	db.Model(&model.TusUpload{}).
+		Where("user_id = ? AND status IN ? AND expires_at > ?", userID, []string{"uploading", "finalizing"}, time.Now()).
+		Select("COALESCE(SUM(total_size), 0)").Scan(&tusTotal)
+
+	return total + tusTotal
 }
 
 // rejectOverQuota answers the request with the shortfall spelled out, and

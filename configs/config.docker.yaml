@@ -27,6 +27,8 @@ server:
   host: "0.0.0.0"
   port: 3103
   mode: "release"
+  # These bound ordinary API calls. File transfers lift them per request, so a
+  # large upload or download is not cut off at 30 seconds.
   read_timeout: 30s
   write_timeout: 30s
   max_header_bytes: 1048576

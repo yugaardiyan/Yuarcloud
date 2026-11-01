@@ -140,6 +140,10 @@ type ShareLink struct {
 	// Relations
 	User User `gorm:"foreignKey:UserID" json:"-"`
 	File File `gorm:"foreignKey:FileID" json:"-"`
+	// Items carries the full set when one link covers several files/folders.
+	// A single-item share has no rows here and is described entirely by File,
+	// which is also the column existing links were created with.
+	Items []ShareLinkItem `gorm:"foreignKey:ShareLinkID" json:"-"`
 }
 
 func (s *ShareLink) BeforeCreate(*gorm.DB) error {
@@ -149,6 +153,29 @@ func (s *ShareLink) BeforeCreate(*gorm.DB) error {
 
 func (ShareLink) TableName() string {
 	return "share_links"
+}
+
+// ShareLinkItem is one member of a multi-item share: the link opens a list of
+// everything in the set instead of a single file or folder.
+type ShareLinkItem struct {
+	ID          uuid.UUID `gorm:"type:uuid;primary_key" json:"id"`
+	ShareLinkID uuid.UUID `gorm:"type:uuid;index;not null" json:"share_link_id"`
+	FileID      uuid.UUID `gorm:"type:uuid;index;not null" json:"file_id"`
+	// Position preserves the order the owner selected the items in, which is
+	// the order the public page lists them.
+	Position  int       `gorm:"not null;default:0" json:"position"`
+	CreatedAt time.Time `json:"created_at"`
+
+	File File `gorm:"foreignKey:FileID" json:"-"`
+}
+
+func (i *ShareLinkItem) BeforeCreate(*gorm.DB) error {
+	generateUUID(&i.ID)
+	return nil
+}
+
+func (ShareLinkItem) TableName() string {
+	return "share_link_items"
 }
 
 type Setting struct {
@@ -175,7 +202,8 @@ type UploadSession struct {
 	ChunkSize      int64          `gorm:"not null" json:"chunk_size"`
 	TotalChunks    int            `gorm:"not null" json:"total_chunks"`
 	UploadedChunks int            `gorm:"default:0" json:"uploaded_chunks"`
-	Status         string         `gorm:"size:20;default:'pending'" json:"status"` // pending, uploading, completed, failed, expired
+	Status         string         `gorm:"size:20;default:'pending'" json:"status"` // pending, uploading, completing, completed, failed, expired
+	ErrorMessage   string         `gorm:"size:500" json:"error,omitempty"`
 	TempDir        string         `gorm:"size:500" json:"temp_dir"`
 	Checksum       string         `gorm:"size:64" json:"checksum"`
 	ExpiresAt      time.Time      `gorm:"index" json:"expires_at"`
@@ -191,6 +219,45 @@ func (u *UploadSession) BeforeCreate(*gorm.DB) error {
 
 func (UploadSession) TableName() string {
 	return "upload_sessions"
+}
+
+// TusUpload is the server-side state of one tus 1.0 upload.
+//
+// Unlike UploadSession, whose bytes live as one file per chunk and whose state
+// is held in memory, a tus upload appends to a single data file and every
+// field here has to survive a restart: that is the whole point of speaking tus.
+// The row is therefore the source of truth for target path and limits, and the
+// data file's size is the source of truth for the offset.
+type TusUpload struct {
+	ID       uuid.UUID  `gorm:"type:uuid;primary_key" json:"id"`
+	UserID   uuid.UUID  `gorm:"type:uuid;index;not null" json:"user_id"`
+	FileID   *uuid.UUID `gorm:"type:uuid;index" json:"file_id"`
+	ParentID *uuid.UUID `gorm:"type:uuid;index" json:"parent_id"`
+	Filename string     `gorm:"size:255;not null" json:"filename"`
+	// TargetPath is the final, scoped path the assembled bytes are renamed to.
+	TargetPath string `gorm:"size:1000;not null" json:"target_path"`
+	TotalSize  int64  `gorm:"not null" json:"total_size"`
+	// Offset is what the database believes has been written. The data file's
+	// size is checked against it on every HEAD/PATCH, because a crash between
+	// the append and this row's update would otherwise leave the two disagreeing
+	// forever — and the client would be told to resend bytes already on disk, or
+	// worse, skip bytes that never arrived.
+	Offset       int64     `gorm:"not null;default:0" json:"offset"`
+	Checksum     string    `gorm:"size:64" json:"checksum"`
+	Status       string    `gorm:"size:20;default:'uploading'" json:"status"` // uploading, finalizing, completed, failed
+	ErrorMessage string    `gorm:"size:500" json:"error,omitempty"`
+	ExpiresAt    time.Time `gorm:"index" json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (t *TusUpload) BeforeCreate(*gorm.DB) error {
+	generateUUID(&t.ID)
+	return nil
+}
+
+func (TusUpload) TableName() string {
+	return "tus_uploads"
 }
 
 type AuditLog struct {
@@ -285,8 +352,11 @@ func ToFileResponse(f *File) FileResponse {
 }
 
 type ShareLinkResponse struct {
-	ID         uuid.UUID  `json:"id"`
-	FileID     uuid.UUID  `json:"file_id"`
+	ID     uuid.UUID `json:"id"`
+	FileID uuid.UUID `json:"file_id"`
+	// ItemCount is how many files/folders the link opens. It is 1 for an
+	// ordinary single-item share and N for a multi-item one.
+	ItemCount  int        `json:"item_count"`
 	FileName   string     `json:"file_name"`
 	Token      string     `json:"token"`
 	URL        string     `json:"url"`

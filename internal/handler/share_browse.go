@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/yuarcloud/yuarcloud/internal/model"
+	"github.com/yuarcloud/yuarcloud/internal/share"
 	"github.com/yuarcloud/yuarcloud/internal/storage"
 )
 
@@ -33,26 +34,43 @@ func cleanSharePath(raw string) (string, bool) {
 // shareTarget resolves the item a public download, preview or browse request
 // refers to.
 //
-// No path means the shared item itself. Anything else has to sit inside the
-// shared folder: the prefix check compares whole segments, so "Photos old"
+// No path means the first shared item. Anything else has to sit inside one of
+// the shared roots: the prefix check compares whole segments, so "Photos old"
 // cannot masquerade as a child of "Photos", and the row lookup carries the
 // owner's id, so a crafted path cannot reach another account's tree. Trashed
 // rows are excluded for the same reason ValidateShare excludes them — a link
 // must not resurrect what its owner threw away.
-func (h *ShareHandler) shareTarget(c *gin.Context, root *model.File) (*model.File, bool) {
+//
+// `roots` is the live item set of the link: one entry for an ordinary share,
+// every item for a multi-item one, which is what lets a folder inside any
+// bundle member be browsed and downloaded by path.
+func (h *ShareHandler) shareTargetIn(c *gin.Context, roots []model.File) (*model.File, bool) {
 	p, ok := cleanSharePath(c.Query("path"))
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "file is no longer available"})
 		return nil, false
 	}
-
-	if p == "" || p == root.Path {
-		return root, true
-	}
-
-	if !strings.HasPrefix(p, root.Path+"/") {
+	if len(roots) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "file is no longer available"})
 		return nil, false
+	}
+	if p == "" {
+		return &roots[0], true
+	}
+
+	var root *model.File
+	for i := range roots {
+		if p == roots[i].Path || strings.HasPrefix(p, roots[i].Path+"/") {
+			root = &roots[i]
+			break
+		}
+	}
+	if root == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file is no longer available"})
+		return nil, false
+	}
+	if p == root.Path {
+		return root, true
 	}
 
 	// A deep link can name a folder or file whose row does not exist yet
@@ -90,13 +108,35 @@ func (h *ShareHandler) ListSharedFolder(c *gin.Context) {
 		return
 	}
 
-	root := &link.File
-	if !root.IsDir {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "this share is not a folder"})
+	roots := share.LiveShareFiles(link)
+	if len(roots) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "share is no longer available"})
 		return
 	}
 
-	folder, ok := h.shareTarget(c, root)
+	// A multi-item link has no single folder to open at its root: its "root"
+	// is the list of shared items itself. The page gets that list from the
+	// access response, but answering here too keeps the endpoint honest for a
+	// reload or a hand-built request. A path still opens a folder inside any
+	// member, which is what the browse rows ask for.
+	if len(roots) > 1 {
+		p, ok := cleanSharePath(c.Query("path"))
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "folder is no longer available"})
+			return
+		}
+		if p == "" {
+			foldersFirst(roots)
+			items := make([]model.FileResponse, 0, len(roots))
+			for i := range roots {
+				items = append(items, fileResponseOf(&roots[i]))
+			}
+			c.JSON(http.StatusOK, gin.H{"items": items})
+			return
+		}
+	}
+
+	folder, ok := h.shareTargetIn(c, roots)
 	if !ok {
 		return
 	}
@@ -120,7 +160,7 @@ func (h *ShareHandler) ListSharedFolder(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list folder"})
 			return
 		}
-		if err := adoptDirectoryEntries(h.db, root.UserID, folder.Path, folder, entries); err != nil {
+		if err := adoptDirectoryEntries(h.db, folder.UserID, folder.Path, folder, entries); err != nil {
 			c.Error(err) //nolint:errcheck
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to index folder"})
 			return
@@ -130,7 +170,7 @@ func (h *ShareHandler) ListSharedFolder(c *gin.Context) {
 	pattern, nested := childPathPatterns(folder.Path)
 	var children []model.File
 	query := h.db.WithContext(ctx).
-		Where("user_id = ? AND is_trashed = ? AND path LIKE ? ESCAPE '\\'", root.UserID, false, pattern)
+		Where("user_id = ? AND is_trashed = ? AND path LIKE ? ESCAPE '\\'", folder.UserID, false, pattern)
 	if nested != "" {
 		query = query.Where("path NOT LIKE ? ESCAPE '\\'", nested)
 	}

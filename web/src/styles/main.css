@@ -1084,12 +1084,13 @@ input.input[type='number'] {
 /* File Grid/List */
 .file-grid {
   display: grid;
-  /* 116px, not 132. Measured: at 132 the tile rendered 153px wide to hold a
-     60px glyph, so the hover highlight was two-thirds empty padding. The floor
-     is what sets the tile width (the columns are 1fr), so lowering it is the
-     only lever that shrinks the box without also shrinking the glyph. */
-  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
-  gap: 6px;
+  /* Wide, horizontal cards instead of tiny icon tiles: the name gets the room
+     it needs, the ⋯ sits on the same line, and the grid still scans in rows
+     the way a folder of mixed files should. The floor is what decides the
+     column count on any window width; 232px keeps two columns comfortable on
+     a tablet and four on a desktop, with the name still readable. */
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 12px;
 }
 
 .file-list {
@@ -1165,13 +1166,16 @@ input.input[type='number'] {
   color: var(--text-primary);
 }
 
-/* The grid tile is a column, so the trigger is pinned to its top-right corner
-   instead of taking a row of its own. No background: on a phone the dots read
-   as part of the tile rather than as a floating white control. */
+/* The grid card is a row, so the trigger sits in the flow at the right edge
+   rather than floating over a corner. It keeps its reserved 28px whether it is
+   revealed or not, so a name never reflows when the pointer arrives. The
+   negative margin closes most of the flex gap on its left: the clickable box
+   stays full size, but the name's ellipsis runs right up to it instead of
+   stopping a gap short. */
 .file-card .file-menu-btn {
-  position: absolute;
-  top: 2px;
-  right: 2px;
+  position: static;
+  flex: 0 0 28px;
+  margin-left: -6px;
   z-index: 3;
 }
 
@@ -1205,12 +1209,12 @@ input.input[type='number'] {
     background: var(--bg-selected);
   }
 
-  .file-card:hover::before {
-    background: transparent;
+  .file-card:hover {
+    background: var(--bg-secondary);
   }
 
-  .file-card.selected:hover::before {
-    background: var(--bg-selected);
+  .file-card.selected:hover {
+    background: var(--bg-selected-hover);
   }
 }
 
@@ -1658,109 +1662,86 @@ input.input[type='number'] {
 }
 
 /* --- Grid cards -------------------------------------------------------- */
+/* Wide, horizontal cards instead of icon tiles. The glyph sits on the left,
+   the name and its date stack in the middle, and the ⋯ closes the row. The
+   fill is what makes the card read as a card; the middle block gets the
+   leftover width, and the tight gap keeps it close to the glyph. */
 .file-card {
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 7px 6px;
+  gap: 8px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 9px 4px 9px 14px;
   border: 1px solid transparent;
+  border-radius: var(--radius-xl);
+  background: var(--bg-secondary);
   position: relative;
 }
 
-/* The tile is a 1fr grid column, so a background painted on the card itself
-   spans the whole column — 132px to hold a 56px glyph, which is why it read
-   as a padded box instead of a highlight. Painting the state background on an
-   inset pseudo-element narrows the highlight to roughly what the content
-   occupies. The glyph and label are lifted above it explicitly: an absolutely
-   positioned box paints over static text otherwise. */
-.file-card:hover,
-.file-card.selected,
-.file-card.selected:hover,
+/* State fills are painted on the card box itself now — there is no inset
+   pseudo-element left to fall out of step with the card it belongs to. */
+.file-card:hover {
+  background: var(--bg-hover);
+}
+
+/* On a filled card `--bg-selected` is within a few points of the resting fill,
+   so a marked card would not read as marked. The stronger tint is the one that
+   already belonged to "hovering a selected row"; the card uses it at rest and
+   steps one shade further when the pointer arrives. */
+.file-card.selected {
+  background: var(--bg-selected-hover);
+}
+
+.file-card.selected:hover {
+  background: #c2dbfb;
+}
+
 .file-card.is-drop-target {
-  background: transparent;
-  box-shadow: none;
+  background: var(--bg-selected-hover);
+  border-color: var(--accent-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: inset 0 0 0 1px var(--accent-primary);
 }
 
-.file-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 6px;
-  z-index: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
-  pointer-events: none;
-}
-
-.file-card:hover::before { background: var(--bg-hover); }
-.file-card.selected::before { background: var(--bg-selected); }
-.file-card.selected:hover::before { background: var(--bg-selected-hover); }
-
-.file-card.is-drop-target::before {
-  background: var(--bg-selected);
-  box-shadow: inset 0 0 0 2px var(--accent-primary);
-}
-
-.file-card .file-icon,
-.file-card .file-info {
-  position: relative;
-  z-index: 1;
-}
-
-/* The card is a column flex container with `align-items: center`, so this box
-   was sized by its widest child rather than by the card. A nowrap meta line
-   longer than the tile — "4.1 MB · Oct 19, 05:48 AM" needed 133px in a 107px
-   content box — stretched the whole block past the padding, and with it the
-   centred name, so neighbouring tiles wrote over each other. A card's content
-   is not allowed to be wider than the card. */
-.file-card .file-info {
-  width: 100%;
-}
-
-/* The glyph is the whole tile, so it is the only thing in this band — which
-   means the band is what sizes the tile, and every pixel of slack in it is
-   padding the pointer has to cross before reaching the card's real content.
-   58px against a 56px glyph leaves 1px either side. */
+/* The glyph is a fixed square so every name starts on the same vertical line.
+   26px of artwork in a 32px box stays crisp without making the card tall. */
 .file-card .file-icon {
-  width: 100%;
-  height: 58px;
+  width: 32px;
+  height: 32px;
 }
 
 .file-card .file-icon svg,
 .file-card .file-icon > svg {
-  width: 56px;
-  height: 56px;
+  width: 26px;
+  height: 26px;
 }
 
+/* Two short lines: the name first, its date beneath. The name is cut by
+   TruncatedName, which appends ".." — CSS's ellipsis can only draw its fixed
+   three-dot glyph, so no text-overflow here. */
 .file-card .file-name {
-  /* One step down from the list view's 13px: the tile is 119px wide, so the
-     same size wrapped long names after fewer characters and left the card
-     looking cramped next to its neighbours. */
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  text-align: center;
-  /* Two lines before the ellipsis. The grid got narrower when its column floor
-     came down from 160px to 132px, which started cutting names in half; a
-     second line buys back most of what was lost without letting a long name
-     take three rows and throw the grid out of alignment. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-word;
-  /* The base rule pins this to nowrap for the list view. Left in place it
-     wins over line-clamp's wrapping and every name stays on one line. */
-  white-space: normal;
   text-overflow: clip;
+  word-break: normal;
 }
 
+/* The date only, not "Modified <date>": the line under a file name already
+   reads as when it last changed, and the word cost the name width. The two
+   lines sit directly against each other; a margin here read as a gap in the
+   middle of the label. */
 .file-card .file-meta {
-  font-size: 10px;
+  display: block;
+  margin-top: 0;
+  font-size: 11px;
+  line-height: 1.2;
   color: var(--text-tertiary);
-  text-align: center;
-  /* One line, always. Allowed to wrap it added a second line and grew the card
-     mid-row; truncating beats making the tile taller than its neighbours. */
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1901,6 +1882,33 @@ input.input[type='number'] {
   border: 1px solid var(--accent-primary);
   border-radius: 3px;
   background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+/* Floating banner shown above the listing while select mode is active. A thin
+   strip rather than a full overlay, so the files underneath stay reachable;
+   the strip itself is the affordance that says "you are in select mode, tap
+   to toggle." Exits via Esc on desktop or by tapping the same item again. */
+.select-mode-banner {
+  margin: 0 0 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bg-selected);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 40%, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.select-mode-banner kbd {
+  font: inherit;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0 5px;
 }
 
 /* The settings page reuses this card, so its scroll container has to fill it the
@@ -2076,6 +2084,32 @@ input.input[type='number'] {
 
 .status-item-sep {
   color: var(--text-tertiary);
+}
+
+/* Storage figure. When the account has no quota the second value is the
+   infinity glyph instead of a number, so 0 never reads as "no space left". */
+.status-storage {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.status-storage-sep {
+  color: var(--text-tertiary);
+}
+
+.status-unlimited {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+}
+
+/* Same half-pixel correction as the Users tab: the glyph sits a touch high
+   against digits otherwise. */
+.status-unlimited svg {
+  position: relative;
+  top: 0.5px;
 }
 
 /* .btn-icon carries 8px of padding, which is taller than the bar it now lives
@@ -3545,7 +3579,38 @@ input.input[type='number'] {
 }
 
 @media (max-width: 560px) {
-  .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  /* Two cards per row on a phone. `minmax(0, 1fr)` is the part that matters:
+     a bare `1fr` has an automatic minimum, so one long file name stretched its
+     track past the container and made the whole pane scroll sideways. */
+  .file-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  /* Reclaim the width the two-column layout takes from the name: smaller
+     padding, glyph and ⋯ box. The card still lines up with the folder cards
+     because both use this same rule. */
+  .file-card {
+    gap: 7px;
+    min-height: 56px;
+    padding: 8px 2px 8px 10px;
+  }
+
+  .file-card .file-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .file-card .file-icon svg,
+  .file-card .file-icon > svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .file-card .file-menu-btn {
+    flex-basis: 24px;
+    width: 24px;
+  }
 
   /* Phone layout, regardless of what the browser reports for hover. The dots
      stay visible and carry no painted box even if a stylus is connected. */

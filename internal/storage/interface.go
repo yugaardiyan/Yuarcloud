@@ -59,6 +59,21 @@ type StorageBackend interface {
 	GetUploadSession(uploadID string) (*UploadSession, bool)
 	DeleteUploadSession(uploadID string)
 
+	// Tus uploads
+	//
+	// A tus upload is one append-only data file rather than a directory of
+	// chunks. TusAppend writes at exactly `offset` (the protocol's own
+	// precondition), refuses to grow past maxSize, and returns the new size.
+	// TusSize reports the number of bytes actually on disk, which is the value
+	// HEAD and PATCH must agree on. TusFinalize moves the data file to its
+	// destination — a rename on the same volume — and checks the optional
+	// checksum. TusRemove deletes a partial upload.
+	TusAppend(ctx context.Context, uploadID string, offset, maxSize int64, reader io.Reader) (int64, error)
+	TusSize(uploadID string) (int64, error)
+	TusFinalize(ctx context.Context, uploadID, finalPath, expectedChecksum string) (int64, error)
+	TusRemove(uploadID string) error
+	SweepTusOrphans(keep map[string]struct{})
+
 	// Utility
 	GetTempDir() string
 	// GetLimits exposes the runtime upload ceilings. They are read through the

@@ -3,9 +3,29 @@
 
 import axios from 'axios'
 
+// Ordinary API calls fail fast: 30 seconds is already long for JSON.
+const API_TIMEOUT = 30000
+
+// Transfers are a different question. A file that takes four minutes is not a
+// hung request — it is a four-minute file — and the old shared 30s ceiling put
+// a hard floor under the upload speed. Anything over 16 MB is sent in 10 MB
+// chunks, so each piece had to finish inside 30s (about 2.7 Mbps) or the whole
+// file failed with "timeout of 30000ms exceeded"; the simple path under that
+// threshold needed ~1.1 Mbps for a 4 MB file. A phone hotspot, a busy uplink or
+// a loaded Cloudflare tunnel all failed the same way, and the server's own 30s
+// request deadline cut the request off independently.
+//
+// `0` disables the client deadline only for the calls that move bytes. The
+// browser still reports a dropped connection, progress (bytes and rate) shows
+// whether a transfer is alive, and the server's upload sessions have their own
+// expiry for abandoned attempts. The final assembly call gets the same
+// treatment: concatenating a multi-gigabyte file and hashing it is not a 30s
+// operation even though its response body is small.
+const TRANSFER_TIMEOUT = 0
+
 const api = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: API_TIMEOUT,
   withCredentials: false,
 })
 
@@ -156,6 +176,7 @@ export const fileApi = {
   // the question an upload panel invites.
   upload: (formData, onProgress) =>
     api.post('/files/upload', formData, {
+      timeout: TRANSFER_TIMEOUT,
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         if (onProgress && e.total) onProgress({ pct: Math.round((e.loaded * 100) / e.total), loaded: e.loaded })
@@ -168,6 +189,7 @@ export const fileApi = {
 
   downloadUrl: (id) => `/api/files/${id}/download`,
   downloadZipUrl: (id) => `/api/files/${id}/download-zip`,
+  batchZipUrl: () => '/api/files/download-zip',
 
   // Asks for the short-lived token the viewer puts in a media URL. The session
   // access token never leaves a header — this one lives five minutes, is
@@ -210,15 +232,51 @@ export const fileApi = {
     const form = new FormData()
     form.append('chunk', blob, `chunk_${index}`)
     return api.post(`/files/upload/chunked/${uploadId}/chunk/${index}`, form, {
+      timeout: TRANSFER_TIMEOUT,
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         if (onProgress && e.total) onProgress({ pct: Math.round((e.loaded * 100) / e.total), loaded: e.loaded })
       },
     })
   },
-  completeChunked: (uploadId) => api.post(`/files/upload/chunked/${uploadId}/complete`),
+  completeChunked: (uploadId) =>
+    api.post(`/files/upload/chunked/${uploadId}/complete`, null, { timeout: TRANSFER_TIMEOUT }),
   chunkStatus: (uploadId) => api.get(`/files/upload/chunked/${uploadId}/status`),
   cancelChunked: (uploadId) => api.delete(`/files/upload/chunked/${uploadId}`),
+
+  // tus 1.0: resumable uploads. PATCH carries raw bytes, not multipart, so the
+  // body is sent through untouched and the protocol headers say where it goes.
+  tusCreate: ({ size, metadata }) =>
+    api.post('/files/tus', null, {
+      timeout: TRANSFER_TIMEOUT,
+      headers: {
+        'Tus-Resumable': '1.0.0',
+        'Upload-Length': String(size),
+        'Upload-Metadata': metadata,
+      },
+    }),
+  tusHead: (uploadId) =>
+    api.head(`/files/tus/${uploadId}`, {
+      timeout: TRANSFER_TIMEOUT,
+      headers: { 'Tus-Resumable': '1.0.0' },
+    }),
+  tusPatch: (uploadId, offset, blob, onProgress) =>
+    api.patch(`/files/tus/${uploadId}`, blob, {
+      timeout: TRANSFER_TIMEOUT,
+      headers: {
+        'Tus-Resumable': '1.0.0',
+        'Upload-Offset': String(offset),
+        'Content-Type': 'application/offset+octet-stream',
+      },
+      // A Blob has to reach the network as bytes. Axios' default transform
+      // would try to JSON-encode anything that is not a plain object.
+      transformRequest: [(data) => data],
+      onUploadProgress: (event) => {
+        if (onProgress) onProgress(event.loaded || 0)
+      },
+    }),
+  tusStatus: (uploadId) => api.get(`/files/tus/${uploadId}/status`, { timeout: TRANSFER_TIMEOUT }),
+  tusDelete: (uploadId) => api.delete(`/files/tus/${uploadId}`, { timeout: TRANSFER_TIMEOUT }),
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +311,7 @@ export const shareApi = {
   // Public upload into a write-enabled shared folder.
   upload: (token, formData, password, onProgress) =>
     api.post(`/shares/${token}/upload`, formData, {
+      timeout: TRANSFER_TIMEOUT,
       headers: { 'Content-Type': 'multipart/form-data' },
       params: { password },
       onUploadProgress: (e) => {

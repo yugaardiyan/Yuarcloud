@@ -31,7 +31,7 @@ func freshShareDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.File{}, &model.ShareLink{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.File{}, &model.ShareLink{}, &model.ShareLinkItem{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return db

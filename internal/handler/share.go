@@ -3,9 +3,11 @@ package handler
 import (
 	"archive/zip"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -39,14 +41,45 @@ func (h *ShareHandler) CreateShare(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
 	var req struct {
-		FileID     uuid.UUID `json:"file_id" binding:"required"`
-		Password   string    `json:"password"`
-		ExpiryDays int       `json:"expiry_days"`
-		MaxViews   int       `json:"max_views"`
-		Permission string    `json:"permission"`
+		// A single share keeps sending file_id; a multi-item share sends
+		// file_ids and ignores file_id. Both are accepted so old clients keep
+		// working and the new dialog has one shape to build.
+		FileID     *uuid.UUID  `json:"file_id"`
+		FileIDs    []uuid.UUID `json:"file_ids"`
+		Password   string      `json:"password"`
+		ExpiryDays int         `json:"expiry_days"`
+		MaxViews   int         `json:"max_views"`
+		Permission string      `json:"permission"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	requested := req.FileIDs
+	if len(requested) == 0 && req.FileID != nil {
+		requested = []uuid.UUID{*req.FileID}
+	}
+	// Deduplicate while keeping the selection order: that order is what the
+	// public page lists, so a Set's arbitrary order cannot be used here.
+	ids := make([]uuid.UUID, 0, len(requested))
+	seen := make(map[uuid.UUID]struct{}, len(requested))
+	for _, id := range requested {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file_id or file_ids is required"})
+		return
+	}
+	if len(ids) > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at most 100 items can be shared at once"})
 		return
 	}
 
@@ -61,25 +94,38 @@ func (h *ShareHandler) CreateShare(c *gin.Context) {
 	// confines the lookup to the caller's own subtree — a file outside it (or
 	// a trashed one) comes back as not found, which is the same answer a
 	// non-owner used to get.
-	var file model.File
+	var files []model.File
 	if err := scoped(reqScope(c), h.db).
-		First(&file, "id = ? AND is_trashed = ?", req.FileID, false).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
+		Where("id IN ? AND is_trashed = ?", ids, false).
+		Find(&files).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load files"})
 		return
 	}
+	if len(files) != len(ids) {
+		// One missing id fails the whole request: a link that silently opens
+		// only part of what was picked is worse than being told to reselect.
+		c.JSON(http.StatusNotFound, gin.H{"error": "one or more files were not found"})
+		return
+	}
+	byID := make(map[uuid.UUID]model.File, len(files))
+	for _, f := range files {
+		byID[f.ID] = f
+	}
+	first := byID[ids[0]]
 
 	// "Read & write" is a folder-only feature; reject the rest early so the
 	// visitor never lands on a share that promises uploads into a file.
-	if req.Permission == share.PermissionWrite && !file.IsDir {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "read & write sharing is only available for folders"})
+	// A multi-item link has no single destination, so it is read-only too.
+	if req.Permission == share.PermissionWrite && (len(ids) > 1 || !first.IsDir) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "read & write sharing is only available for a single folder"})
 		return
 	}
 
 	ctx := c.Request.Context()
-	shareLink, err := h.shareService.CreateShare(ctx, userID, req.FileID, req.Password, req.ExpiryDays, req.MaxViews, req.Permission)
+	shareLink, err := h.shareService.CreateShareFiles(ctx, userID, ids, req.Password, req.ExpiryDays, req.MaxViews, req.Permission)
 	if err != nil {
 		if err == share.ErrShareAlreadyExists {
-			c.JSON(http.StatusConflict, gin.H{"error": "a share link already exists for this file. Delete it first."})
+			c.JSON(http.StatusConflict, gin.H{"error": "a share link already exists for one of these items. Delete it first."})
 			return
 		}
 		if err == share.ErrPasswordRequired {
@@ -92,12 +138,19 @@ func (h *ShareHandler) CreateShare(c *gin.Context) {
 
 	url := h.shareService.ShareURL(shareLink.Token, c.Request)
 
-	logAudit(h.db, c, userID, "create_share", "share", &shareLink.ID, "Created share link for: "+file.Name)
+	displayName := first.Name
+	auditText := "Created share link for: " + first.Name
+	if len(ids) > 1 {
+		displayName = fmt.Sprintf("%d items", len(ids))
+		auditText = fmt.Sprintf("Created share link for %d items", len(ids))
+	}
+	logAudit(h.db, c, userID, "create_share", "share", &shareLink.ID, auditText)
 
 	c.JSON(http.StatusCreated, model.ShareLinkResponse{
 		ID:          shareLink.ID,
 		FileID:      shareLink.FileID,
-		FileName:    file.Name,
+		ItemCount:   len(ids),
+		FileName:    displayName,
 		Token:       shareLink.Token,
 		URL:         url,
 		ExpiresAt:   shareLink.ExpiresAt,
@@ -145,10 +198,12 @@ func (h *ShareHandler) GetShares(c *gin.Context) {
 	// "null", which some clients then can't iterate over.
 	response := make([]model.ShareLinkResponse, 0, len(shares))
 	for _, s := range shares {
+		name, count := shareDisplayName(s)
 		response = append(response, model.ShareLinkResponse{
 			ID:          s.ID,
 			FileID:      s.FileID,
-			FileName:    s.File.Name,
+			ItemCount:   count,
+			FileName:    name,
 			Token:       s.Token,
 			URL:         h.shareService.ShareURL(s.Token, c.Request),
 			ExpiresAt:   s.ExpiresAt,
@@ -210,6 +265,25 @@ func (h *ShareHandler) writeShareAccessError(c *gin.Context, err error) {
 	}
 }
 
+// foldersFirst orders a public listing the way a drive listing reads: folders
+// above files. A stable sort keeps the owner's chosen order inside each group,
+// so the list stays predictable while still leading with the folders.
+func foldersFirst(files []model.File) {
+	sort.SliceStable(files, func(i, j int) bool {
+		return files[i].IsDir && !files[j].IsDir
+	})
+}
+
+// shareDisplayName is the label every listing and preview uses for a link.
+// A multi-item link is named by its size; the individual names would not fit
+// in a table cell and would say nothing a count does not.
+func shareDisplayName(s *model.ShareLink) (string, int) {
+	if len(s.Items) > 1 {
+		return fmt.Sprintf("%d items", len(s.Items)), len(s.Items)
+	}
+	return s.File.Name, 1
+}
+
 // Public share access (no auth required)
 func (h *ShareHandler) AccessShare(c *gin.Context) {
 	token := c.Param("token")
@@ -224,23 +298,32 @@ func (h *ShareHandler) AccessShare(c *gin.Context) {
 
 	shareLink.ViewCount++
 
-	file := shareLink.File
+	files := share.LiveShareFiles(shareLink)
+	if len(files) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file is no longer available"})
+		return
+	}
+	// The public page is a listing, so folders lead. This is also the order
+	// the browse endpoint uses for the children of any folder.
+	foldersFirst(files)
+
+	// The whole set travels with the card so a multi-item link can render its
+	// list immediately, without a second round trip or a special endpoint.
+	items := make([]model.FileResponse, 0, len(files))
+	for i := range files {
+		items = append(items, fileResponseOf(&files[i]))
+	}
+	name, count := shareDisplayName(shareLink)
+
 	c.JSON(http.StatusOK, gin.H{
-		"file": model.FileResponse{
-			ID:        file.ID,
-			Name:      file.Name,
-			Path:      file.Path,
-			Size:      file.Size,
-			MimeType:  file.MimeType,
-			IsDir:     file.IsDir,
-			Checksum:  file.Checksum,
-			CreatedAt: file.CreatedAt,
-			UpdatedAt: file.UpdatedAt,
-		},
+		"file":   items[0],
+		"items":  items,
+		"bundle": len(files) > 1,
 		"share": model.ShareLinkResponse{
 			ID:          shareLink.ID,
 			FileID:      shareLink.FileID,
-			FileName:    file.Name,
+			ItemCount:   count,
+			FileName:    name,
 			Token:       shareLink.Token,
 			URL:         h.shareService.ShareURL(shareLink.Token, c.Request),
 			ExpiresAt:   shareLink.ExpiresAt,
@@ -256,6 +339,9 @@ func (h *ShareHandler) AccessShare(c *gin.Context) {
 }
 
 func (h *ShareHandler) DownloadSharedFile(c *gin.Context) {
+	// Shared files are streamed, including folder zips built on the fly.
+	liftTransferDeadlines(c)
+
 	token := c.Param("token")
 	password := c.Query("password")
 
@@ -266,10 +352,29 @@ func (h *ShareHandler) DownloadSharedFile(c *gin.Context) {
 		return
 	}
 
-	// A `path` inside the shared folder selects one of its children; without
+	roots := share.LiveShareFiles(shareLink)
+	if len(roots) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file is no longer available"})
+		return
+	}
+
+	// No path on a multi-item link means the whole set, delivered as one zip —
+	// the same shape the owner gets from the Drive's batch download.
+	p, pathOK := cleanSharePath(c.Query("path"))
+	if !pathOK {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file is no longer available"})
+		return
+	}
+	if len(roots) > 1 && p == "" {
+		h.shareService.IncrementViewCount(ctx, shareLink.ID)
+		h.streamBundleZip(c, roots)
+		return
+	}
+
+	// A `path` inside any shared folder selects one of its children; without
 	// one this is the shared item itself. Same scoping for files and folders,
 	// so a browse row can download or preview in place.
-	file, ok := h.shareTarget(c, &shareLink.File)
+	file, ok := h.shareTargetIn(c, roots)
 	if !ok {
 		return
 	}
@@ -288,10 +393,15 @@ func (h *ShareHandler) DownloadSharedFile(c *gin.Context) {
 	}
 	defer reader.Close()
 
+	size := file.Size
+	if info, statErr := h.storage.Stat(ctx, file.Path); statErr == nil && !info.IsDir {
+		size = info.Size
+	}
+
 	c.Header("Content-Disposition", contentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.MimeType)
-	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
-	c.DataFromReader(http.StatusOK, file.Size, file.MimeType, reader, nil)
+	c.Header("Content-Length", fmt.Sprintf("%d", size))
+	c.DataFromReader(http.StatusOK, size, file.MimeType, reader, nil)
 }
 
 // PreviewSharedFile streams a shared file inline so a visitor can view it in
@@ -300,6 +410,9 @@ func (h *ShareHandler) DownloadSharedFile(c *gin.Context) {
 // the view counter: previewing a PDF or scrubbing a video would otherwise burn
 // through a view-limited link in seconds.
 func (h *ShareHandler) PreviewSharedFile(c *gin.Context) {
+	// Inline previews stream like the authenticated ones.
+	liftTransferDeadlines(c)
+
 	token := c.Param("token")
 	password := c.Query("password")
 
@@ -312,12 +425,53 @@ func (h *ShareHandler) PreviewSharedFile(c *gin.Context) {
 
 	// Like the download endpoint, `path` can point at a row inside the shared
 	// folder, which is what the browse list uses to preview in place.
-	target, ok := h.shareTarget(c, &shareLink.File)
+	target, ok := h.shareTargetIn(c, share.LiveShareFiles(shareLink))
 	if !ok {
 		return
 	}
 
 	serveInline(c, h.storage, target)
+}
+
+// streamBundleZip streams every item of a multi-item link as one archive.
+// Folders keep their internal tree under their own name, and two files with
+// the same name in different folders get a numeric suffix instead of
+// overwriting each other in the flat top level.
+func (h *ShareHandler) streamBundleZip(c *gin.Context, items []model.File) {
+	c.Header("Content-Disposition", contentDisposition("attachment", "shared-items.zip"))
+	c.Header("Content-Type", "application/zip")
+
+	zw := zip.NewWriter(c.Writer)
+	defer zw.Close()
+
+	ctx := c.Request.Context()
+	taken := make(map[string]struct{}, len(items))
+	for _, file := range items {
+		if file.IsDir {
+			rootName := uniqueZipName(taken, file.Name, true)
+			entries, err := h.storage.List(ctx, file.Path)
+			if err != nil {
+				continue
+			}
+			writeZipTree(ctx, h.storage, zw, entries, rootName)
+			continue
+		}
+		reader, err := h.storage.Read(ctx, file.Path)
+		if err != nil {
+			continue
+		}
+		outName := uniqueZipName(taken, file.Name, false)
+		out, err := zw.Create(outName)
+		if err != nil {
+			reader.Close()
+			continue
+		}
+		if _, err := io.Copy(out, reader); err != nil {
+			reader.Close()
+			continue
+		}
+		reader.Close()
+	}
 }
 
 // streamFolderZip streams a shared folder to the visitor as a ZIP archive.
@@ -339,6 +493,10 @@ func (h *ShareHandler) streamFolderZip(c *gin.Context, folder model.File) {
 // without an account. The file lands inside the shared folder and is owned
 // by the link's creator, exactly as if they had uploaded it themselves.
 func (h *ShareHandler) ShareUpload(c *gin.Context) {
+	// A visitor may be on a slower link than the owner; the body still gets
+	// the same treatment as an authenticated upload.
+	liftTransferDeadlines(c)
+
 	token := c.Param("token")
 	password := c.Query("password")
 

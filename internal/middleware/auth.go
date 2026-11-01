@@ -176,7 +176,16 @@ func GetClaims(c *gin.Context) (*auth.Claims, bool) {
 // CORS middleware is handled by gin-contrib/cors
 // RateLimitMiddleware implements a simple in-memory token bucket limiter.
 // Replace with Redis-backed limiting when running multiple instances.
-func RateLimitMiddleware(requestsPerMinute int, trustProxy bool) gin.HandlerFunc {
+//
+// skip, when non-nil, marks the requests that must not consume the bucket.
+// File transfers are the reason it exists: a chunked upload is one request per
+// chunk by design — a 2 GB file is 205 of them — and counting those against the
+// same per-minute budget as API calls made every upload over roughly 1.2 GB
+// stop part-way with a 429. My own 2 GB test failed at chunk 118 that way.
+// A transfer is still bounded, by authentication, the per-chunk body limit, the
+// configured file-size ceiling and the owner's quota; the bucket was never what
+// made it safe.
+func RateLimitMiddleware(requestsPerMinute int, trustProxy bool, skip func(*gin.Context) bool) gin.HandlerFunc {
 	type client struct {
 		count     int
 		resetTime int64
@@ -199,7 +208,7 @@ func RateLimitMiddleware(requestsPerMinute int, trustProxy bool) gin.HandlerFunc
 	}
 
 	return func(c *gin.Context) {
-		if requestsPerMinute <= 0 {
+		if requestsPerMinute <= 0 || (skip != nil && skip(c)) {
 			c.Next()
 			return
 		}

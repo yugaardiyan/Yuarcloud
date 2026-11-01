@@ -49,7 +49,7 @@ func collisionHarness(t *testing.T) (*FileHandler, *gorm.DB, string) {
 		t.Fatalf("open: %v", err)
 	}
 	if err := db.AutoMigrate(&model.User{}, &model.File{},
-		&model.AuditLog{}, &model.UploadSession{}); err != nil {
+		&model.AuditLog{}, &model.UploadSession{}, &model.TusUpload{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 

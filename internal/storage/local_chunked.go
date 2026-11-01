@@ -82,16 +82,15 @@ func (ls *LocalStorage) WriteChunk(ctx context.Context, uploadID string, chunkIn
 		return false, ErrSizeMismatch
 	}
 
-	// Durable before the session is told it has the chunk. Recorded before
-	// this, a crash between the two left the session claiming a chunk that
-	// was not on disk, and AssembleChunks concatenated whatever survived —
-	// producing a file of the right length and the wrong contents, with a
-	// checksum that had only been computed over what was there.
-	if err := file.Sync(); err != nil {
-		file.Close()         //nolint:errcheck
-		os.Remove(chunkPath) //nolint:errcheck
-		return false, err
-	}
+	// Close, but deliberately no fsync per chunk.
+	//
+	// A chunk only has to survive until assembly in this same process: the
+	// in-memory session is the only thing that knows which indices are present,
+	// and it is gone after a restart. So an fsync here cannot protect a
+	// recoverable state — it only adds a disk flush per 5 MB, which is the
+	// difference between streaming at link speed and waiting on the platter for
+	// every request. The assembled file is fsynced before it is renamed into
+	// place, which is where durability actually matters.
 	if err := file.Close(); err != nil {
 		os.Remove(chunkPath) //nolint:errcheck
 		return false, err
@@ -199,6 +198,12 @@ func (ls *LocalStorage) AssembleChunks(ctx context.Context, uploadID, finalPath 
 	hasher := sha256.New()
 	multiWriter := io.MultiWriter(finalFile, hasher)
 
+	// One buffer for the whole assembly. io.Copy's 32 KB default means roughly
+	// 1.6 million read/write pairs for a 50 GB file; a megabyte at a time cuts
+	// that by 32× and is the cheapest part of making multi-gigabyte assembly
+	// finish inside a request window (or, in the async path, sooner).
+	copyBuf := make([]byte, 1<<20)
+
 	var written int64
 	for i := 0; i < totalChunks; i++ {
 		chunkPath := filepath.Join(chunkDir, fmt.Sprintf("chunk_%05d", i))
@@ -210,7 +215,7 @@ func (ls *LocalStorage) AssembleChunks(ctx context.Context, uploadID, finalPath 
 			return 0, ErrIncompleteUpload
 		}
 
-		n, err := io.Copy(multiWriter, chunkFile)
+		n, err := io.CopyBuffer(multiWriter, chunkFile, copyBuf)
 		chunkFile.Close()
 		if err != nil {
 			finalFile.Close()

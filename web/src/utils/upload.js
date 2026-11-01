@@ -10,13 +10,15 @@
 import { fileApi, apiError } from './api'
 
 /**
- * Hard client-side ceiling per chunk, regardless of what the server allows.
+ * Hard client-side ceiling per chunk — Cloudflare Free tier limit.
  *
- * The server's max_chunk_size is the tunable knob, but it can be set above
- * what Cloudflare will accept in one request — so this stays as a cap on our
- * own choice and we take whichever of the two is smaller.
+ * The server's max_chunk_size is the tunable knob (set in Admin UI).
+ * Cloudflare rejects request bodies > 100 MB, so we cap at that.
+ * The adaptive probe (below) will automatically use a smaller chunk
+ * if the connection is too slow to finish a large chunk within the
+ * ~100–125s proxy read timeout.
  */
-export const MAX_CHUNK_BYTES = 10 * 1024 * 1024 // 10 MB
+export const MAX_CHUNK_BYTES = 100 * 1024 * 1024 // 100 MB (Cloudflare hard limit)
 
 /** Files at or below this go through the simple upload path. */
 export const SIMPLE_UPLOAD_LIMIT = 16 * 1024 * 1024 // 16 MB
@@ -58,6 +60,7 @@ function fetchUploadLimits() {
     return {
       maxChunkSize: max,
       maxConcurrentUploads: normalizeConcurrentUploads(res?.data?.max_concurrent_uploads),
+      maxParallelChunks: normalizeConcurrentUploads(res?.data?.max_parallel_chunks),
     }
   })
 }
@@ -122,6 +125,38 @@ export function resetUploadLimits() {
 }
 
 /**
+ * Default parallel chunks per file.
+ * Kept as the fallback reported when the server cannot tell us its own value.
+ */
+const CHUNK_UPLOAD_CONCURRENCY = 3
+
+/** How often a client asks whether background assembly is done. */
+const COMPLETION_POLL_INTERVAL_MS = 2000
+
+/**
+ * Ceiling on background assembly polling. Assembly is bounded by disk speed,
+ * not the network; an hour is generous even for 50 GB on a slow array, while
+ * still giving up rather than polling a stuck session forever.
+ */
+const COMPLETION_TIMEOUT_MS = 60 * 60 * 1000
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Max parallel chunks for a single file upload.
+ * Fetched from server settings (Admin UI: Max Parallel Chunks).
+ */
+export async function resolveMaxParallelChunks() {
+  try {
+    return (await resolveUploadLimits()).maxParallelChunks
+  } catch {
+    return CHUNK_UPLOAD_CONCURRENCY
+  }
+}
+
+/**
  * Largest file we will hash client-side.
  *
  * SubtleCrypto has no streaming digest — `digest()` takes the whole message at
@@ -154,44 +189,223 @@ export async function sha256Hex(file) {
   }
 }
 
-/**
- * Send one chunk, retrying a dropped request.
- *
- * A chunk crossing a Cloudflare tunnel or a phone hotspot fails for reasons
- * that have nothing to do with the bytes — and one failure used to abort the
- * whole file. Retrying is safe by construction: the server records chunk
- * indices in a set, so a repeat overwrites in place and reports that it was a
- * duplicate rather than inflating the counter. That is exactly the case the
- * duplicate handling exists for.
- *
- * Deliberately not retried: 4xx. A rejected chunk means the session itself is
- * wrong, and hammering it just delays the real error.
- *
- * `onBytes` is forwarded so the chunk being sent reports progress continuously.
- * Without it a chunked upload only moved its bar once per chunk, every few
- * seconds — coarse enough that neither the bar nor any speed derived from it
- * could describe what was actually happening.
- */
-async function sendChunkWithRetry(uploadId, index, blob, signal, onBytes) {
-  const MAX_ATTEMPTS = 4
-  let lastError
+/** Where a resumable upload's id is remembered between attempts. */
+const TUS_STORAGE_PREFIX = 'yuarcloud:tus:'
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+/** PATCH retries before a dropped connection becomes a failure. */
+const TUS_CHUNK_ATTEMPTS = 6
+
+/**
+ * Identifies "the same file going to the same place" across reloads.
+ *
+ * Name, size, last-modified and destination are what a tus server would use to
+ * decide whether a stored upload can be resumed. Two genuinely different files
+ * sharing all four are the same file for practical purposes; a file edited
+ * between attempts has a new mtime and correctly starts over.
+ */
+function tusFingerprint(file, destination) {
+  return `${TUS_STORAGE_PREFIX}${file.name}:${file.size}:${file.lastModified}:${destination ?? ''}`
+}
+
+/**
+ * Encode Upload-Metadata's `key base64value` form.
+ *
+ * TextEncoder first: btoa alone only accepts Latin-1, so a filename with an
+ * accent, an emoji or a non-Latin script would throw before the upload began.
+ */
+function encodeTusMetadata(values) {
+  const encoder = new TextEncoder()
+  return Object.entries(values)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => {
+      const bytes = encoder.encode(String(value))
+      let binary = ''
+      for (const byte of bytes) binary += String.fromCharCode(byte)
+      return `${key} ${btoa(binary)}`
+    })
+    .join(',')
+}
+
+/** The upload id is the final path element of the Location header. */
+function tusIDFromLocation(location) {
+  if (!location) return null
+  const path = String(location).split('?')[0].replace(/\/+$/, '')
+  const id = path.slice(path.lastIndexOf('/') + 1)
+  return id || null
+}
+
+/** Axios exposes header names case-insensitively; this normalises both shapes. */
+function headerValue(headers, name) {
+  if (!headers) return undefined
+  const value = headers[name] ?? headers[name.toLowerCase()]
+  return Array.isArray(value) ? value[0] : value
+}
+
+/**
+ * Wait for the server to turn the received bytes into a file row.
+ *
+ * Finalisation is synchronous up to the async threshold and runs in the
+ * background above it, so the last PATCH can answer before the file exists.
+ * Holding at 99 while that happens is honest; 100 would claim a completion that
+ * has not happened yet.
+ */
+async function waitForTusCompletion(uploadId, fileSize, signal, onProgress) {
+  const started = Date.now()
+
+  for (;;) {
     if (signal?.aborted) throw new Error('upload cancelled')
-    try {
-      return await fileApi.uploadChunk(uploadId, index, blob, onBytes)
-    } catch (error) {
-      lastError = error
-      const status = error?.response?.status
-      if (status && status >= 400 && status < 500) throw error
-      if (attempt === MAX_ATTEMPTS) break
-      // Short, growing backoff: long enough for a dropped connection to come
-      // back, short enough that four attempts still feel immediate.
-      await new Promise((r) => setTimeout(r, 400 * 2 ** (attempt - 1)))
+
+    const res = await fileApi.tusStatus(uploadId)
+    const status = res?.data || {}
+
+    if (status.status === 'completed') {
+      if (status.file) return status.file
+      throw new Error('upload finished but the server did not return the file record')
     }
+    if (status.status === 'failed') {
+      throw new Error(status.error || 'the server could not finalise the upload')
+    }
+    if (Date.now() - started > COMPLETION_TIMEOUT_MS) {
+      throw new Error('the server is still finalising this upload; try again later')
+    }
+
+    onProgress?.(99, fileSize)
+    await sleep(COMPLETION_POLL_INTERVAL_MS)
+  }
+}
+
+/**
+ * Upload a large file over tus 1.0.
+ *
+ * tus is deliberately sequential: each PATCH starts where the previous one
+ * ended, which is exactly what lets the server answer HEAD with a single offset
+ * after a dropped connection. FileBrowser moves large files the same way, so
+ * the throughput a 50 MB PATCH reaches on the same tunnel is the comparison
+ * that matters. Parallel chunk requests were an optimisation of the old
+ * protocol; they cannot be combined with one whose correctness is "one offset".
+ *
+ * Resume works in two layers. Inside one page session a failed PATCH retries
+ * and asks HEAD where the server actually is, so a tunnel hiccup costs one
+ * chunk rather than the file. Across a reload, the upload id is kept in
+ * localStorage under a fingerprint of the file, and re-selecting the same file
+ * continues from the server's offset instead of starting from zero.
+ */
+async function uploadFileTus(file, { destination, chunkSize, onProgress, signal }) {
+  const resolvedChunkSize = await resolveChunkSize(chunkSize)
+  const fingerprint = tusFingerprint(file, destination)
+
+  let uploadId = null
+  let offset = 0
+
+  const remembered = localStorage.getItem(fingerprint)
+  if (remembered) {
+    try {
+      const head = await fileApi.tusHead(remembered)
+      const status = String(headerValue(head.headers, 'x-yuarcloud-status') || '')
+      const total = Number(headerValue(head.headers, 'upload-length'))
+      const serverOffset = Number(headerValue(head.headers, 'upload-offset'))
+      // Only a live session is resumable. "completed" already produced its
+      // file, and "failed" can never be patched again (the server answers 410),
+      // so reusing either id would turn every retry into the same error. Both
+      // fall through to a fresh creation.
+      const resumable = status === 'uploading' || status === 'finalizing'
+      if (resumable && total === file.size && Number.isFinite(serverOffset) && serverOffset >= 0) {
+        uploadId = remembered
+        offset = Math.min(serverOffset, file.size)
+      }
+    } catch {
+      // Expired or swept: fall through to a fresh creation.
+    }
+    if (!uploadId) localStorage.removeItem(fingerprint)
   }
 
-  throw lastError
+  if (!uploadId) {
+    const metadata = encodeTusMetadata({
+      filename: file.name,
+      parent_id: destination ?? '',
+      checksum: await sha256Hex(file),
+    })
+    const created = await fileApi.tusCreate({ size: file.size, metadata })
+    uploadId = tusIDFromLocation(headerValue(created.headers, 'location'))
+    if (!uploadId) throw new Error('the server did not return an upload location')
+    localStorage.setItem(fingerprint, uploadId)
+    offset = 0
+  }
+
+  if (offset > 0) {
+    // Resuming: show what the server already has rather than restarting at 0.
+    onProgress?.(Math.min(99, Math.round((offset * 100) / file.size)), offset)
+  }
+
+  try {
+    let attempt = 0
+    while (offset < file.size) {
+      if (signal?.aborted) throw new Error('upload cancelled')
+
+      const start = offset
+      const end = Math.min(start + resolvedChunkSize, file.size)
+      // The third argument makes the Blob itself carry tus' media type. The
+      // request header says the same thing, but axios' Node adapter overwrites
+      // Content-Type with blob.type for any Blob it sends, so a slice left with
+      // the picked file's own MIME type would be rejected as 415 there — and a
+      // browser extension or proxy that rebuilds the request would hit the same
+      // wall. Both sources now agree.
+      const blob = file.slice(start, end, 'application/offset+octet-stream')
+
+      try {
+        const response = await fileApi.tusPatch(uploadId, start, blob, (loaded) => {
+          const capped = Math.min(Math.max(Number(loaded) || 0, 0), blob.size)
+          const overall = Math.min(file.size, start + capped)
+          onProgress?.(Math.min(99, Math.round((overall * 100) / file.size)), overall)
+        })
+        const next = Number(headerValue(response.headers, 'upload-offset'))
+        if (!Number.isFinite(next) || next <= start) {
+          throw new Error('the server did not advance the upload offset')
+        }
+        offset = Math.min(next, file.size)
+        attempt = 0
+      } catch (error) {
+        if (signal?.aborted) throw new Error('upload cancelled')
+
+        const status = error?.response?.status
+        // 409 is the protocol's "your offset is stale": recover by asking
+        // HEAD. Any other 4xx means the session itself is wrong.
+        if (status && status >= 400 && status < 500 && status !== 409) throw error
+
+        attempt += 1
+        if (attempt > TUS_CHUNK_ATTEMPTS) throw error
+        await sleep(500 * 2 ** (attempt - 1))
+
+        try {
+          const head = await fileApi.tusHead(uploadId)
+          const serverOffset = Number(headerValue(head.headers, 'upload-offset'))
+          if (Number.isFinite(serverOffset) && serverOffset >= 0) {
+            offset = Math.min(serverOffset, file.size)
+          }
+        } catch {
+          // Keep the last known offset and retry the PATCH.
+        }
+      }
+    }
+
+    onProgress?.(99, file.size)
+    const record = await waitForTusCompletion(uploadId, file.size, signal, onProgress)
+    localStorage.removeItem(fingerprint)
+    onProgress?.(100, file.size)
+    return record
+  } catch (error) {
+    if (signal?.aborted) {
+      // The user cancelled: they do not intend to resume, so reclaim the disk
+      // now instead of waiting for the sweep interval.
+      try {
+        await fileApi.tusDelete(uploadId)
+      } catch {
+        /* the sweeper will reclaim it */
+      }
+      localStorage.removeItem(fingerprint)
+    }
+    throw error
+  }
 }
 
 /**
@@ -231,61 +445,26 @@ export async function uploadFileChunked(file, options = {}) {
     form.append('file', file, file.name)
     if (destination) form.append('parent_id', destination)
 
-    const response = await fileApi.upload(form, ({ pct, loaded }) => onProgress?.(pct, loaded))
-    return response.data
+    try {
+      const response = await fileApi.upload(form, ({ pct, loaded }) => onProgress?.(pct, loaded))
+      return response.data
+    } catch (error) {
+      // The chunked path already turns its failures into a sentence. The simple
+      // path rethrew the raw axios error, so the tray showed
+      // "timeout of 30000ms exceeded" or "Network Error" while a human message
+      // was one call away. It also left the row on "uploading" until the catch
+      // in uploadFilesWithConcurrency happened to fire.
+      const message = apiError(error, `Failed to upload ${file.name}`)
+      onError?.(message)
+      throw new Error(message)
+    }
   }
 
-  const resolvedChunkSize = await resolveChunkSize(chunkSize)
-  const totalChunks = Math.ceil(file.size / resolvedChunkSize)
-  const checksum = await sha256Hex(file)
-
-  const init = await fileApi.initChunked({
-    filename: file.name,
-    total_size: file.size,
-    chunk_size: resolvedChunkSize,
-    total_chunks: totalChunks,
-    checksum,
-    parent_id: destination ?? undefined,
-  })
-  const uploadId = init.data.upload_id
-
-  // Bytes already committed by finished chunks. Progress inside the chunk in
-  // flight is added on top of this, so the reported count is always "sent so
-  // far across the whole file" rather than a position that resets each chunk.
-  let committed = 0
-
-  try {
-    for (let index = 0; index < totalChunks; index += 1) {
-      if (signal?.aborted) throw new Error('upload cancelled')
-
-      const start = index * resolvedChunkSize
-      const end = Math.min(start + resolvedChunkSize, file.size)
-      const blob = file.slice(start, end)
-
-      await sendChunkWithRetry(uploadId, index, blob, signal, ({ loaded }) => {
-        const sent = committed + Math.min(loaded, blob.size)
-        onProgress?.(Math.round((sent * 100) / file.size), sent)
-      })
-
-      // Progress across the whole file, not just the current chunk.
-      committed = Math.min(end, file.size)
-      onProgress?.(Math.round((committed * 100) / file.size), committed)
-    }
-
-    const done = await fileApi.completeChunked(uploadId)
-    onProgress?.(100, file.size)
-    return done.data
-  } catch (error) {
-    // Best-effort cleanup so temp chunks are not left behind.
-    try {
-      await fileApi.cancelChunked(uploadId)
-    } catch {
-      /* the server's expiry sweep will reclaim it */
-    }
+  return uploadFileTus(file, { destination, chunkSize, onProgress, signal }).catch((error) => {
     const message = apiError(error, `Failed to upload ${file.name}`)
     onError?.(message)
     throw new Error(message)
-  }
+  })
 }
 
 /**

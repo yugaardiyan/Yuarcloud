@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ArrowUpDown } from 'lucide-react'
+import { ArrowUpDown } from 'lucide-react'
 import { useFiles } from '../context/FileContext'
 import { useContextMenu } from './ContextMenuProvider'
 import { formatBytes, formatDate } from '../utils/helpers'
@@ -25,13 +25,11 @@ function readStoredWidth() {
 function FileList({ onOpen, onDownload, onFile }) {
   const {
     items, view, selected, select, selectAll, clearSelection,
-    isSelected, openFolder, downloadItem, sort, toggleSort,
+    isSelected, openFolder, downloadItem, sort, toggleSort, selectMode,
   } = useFiles()
   const { openMenu } = useContextMenu()
   const listRef = useRef(null)
   const { itemProps } = useDragMove()
-  const longPressTimer = useRef(null)
-  const longPressTriggered = useRef(false)
 
   // null until the user drags, so the column starts on the responsive behaviour
   // and only pins itself once there is a width of theirs to honour.
@@ -207,38 +205,6 @@ function FileList({ onOpen, onDownload, onFile }) {
       {items.map((item) => {
         const active = isSelected(item.id)
         const drag = itemProps(item)
-        const handleTouchStart = (e) => {
-          longPressTriggered.current = false
-          longPressTimer.current = setTimeout(() => {
-            longPressTriggered.current = true
-            select(item.id, { additive: true })
-            e.preventDefault()
-          }, 500)
-        }
-        const handleTouchMove = () => {
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current)
-            longPressTimer.current = null
-          }
-        }
-        const handleTouchEnd = (e) => {
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current)
-            longPressTimer.current = null
-          }
-          if (longPressTriggered.current) {
-            e.preventDefault()
-            longPressTriggered.current = false
-            return
-          }
-        }
-        const handleTouchCancel = () => {
-          if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current)
-            longPressTimer.current = null
-          }
-          longPressTriggered.current = false
-        }
         return (
           <div
             key={item.id}
@@ -255,45 +221,39 @@ function FileList({ onOpen, onDownload, onFile }) {
             onDragEnter={drag.onDragEnter}
             onDragLeave={drag.onDragLeave}
             onDrop={drag.onDrop}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onTouchCancel={handleTouchCancel}
             onClick={(e) => {
               if (e.detail === 2) return
-              if (longPressTriggered.current) {
-                longPressTriggered.current = false
+              // In select mode a plain tap toggles selection instead of opening
+              // the item — that is the point of "Select" from the context menu.
+              if (selectMode) {
+                select(item.id, { additive: true })
                 return
               }
               select(item.id, { additive: e.metaKey || e.ctrlKey, range: e.shiftKey })
             }}
-            onDoubleClick={(e) => { e.preventDefault(); activate(item) }}
+            onDoubleClick={(e) => {
+              e.preventDefault()
+              if (selectMode) select(item.id, { additive: true }); else activate(item)
+            }}
             onContextMenu={(e) => {
-              if (longPressTriggered.current) {
-                e.preventDefault()
-                longPressTriggered.current = false
-                return
-              }
               openMenu(e, item.id, active && selected.size > 1)
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(item) }
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                if (selectMode) select(item.id, { additive: true }); else activate(item)
+              }
             }}
           >
             <div className={`file-icon file-icon-sm ${iconClassFor(item)}`}>
               <FileIcon item={item} />
-              {active && (
-                <span className="file-check file-check-sm" aria-hidden="true">
-                  <Check size={10} />
-                </span>
-              )}
             </div>
 
             <span className="file-name flex-1" title={item.name}>{item.name}</span>
             <span className="file-col-size">{item.is_dir ? '—' : formatBytes(item.size)}</span>
             <span className="file-col-date">{item.updated_at ? formatDate(item.updated_at) : '—'}</span>
 
-            <FileMenuButton item={item} multi={active && selected.size > 1} />
+            <FileMenuButton item={item} />
           </div>
         )
       })}

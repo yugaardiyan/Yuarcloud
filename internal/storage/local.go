@@ -31,9 +31,16 @@ const InternalPrefix = ".yuarcloud"
 type LocalStorage struct {
 	rootDir       string
 	tempDir       string
+	tusDir        string
 	limits        *Limits
 	mu            sync.RWMutex
 	activeUploads map[string]*UploadSession
+
+	// tusLocks serialises the append, finalise and remove of one tus upload.
+	// The handler already holds a per-request lock, but the background sweeper
+	// can remove a session while a PATCH is writing to it, and neither side
+	// sees the other's gin context.
+	tusLocks sync.Map
 }
 
 // isInternal reports whether a single directory entry belongs to the server.
@@ -73,9 +80,23 @@ func NewLocalStorageWithLimits(cfg *config.Config, limits *Limits) (*LocalStorag
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 
+	// Tus partial data lives beside the user's files, not under tempDir.
+	//
+	// Two reasons. sweepOrphanedChunks deletes every directory under tempDir at
+	// startup, which would silently destroy exactly the uploads that are
+	// supposed to survive a restart. And keeping it on the storage volume makes
+	// finalisation a same-filesystem rename, so a 50 GB upload finishes without
+	// a second 50 GB copy. The leading InternalPrefix keeps it out of listings
+	// and out of reach of client-supplied paths.
+	tusDir := filepath.Join(rootDir, InternalPrefix+"-tus")
+	if err := os.MkdirAll(tusDir, 0755); err != nil {
+		return nil, fmt.Errorf("create tus dir: %w", err)
+	}
+
 	ls := &LocalStorage{
 		rootDir:       rootDir,
 		tempDir:       tempDir,
+		tusDir:        tusDir,
 		limits:        limits,
 		activeUploads: make(map[string]*UploadSession),
 	}

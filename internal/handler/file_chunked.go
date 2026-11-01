@@ -113,6 +113,30 @@ func (h *FileHandler) InitChunkedUpload(c *gin.Context) {
 		return
 	}
 
+	// A chunked upload briefly needs room for two copies: the chunk files, and
+	// the assembled file they are copied into. The final file is only renamed
+	// into place after the chunks have all been read, so it is not possible to
+	// reclaim them early without losing the ability to retry a failed assembly.
+	// Check before a single byte is sent — discovering this at the end wastes
+	// hours of the client's uplink and leaves the chunks behind.
+	//
+	// A failure to stat the volume is not treated as "no space": that would
+	// refuse every upload on a platform where GetDiskUsage is unavailable, so
+	// the check only acts on a positive, successful reading.
+	required := req.TotalSize
+	if req.TotalSize < (1 << 62) {
+		required = req.TotalSize * 2
+	}
+	if _, free, err := h.storage.GetDiskUsage(context.Background(), ""); err == nil && free > 0 && required > free {
+		c.JSON(http.StatusInsufficientStorage, gin.H{
+			"error":    fmt.Sprintf("not enough free disk space: this upload needs %d bytes free for chunks and assembly", required),
+			"disk":     true,
+			"free":     free,
+			"required": required,
+		})
+		return
+	}
+
 	// Create upload session. The TTL is a floor, not the real deadline: every chunk
 	// pushes ExpiresAt forward (see WriteChunk), so what actually ends an upload
 	// is going quiet for one cleanup interval, not this number. That is what lets
@@ -170,6 +194,11 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	uploadID := c.Param("uploadId")
 	chunkIndexStr := c.Param("chunkIndex")
+
+	// A chunk is small by contract, but the link carrying it can still be slow
+	// enough to outlive a 30s deadline — especially the first one, before the
+	// connection has warmed up.
+	liftTransferDeadlines(c)
 
 	chunkIndex := 0
 	if _, err := fmt.Sscanf(chunkIndexStr, "%d", &chunkIndex); err != nil {
@@ -252,9 +281,26 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	})
 }
 
+// chunkedAsyncAssemblyThreshold is where completion stops waiting for the
+// assembled bytes before answering.
+//
+// Assembly has to read every chunk, write the final file and hash it. At
+// spinning-disk speeds a 50 GB file is minutes of work, and Cloudflare closes a
+// proxied request at roughly 100–125 seconds no matter what the origin's own
+// timeouts say. A synchronous complete therefore turned a successful upload
+// into a 524 at the very last step. Up to this size it is still fast enough to
+// answer in the request; above it, the work moves to a goroutine and the client
+// polls /status. Tests lower this to exercise the async path with tiny files.
+var chunkedAsyncAssemblyThreshold int64 = 2 * 1024 * 1024 * 1024 // 2 GiB
+
 func (h *FileHandler) CompleteChunkedUpload(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	uploadID := c.Param("uploadId")
+
+	// Assembly rewrites every chunk into the final file and re-reads it for the
+	// checksum. On a multi-gigabyte upload that outlives the response deadline
+	// even though the client is only waiting for a small JSON body.
+	liftTransferDeadlines(c)
 
 	var session model.UploadSession
 	if err := h.db.First(&session, "id = ? AND user_id = ?", uploadID, userID).Error; err != nil {
@@ -303,19 +349,56 @@ func (h *FileHandler) CompleteChunkedUpload(c *gin.Context) {
 		return
 	}
 
-	// Assemble chunks. The returned length is what was measured on disk, and it
-	// is what gets stored and charged — session.TotalSize is the client's claim,
-	// and using it here would let a session that declared a byte write a
-	// terabyte while used_bytes recorded one.
-	assembledSize, err := h.storage.AssembleChunks(context.Background(), uploadID, session.TargetPath, session.TotalChunks, session.Checksum)
+	// Large uploads finish out of band. The goroutine gets copies of what it
+	// needs from the request, because *gin.Context is not valid once this
+	// handler returns.
+	if session.TotalSize >= chunkedAsyncAssemblyThreshold {
+		ip := c.ClientIP()
+		userAgent := c.GetHeader("User-Agent")
+		go h.finishChunkedUploadAsync(&session, userID, ip, userAgent)
+
+		c.JSON(http.StatusAccepted, gin.H{
+			"upload_id": uploadID,
+			"status":    "completing",
+			"message":   "upload received; finalising on the server",
+		})
+		return
+	}
+
+	file, err := h.finishChunkedUpload(&session)
 	if err != nil {
+		// Nothing was registered, so the chunks are still the client's to
+		// retry with — put the session back where it was.
+		release()
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Create file record
+	logAudit(h.db, c, userID, "upload_chunked", "file", &file.ID, fmt.Sprintf("Uploaded (chunked): %s", session.Filename))
+	c.JSON(http.StatusCreated, model.ToFileResponse(file))
+}
+
+// finishChunkedUpload turns a fully-received session into a file row.
+//
+// Shared by the synchronous and background completion paths so the two cannot
+// drift: the order of assemble, register, charge and clean up is the part that
+// has to stay identical. It reports failures to the caller and never changes
+// the session status on them; the sync path releases the claim for a retry, the
+// async path marks it failed because there is no request left to retry from.
+func (h *FileHandler) finishChunkedUpload(session *model.UploadSession) (*model.File, error) {
+	uploadID := session.ID.String()
+
+	// The returned length is what was measured on disk, and it is what gets
+	// stored and charged — session.TotalSize is the client's claim, and using it
+	// here would let a session that declared a byte write a terabyte while
+	// used_bytes recorded one.
+	assembledSize, err := h.storage.AssembleChunks(context.Background(), uploadID, session.TargetPath, session.TotalChunks, session.Checksum)
+	if err != nil {
+		return nil, err
+	}
+
 	file := &model.File{
-		UserID:      userID,
+		UserID:      session.UserID,
 		ParentID:    session.ParentID,
 		Name:        session.Filename,
 		Path:        session.TargetPath,
@@ -338,19 +421,18 @@ func (h *FileHandler) CompleteChunkedUpload(c *gin.Context) {
 		if rows == 0 {
 			h.storage.Remove(context.Background(), session.TargetPath)
 		}
-		release()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create file record"})
-		return
+		return nil, fmt.Errorf("failed to create file record")
 	}
 
-	// Update user storage usage
-	h.db.Model(&model.User{}).Where("id = ?", userID).UpdateColumn("used_bytes", gorm.Expr("used_bytes + ?", assembledSize))
+	h.db.Model(&model.User{}).
+		Where("id = ?", session.UserID).
+		UpdateColumn("used_bytes", gorm.Expr("used_bytes + ?", assembledSize))
 
-	// Mark session complete
-	h.db.Model(&session).Updates(map[string]interface{}{
-		"status":     "completed",
-		"file_id":    file.ID,
-		"updated_at": time.Now(),
+	h.db.Model(session).Updates(map[string]interface{}{
+		"status":        "completed",
+		"file_id":       file.ID,
+		"error_message": "",
+		"updated_at":    time.Now(),
 	})
 
 	// Cleanup temp chunks and release the in-memory session — same reason as the
@@ -358,9 +440,30 @@ func (h *FileHandler) CompleteChunkedUpload(c *gin.Context) {
 	h.storage.CleanupChunks(context.Background(), uploadID)
 	h.storage.DeleteUploadSession(uploadID)
 
-	logAudit(h.db, c, userID, "upload_chunked", "file", &file.ID, fmt.Sprintf("Uploaded (chunked): %s", session.Filename))
+	return file, nil
+}
 
-	c.JSON(http.StatusCreated, model.ToFileResponse(file))
+func (h *FileHandler) finishChunkedUploadAsync(session *model.UploadSession, userID uuid.UUID, ip, userAgent string) {
+	uploadID := session.ID.String()
+
+	file, err := h.finishChunkedUpload(session)
+	if err != nil {
+		h.db.Model(&model.UploadSession{}).Where("id = ?", uploadID).Updates(map[string]interface{}{
+			"status":        "failed",
+			"error_message": err.Error(),
+			"updated_at":    time.Now(),
+		})
+		// A failed assembly cannot be retried through this session: the status
+		// is no longer "uploading", and the chunks have already been read once.
+		// Leaving up to 50 GB in the temp directory for a session nothing can
+		// reach is worse than asking the client to send it again.
+		h.storage.CleanupChunks(context.Background(), uploadID)
+		h.storage.DeleteUploadSession(uploadID)
+		return
+	}
+
+	logAuditClient(h.db, userID, "upload_chunked", "file", &file.ID,
+		fmt.Sprintf("Uploaded (chunked): %s", session.Filename), ip, userAgent)
 }
 
 func (h *FileHandler) GetUploadStatus(c *gin.Context) {
@@ -378,7 +481,7 @@ func (h *FileHandler) GetUploadStatus(c *gin.Context) {
 		progress = float64(session.UploadedChunks) / float64(session.TotalChunks) * 100
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"id":              session.ID,
 		"filename":        session.Filename,
 		"target_path":     session.TargetPath,
@@ -390,7 +493,23 @@ func (h *FileHandler) GetUploadStatus(c *gin.Context) {
 		"progress":        progress,
 		"created_at":      session.CreatedAt,
 		"expires_at":      session.ExpiresAt,
-	})
+	}
+	if session.ErrorMessage != "" {
+		resp["error"] = session.ErrorMessage
+	}
+	// The completion response for a background assembly is only "accepted", so
+	// the file record has to come from here once the work is done. Without it a
+	// polling client knows the upload succeeded but not what it created, and
+	// cannot refresh the folder or open the file.
+	if session.Status == "completed" && session.FileID != nil {
+		var file model.File
+		if err := scoped(reqScope(c), h.db).
+			First(&file, "id = ? AND user_id = ?", *session.FileID, userID).Error; err == nil {
+			resp["file"] = toResponse(reqScope(c), &file)
+		}
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *FileHandler) CancelUpload(c *gin.Context) {

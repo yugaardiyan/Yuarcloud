@@ -34,7 +34,16 @@ const PERMISSION = {
   write: { label: 'Edit', icon: Upload },
 }
 
-export default function ShareModal({ fileId, fileName, isDir = false, onClose, onCreated }) {
+export default function ShareModal({ fileId, fileIds, fileName, isDir = false, onClose, onCreated }) {
+  // A multi-item share sends its whole set and opens one public page listing
+  // all of it. The single-item form keeps sending file_id, so older callers
+  // and the server's original contract are unchanged.
+  const ids = Array.isArray(fileIds) && fileIds.length ? fileIds : (fileId ? [fileId] : [])
+  const primaryId = ids[0]
+  const isMulti = ids.length > 1
+  const canWrite = !!isDir && !isMulti
+  const subject = `"${isMulti ? (fileName || `${ids.length} items`) : fileName}"`
+
   // Register as an open surface so document-level shortcuts stand down.
   // See utils/keyboardOwner — a shortcut asking "is anything open?" cannot be
   // defeated by a new overlay class it does not know about.
@@ -66,8 +75,13 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
   // Memoised so the effect below can name it as a dependency instead of
   // suppressing the rule. `fileId` is the only thing it reads.
   const loadShares = useCallback(async () => {
+    if (!primaryId) {
+      setShares([])
+      setLoadingShares(false)
+      return
+    }
     try {
-      const response = await shareApi.list(fileId)
+      const response = await shareApi.list(primaryId)
       const list = Array.isArray(response?.data?.shares) ? response.data.shares : []
       setShares(list)
     } catch (error) {
@@ -76,7 +90,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
     } finally {
       setLoadingShares(false)
     }
-  }, [fileId])
+  }, [primaryId])
 
   // After loadShares, not before: a dependency array is evaluated where it is
   // written, so naming a `const` declared further down throws.
@@ -122,10 +136,10 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
     setLoading(true)
     try {
       await shareApi.create({
-        file_id: fileId,
+        ...(isMulti ? { file_ids: ids } : { file_id: primaryId }),
         password: formData.password || undefined,
         expiry_days: formData.expiryDays,
-        permission: formData.permission,
+        permission: canWrite ? formData.permission : 'read',
       })
       toast.success('Share link created')
       setFormData({ password: '', expiryDays: 7, permission: 'read' })
@@ -187,7 +201,7 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
               the file it is a list to review, not a form to fill in, so saying
               "Share" over a list read as the wrong verb. */}
           <h2 id="share-modal-title" className="modal-title">
-            {visibleShares.length > 0 ? 'Existing Share links' : 'Share'} "{fileName}"
+            {visibleShares.length > 0 ? 'Existing Share links' : 'Share'} {subject}
           </h2>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             <X size={15} />
@@ -272,11 +286,12 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
               <div className="share-form-row">
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--text-primary)' }}>
-                    Password (optional)
+                    Password
                   </label>
                   <input
                     type="password"
                     className="input input-capsule"
+                    placeholder="Optional"
                     value={formData.password}
                     onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                     autoComplete="new-password"
@@ -309,11 +324,11 @@ export default function ShareModal({ fileId, fileName, isDir = false, onClose, o
                 <div className="share-perm-picker" role="radiogroup" aria-label="Access permission">
                   {[
                     { value: 'read', label: 'View', icon: Eye, desc: 'Visitors can view and download.' },
-                    { value: 'write', label: 'Edit', icon: Upload, desc: isDir ? 'Visitors can also upload into this folder.' : 'Available for folders only.' },
+                    { value: 'write', label: 'Edit', icon: Upload, desc: canWrite ? 'Visitors can also upload into this folder.' : (isMulti ? 'Available for a single folder only.' : 'Available for folders only.') },
                   ].map((opt) => {
                     const Icon = opt.icon
                     const active = formData.permission === opt.value
-                    const disabled = opt.value === 'write' && !isDir
+                    const disabled = opt.value === 'write' && !canWrite
                     return (
                       <button
                         key={opt.value}

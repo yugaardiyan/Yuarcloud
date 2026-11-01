@@ -686,6 +686,7 @@ function ChunkedConfigTab({ config }) {
     max_chunk_size_mb: 10,
     max_file_size_gb: 10,
     max_concurrent_uploads: 3,
+    max_parallel_chunks: 3,
     cleanup_interval: '1h',
   })
   const [loading, setLoading] = useState(false)
@@ -696,6 +697,7 @@ function ChunkedConfigTab({ config }) {
         max_chunk_size_mb: Math.round(config.max_chunk_size / 1048576),
         max_file_size_gb: Math.round(config.max_file_size / 1073741824),
         max_concurrent_uploads: config.max_concurrent_uploads ?? 3,
+        max_parallel_chunks: config.max_parallel_chunks ?? 3,
         cleanup_interval: cleanupOptionValue(config.cleanup_interval),
       })
     }
@@ -709,11 +711,24 @@ function ChunkedConfigTab({ config }) {
     setLoading(true)
     try {
       const chunkMb = formData.max_chunk_size_mb === '' ? config.max_chunk_size / 1048576 : Number(formData.max_chunk_size_mb)
+      const fileGb = Number(formData.max_file_size_gb)
       const parallel = formData.max_concurrent_uploads === '' ? config.max_concurrent_uploads : Number(formData.max_concurrent_uploads)
+      const parallelChunks = formData.max_parallel_chunks === '' ? config.max_parallel_chunks : Number(formData.max_parallel_chunks)
+
+      // An empty or half-typed field used to reach the API as NaN/null, which
+      // the server read as "leave the stored value alone" while the toast still
+      // said saved. 10, 20 and 50 GB are all valid; anything that is not a
+      // positive whole number is not a limit at all.
+      if (!Number.isFinite(fileGb) || fileGb < 1) {
+        toast.error('Max File Size must be at least 1 GB')
+        return
+      }
+
       await adminApi.updateChunkedConfig({
         max_chunk_size: chunkMb * 1048576,
-        max_file_size: Number(formData.max_file_size_gb) * 1073741824,
+        max_file_size: Math.round(fileGb) * 1073741824,
         max_concurrent_uploads: parallel,
+        max_parallel_chunks: parallelChunks,
         cleanup_interval: formData.cleanup_interval,
       })
       toast.success('Chunked upload configuration saved')
@@ -755,8 +770,9 @@ function ChunkedConfigTab({ config }) {
               onChange={(e) => setFormData({ ...formData, max_chunk_size_mb: e.target.value })}
               min={1}
               max={100}
+              placeholder="10-50"
             />
-            <span className="input-hint" aria-hidden="true">5–10 MB is best</span>
+            <span className="input-hint" aria-hidden="true">10-50 MB Recommended</span>
           </div>
         </div>
 
@@ -767,13 +783,15 @@ function ChunkedConfigTab({ config }) {
             type="number"
             className="input input-capsule"
             value={formData.max_file_size_gb}
-            onChange={(e) => setFormData({ ...formData, max_file_size_gb: parseInt(e.target.value) || 10 })}
+            onChange={(e) => setFormData({ ...formData, max_file_size_gb: e.target.value })}
             min={1}
+            step={1}
+            placeholder="10, 20 or 50"
           />
         </div>
 
         <div>
-          <label className="field-label" htmlFor="concurrent-uploads">Parallel Uploads</label>
+          <label className="field-label" htmlFor="concurrent-uploads">Parallel Uploads (files)</label>
           <div className="input-wrap">
             <input
               id="concurrent-uploads"
@@ -785,6 +803,22 @@ function ChunkedConfigTab({ config }) {
               max={10}
             />
             <span className="input-hint" aria-hidden="true">1–10, 3 is good</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="parallel-chunks">Parallel Chunks (per file)</label>
+          <div className="input-wrap">
+            <input
+              id="parallel-chunks"
+              type="number"
+              className="input input-capsule input-inline-hint"
+              value={formData.max_parallel_chunks}
+              onChange={(e) => setFormData({ ...formData, max_parallel_chunks: e.target.value })}
+              min={1}
+              max={10}
+            />
+            <span className="input-hint" aria-hidden="true">1–10, 3 recommended</span>
           </div>
         </div>
 

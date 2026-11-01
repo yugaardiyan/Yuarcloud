@@ -93,32 +93,63 @@ func (s *ShareService) tokenExists(token string) (bool, error) {
 	return count > 0, nil
 }
 
+// CreateShare is the single-item entry point. It is the same logic as
+// CreateShareFiles with a one-element set, so single and multi links cannot
+// diverge on expiry, password policy or the one-share-per-item rule.
 func (s *ShareService) CreateShare(ctx context.Context, userID, fileID uuid.UUID, password string, expiryDays, maxViews int, permission string) (*model.ShareLink, error) {
+	return s.CreateShareFiles(ctx, userID, []uuid.UUID{fileID}, password, expiryDays, maxViews, permission)
+}
+
+// CreateShareFiles creates one link covering every id in fileIDs. A single id
+// keeps the historical shape (FileID only); two or more also write a row per
+// item, ordered the way the caller sent them, which is what the public page
+// lists.
+func (s *ShareService) CreateShareFiles(ctx context.Context, userID uuid.UUID, fileIDs []uuid.UUID, password string, expiryDays, maxViews int, permission string) (*model.ShareLink, error) {
+	ids := make([]uuid.UUID, 0, len(fileIDs))
+	seen := make(map[uuid.UUID]struct{}, len(fileIDs))
+	for _, id := range fileIDs {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, ErrShareNotFound
+	}
+
 	// A file can only carry one share link at a time so the popup never
-	// accumulates a stack of links. The owner must delete the existing
-	// link before creating a new one.
-	var existing model.ShareLink
-	err := s.db.WithContext(ctx).Where("file_id = ?", fileID).First(&existing).Error
-	switch {
-	case err == nil:
-		// A lapsed link is invisible in every listing, so refusing here would
-		// leave the file permanently unshareable: the owner has nothing to
-		// delete. Replace it instead.
-		if existing.ExpiresAt == nil || time.Now().Before(*existing.ExpiresAt) {
-			return nil, ErrShareAlreadyExists
+	// accumulates a stack of links. That rule now has to look inside bundles
+	// too: sharing B as part of [A B] must count as B already being shared.
+	// A lapsed link is invisible in every listing, so it is replaced rather
+	// than refused — otherwise the member would have nothing they could delete.
+	for _, id := range ids {
+		var existing model.ShareLink
+		err := s.db.WithContext(ctx).
+			Where("file_id = ? OR id IN (?)", id,
+				s.db.Model(&model.ShareLinkItem{}).Select("share_link_id").Where("file_id = ?", id)).
+			First(&existing).Error
+		switch {
+		case err == nil:
+			if existing.ExpiresAt == nil || time.Now().Before(*existing.ExpiresAt) {
+				return nil, ErrShareAlreadyExists
+			}
+			if delErr := s.db.WithContext(ctx).Delete(&existing).Error; delErr != nil {
+				return nil, delErr
+			}
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			// Nothing to replace.
+		default:
+			return nil, err
 		}
-		if delErr := s.db.WithContext(ctx).Delete(&existing).Error; delErr != nil {
-			return nil, delErr
-		}
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		// Nothing to replace.
-	default:
-		return nil, err
 	}
 
 	if expiryDays < 0 {
 		// Sentinel for "no expiry": leave ExpiresAt nil so the link
-		// lives until the owner deletes the file or the share itself.
+		// lives until the member deletes the file or the share itself.
 	} else if expiryDays == 0 {
 		expiryDays = s.defaultExpiry
 	}
@@ -163,7 +194,7 @@ func (s *ShareService) CreateShare(ctx context.Context, userID, fileID uuid.UUID
 
 	share := &model.ShareLink{
 		UserID:       userID,
-		FileID:       fileID,
+		FileID:       ids[0],
 		Token:        token,
 		PasswordHash: passwordHash,
 		ExpiresAt:    expiresAt,
@@ -172,7 +203,28 @@ func (s *ShareService) CreateShare(ctx context.Context, userID, fileID uuid.UUID
 		Permission:   permission,
 	}
 
-	if err := s.db.WithContext(ctx).Create(share).Error; err != nil {
+	// One transaction: a link whose item rows half-failed would open a page
+	// that lists a different set than the owner chose.
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(share).Error; err != nil {
+			return err
+		}
+		if len(ids) < 2 {
+			return nil
+		}
+		for i, id := range ids {
+			item := &model.ShareLinkItem{
+				ShareLinkID: share.ID,
+				FileID:      id,
+				Position:    i,
+			}
+			if err := tx.Create(item).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -184,6 +236,10 @@ func (s *ShareService) GetShareByToken(ctx context.Context, token string) (*mode
 	if err := s.db.WithContext(ctx).
 		Preload("User").
 		Preload("File").
+		Preload("Items", func(db *gorm.DB) *gorm.DB {
+			return db.Order("position ASC")
+		}).
+		Preload("Items.File").
 		Where("token = ? AND is_active = ?", token, true).
 		First(&share).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -220,7 +276,15 @@ func (s *ShareService) ValidateShare(ctx context.Context, token, password string
 	// browse endpoint followed it there. Trashing is supposed to take the item
 	// out of circulation; a share link quietly undid that, for anyone holding
 	// the token, with no expiry and no view cap involved.
-	if share.File.ID == uuid.Nil || share.File.IsTrashed {
+	//
+	// A multi-item link is judged by its set: the first item may have been
+	// trashed while the rest are still shared, and the page can simply leave
+	// that one out. Only a set with nothing live left is gone.
+	if len(share.Items) == 0 {
+		if share.File.ID == uuid.Nil || share.File.IsTrashed {
+			return nil, ErrShareNotFound
+		}
+	} else if len(LiveShareFiles(share)) == 0 {
 		return nil, ErrShareNotFound
 	}
 
@@ -282,6 +346,26 @@ const (
 	shareTokenLength = 6
 )
 
+// LiveShareFiles is the item set a public request may serve: the rows of a
+// multi-item link, in the owner's order, with anything trashed or vanished
+// left out. A single-item link has no rows and falls back to its File.
+func LiveShareFiles(s *model.ShareLink) []model.File {
+	if len(s.Items) == 0 {
+		if s.File.ID == uuid.Nil || s.File.IsTrashed {
+			return nil
+		}
+		return []model.File{s.File}
+	}
+	files := make([]model.File, 0, len(s.Items))
+	for _, item := range s.Items {
+		if item.File.ID == uuid.Nil || item.File.IsTrashed {
+			continue
+		}
+		files = append(files, item.File)
+	}
+	return files
+}
+
 // Status reports whether a link can still be opened, using the same checks as
 // ValidateShare.
 func Status(s *model.ShareLink) string {
@@ -326,6 +410,10 @@ func (s *ShareService) GetUserShares(ctx context.Context, userID uuid.UUID, page
 	offset := (page - 1) * pageSize
 	if err := query.
 		Preload("File").
+		Preload("Items", func(db *gorm.DB) *gorm.DB {
+			return db.Order("position ASC")
+		}).
+		Preload("Items.File").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
@@ -351,6 +439,10 @@ func (s *ShareService) GetAllShares(ctx context.Context, page, pageSize int) ([]
 	offset := (page - 1) * pageSize
 	if err := liveShares(s.db.WithContext(ctx).Model(&model.ShareLink{})).
 		Preload("File").
+		Preload("Items", func(db *gorm.DB) *gorm.DB {
+			return db.Order("position ASC")
+		}).
+		Preload("Items.File").
 		// Select the three owner columns inside a closure. Passing bare strings
 		// as trailing args to Preload does not restrict the columns — they are
 		// folded into the query's conditions, which then match no row, and the
