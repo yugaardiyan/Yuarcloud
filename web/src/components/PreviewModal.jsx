@@ -82,6 +82,19 @@ function warmPreviewToken(fileId) {
     .catch(() => {})
 }
 
+// The width the image viewer asks the server for, in device pixels. A photo is
+// drawn at most one screen wide, so pulling the original over a slow link
+// spends bytes on detail no display can show; the server renders this size
+// instead and caches it. It is clamped so a phone does not download a desktop's
+// worth of pixels, and computed once so the URL — and the browser's copy of the
+// bytes — stays stable across opens.
+const PREVIEW_WIDTH = (() => {
+  if (typeof window === 'undefined') return 2048
+  const dpr = window.devicePixelRatio || 1
+  const pixels = Math.ceil((window.innerWidth || 1024) * dpr)
+  return Math.min(2560, Math.max(1024, pixels))
+})()
+
 export default function PreviewModal({
   item, items, onNavigate, onClose, onDownload,
   // Overrides so the viewer can be pointed at a source other than the signed-in
@@ -208,8 +221,8 @@ export default function PreviewModal({
   const streamUrl = !item
     ? null
     : needsPreviewToken
-      ? (previewToken ? streamUrlFor(item, previewToken) : null)
-      : streamUrlFor(item)
+      ? (previewToken ? streamUrlFor(item, previewToken, PREVIEW_WIDTH) : null)
+      : streamUrlFor(item, undefined, PREVIEW_WIDTH)
   const blobUrl = item ? fetchUrlFor(item) : null
 
   useEffect(() => {

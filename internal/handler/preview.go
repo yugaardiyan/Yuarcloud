@@ -152,6 +152,14 @@ func (h *FileHandler) PreviewFile(c *gin.Context) {
 		return
 	}
 
+	// A ?w= hint asks for a screen-sized copy instead of the original, which is
+	// what keeps a multi-megabyte photo from crossing a slow link in full. It is
+	// best-effort: anything ServeThumb cannot render falls through to the
+	// original below.
+	if h.thumbs != nil && h.thumbs.ServeThumb(c, file, previewWidth(c.Query("w")), true) {
+		return
+	}
+
 	serveInline(c, h.storage, file, true)
 }
 

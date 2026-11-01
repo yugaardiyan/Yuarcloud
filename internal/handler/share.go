@@ -23,6 +23,9 @@ type ShareHandler struct {
 	db           *gorm.DB
 	shareService *share.ShareService
 	storage      storage.StorageBackend
+	// thumbs renders downscaled previews; nil disables the optimisation. See
+	// FileHandler.SetThumbService.
+	thumbs *ThumbService
 }
 
 func NewShareHandler(db *gorm.DB, shareService *share.ShareService, store storage.StorageBackend) *ShareHandler {
@@ -31,6 +34,12 @@ func NewShareHandler(db *gorm.DB, shareService *share.ShareService, store storag
 		shareService: shareService,
 		storage:      store,
 	}
+}
+
+// SetThumbService enables generated previews for shared files. Shared with the
+// FileHandler's instance so both draw from one render budget and one cache.
+func (h *ShareHandler) SetThumbService(thumbs *ThumbService) {
+	h.thumbs = thumbs
 }
 
 // Read through storage, not a copy taken at construction — see the note on
@@ -427,6 +436,14 @@ func (h *ShareHandler) PreviewSharedFile(c *gin.Context) {
 	// folder, which is what the browse list uses to preview in place.
 	target, ok := h.shareTargetIn(c, share.LiveShareFiles(shareLink))
 	if !ok {
+		return
+	}
+
+	// The downscaled copy matters here as much as on the signed-in path, so a
+	// visitor on a slow link is not made to pull the original. It is not marked
+	// cacheable, though: a share can be revoked, and a copy in the browser would
+	// outlive the revocation.
+	if h.thumbs != nil && h.thumbs.ServeThumb(c, target, previewWidth(c.Query("w")), false) {
 		return
 	}
 

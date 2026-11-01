@@ -130,6 +130,16 @@ func main() {
 	shareHandler := handler.NewShareHandler(db, shareService, store)
 	adminHandler := handler.NewAdminHandler(db, adminService, authService, shareService, store)
 
+	// Downscaled previews. If the cache directory cannot be created the feature
+	// is simply off and the endpoints stream originals as before — a missing
+	// preview cache must never stop the server from starting.
+	if thumbs, err := handler.NewThumbService(store, handler.DefaultPreviewCacheDir(cfg.Storage.Local.Root)); err != nil {
+		log.Printf("Warning: generated image previews disabled: %v", err)
+	} else if thumbs != nil {
+		fileHandler.SetThumbService(thumbs)
+		shareHandler.SetThumbService(thumbs)
+	}
+
 	// Re-apply whatever an admin last saved, so the panel's settings survive a
 	// restart. The YAML values seeded the limits above; these win where set,
 	// because the panel is the newer intent.

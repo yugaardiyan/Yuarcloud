@@ -925,7 +925,7 @@ export default function ShareView() {
           onNavigate={() => {}}
           onClose={() => setPreviewFile(null)}
           onDownload={handleDownload}
-          streamUrlFor={() => shareApi.previewUrl(token, password, previewFile.path)}
+          streamUrlFor={(_item, _token, width) => shareApi.previewUrl(token, password, previewFile.path, width)}
           fetchUrlFor={() => shareApi.previewUrl(token, password, previewFile.path)}
           needsPreviewToken={false}
         />

@@ -28,6 +28,10 @@ type FileHandler struct {
 	// database status transition, which has to happen in the same critical
 	// section as the offset check or two PATCHes can both pass it.
 	tusLocks sync.Map
+	// thumbs renders downscaled previews. Nil disables the optimisation and
+	// every preview streams the original, which is how the tests run unless
+	// they opt in.
+	thumbs *ThumbService
 }
 
 func NewFileHandler(db *gorm.DB, storage storage.StorageBackend, authService *auth.AuthService) *FileHandler {
@@ -36,6 +40,14 @@ func NewFileHandler(db *gorm.DB, storage storage.StorageBackend, authService *au
 		storage:     storage,
 		authService: authService,
 	}
+}
+
+// SetThumbService enables generated previews. It is a setter rather than a
+// constructor argument so that every existing NewFileHandler caller — the
+// server and a dozen tests — keeps working unchanged, with the optimisation
+// simply off.
+func (h *FileHandler) SetThumbService(thumbs *ThumbService) {
+	h.thumbs = thumbs
 }
 
 // The ceilings are read from storage on every check rather than copied into the

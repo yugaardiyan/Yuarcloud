@@ -205,8 +205,14 @@ export const fileApi = {
 
   // Inline streaming URL for <img>/<video>/<audio>/<iframe>. Takes the file
   // record, not the id — PreviewModal hands one straight through.
-  previewUrl: (item, previewToken) =>
-    `/api/files/${item.id}/preview?token=${encodeURIComponent(previewToken || '')}`,
+  //
+  // `width` is the ?w= hint the image viewer sends: it asks the server for a
+  // screen-sized copy instead of the original, which is what stops a
+  // multi-megabyte photo crossing a slow link in full. It is ignored for every
+  // other kind, and a request without it is served the original.
+  previewUrl: (item, previewToken, width) =>
+    `/api/files/${item.id}/preview?token=${encodeURIComponent(previewToken || '')}` +
+    (width ? `&w=${width}` : ''),
 
   // Same endpoint, but without the query token, for the previewers that parse
   // in the browser (text, xlsx, docx) and therefore fetch with a header anyway.
@@ -305,9 +311,11 @@ export const shareApi = {
   },
   // Inline streaming URL for the share page's viewer. Public: the share token
   // in the path is the credential, which is also how the download link works.
-  previewUrl: (token, password, path) => {
+  // `width` carries the same ?w= hint as the signed-in URL.
+  previewUrl: (token, password, path, width) => {
     const query = new URLSearchParams({ password: password || '' })
     if (path) query.set('path', path)
+    if (width) query.set('w', String(width))
     return `/api/shares/${token}/preview?${query}`
   },
   // Public upload into a write-enabled shared folder.
