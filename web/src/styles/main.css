@@ -2358,12 +2358,18 @@ input.input[type='number'] {
 }
 
 /* The per-row cancel. Quiet until hovered: it sits beside the progress it
- * stops, so it must be easy to find without competing with the bar. */
+ * stops, so it must be easy to find without competing with the bar.
+ *
+ * Same 28px box as the header's `.icon-close`. It was 22px, and because the
+ * two are right-aligned at the same 12px padding the edges matched but the
+ * glyphs did not: a narrower box centres its icon 3px further right, so the
+ * row Xs sat visibly inside the header X's line. Matching the box puts every
+ * X on one vertical line. */
 .upload-row-cancel {
   flex-shrink: 0;
   align-self: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;

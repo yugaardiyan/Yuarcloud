@@ -139,7 +139,7 @@ export default function UploadTray() {
                 aria-label={`Cancel ${job.name}`}
                 title="Cancel upload"
               >
-                <X size={14} />
+                <X size={15} />
               </button>
             )}
           </div>
