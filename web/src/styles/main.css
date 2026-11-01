@@ -4828,14 +4828,6 @@ input.input[type='number'] {
   transition: transform 90ms ease-out;
 }
 
-/* Once there is something to pan, keep the picture on its own compositor layer
-   so a drag moves it instead of repainting the decoded bitmap every frame. It
-   is scoped to the zoomed state: at fit the image never moves, and promoting a
-   full-resolution photo to a layer it does not need only costs memory. */
-.preview-image-stage.is-zoomed .preview-image {
-  will-change: transform;
-}
-
 .preview-audio {
   flex: 1;
   /* A nowrap title has a huge min-content width, and a flex item defaults to

@@ -194,10 +194,6 @@ export default function ImageViewer({ src, alt, canPage, onPage }) {
         src={src}
         alt={alt || ''}
         draggable={false}
-        /* Decode off the main thread when the browser supports it. A 4000px
-           photo otherwise decodes on the critical path and the first paint
-           stalls for as long as that takes. */
-        decoding="async"
         style={{
           transform: `translate3d(${pan.x + swipe.dx}px, ${pan.y}px, 0) scale(${zoom})`,
           transition: swipe.active ? 'none' : undefined,
