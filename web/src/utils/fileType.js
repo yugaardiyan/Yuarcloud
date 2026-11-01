@@ -49,7 +49,7 @@ const VIDEO_EXT = new Set([
   'mp4', 'm4v', 'webm', 'ogv', 'mov', 'avi', 'mkv', 'mpg', 'mpeg', '3gp', 'wmv', 'flv',
 ])
 
-const AUDIO_EXT = new Set([
+export const AUDIO_EXT = new Set([
   'mp3', 'wav', 'ogg', 'oga', 'opus', 'm4a', 'aac', 'flac', 'wma', 'aiff', 'aif', 'mid', 'midi',
 ])
 

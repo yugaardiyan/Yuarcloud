@@ -1,4 +1,5 @@
 import React from 'react'
+import { AUDIO_EXT, extOf } from '../utils/fileType'
 
 /**
  * File and folder glyphs.
@@ -139,6 +140,20 @@ function PdfIcon() {
   )
 }
 
+/**
+ * True for anything that is a music track.
+ *
+ * The MIME check alone is not enough: a large .wav sent through the resumable
+ * upload arrives as application/octet-stream — the server's extension table has
+ * no entry for .wav — and used to fall through to the blank sheet while a .mp3
+ * sat next to it with the note glyph. The extension is the fallback, and it is
+ * the same set the previewer uses, so a track is drawn as a track as well as
+ * opened as one.
+ */
+function isAudio(name, mime) {
+  return mime.startsWith('audio/') || AUDIO_EXT.has(extOf(name))
+}
+
 /** CSS class that colours the glyph for a given item type. */
 export function iconClassFor(item) {
   if (item.is_dir) return 'folder'
@@ -147,7 +162,7 @@ export function iconClassFor(item) {
 
   if (mime.startsWith('image/')) return 'image'
   if (mime.startsWith('video/')) return 'video'
-  if (mime.startsWith('audio/')) return 'audio'
+  if (isAudio(name, mime)) return 'audio'
   if (mime.includes('pdf')) return 'pdf'
   if (mime.includes('spreadsheet') || mime.includes('excel') || /\.(xls|xlsx|csv|ods|tsv)$/.test(name)) return 'sheet'
   if (mime.includes('zip') || mime.includes('archive') || /\.(zip|rar|7z|tar|gz|bz2)$/.test(name)) return 'archive'
@@ -195,7 +210,7 @@ export function FileIcon({ item }) {
     )
   }
 
-  if (mime.startsWith('audio/')) {
+  if (isAudio(name, mime)) {
     return (
       <svg {...strokePropsMiter}>
         {/* Two note heads on a beamed pair of stems. */}
