@@ -115,6 +115,16 @@ export function FileProvider({ children }) {
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
 
   const [uploads, setUploads] = useState([])
+  // One AbortController per in-flight upload, keyed by tray row id, so the X on
+  // a row stops that file alone. Held in a ref because the controllers are not
+  // render output; rebuilding them on every render would drop the handles the
+  // cancel button needs.
+  const uploadControllers = useRef(new Map())
+  // A batch counter. Row ids already mix name/size/mtime/index, but two identical
+  // picks started close together can produce the same string; the counter keeps
+  // each batch's rows distinct so a cancel or a completion can never land on the
+  // other batch's row.
+  const uploadBatchSeq = useRef(0)
   const [searchQuery, setSearchQuery] = useState('')
 
   const requestId = useRef(0)
@@ -440,6 +450,7 @@ export function FileProvider({ children }) {
   const uploadFiles = useCallback(async (fileList, destination) => {
     const list = Array.from(fileList || [])
     if (!list.length) return
+    const batch = ++uploadBatchSeq.current
 
     // Build the directory tree the pick implies, shallowest first so a child
     // never waits on a parent that does not exist yet. Each level's parents are
@@ -522,7 +533,7 @@ export function FileProvider({ children }) {
       // existed and no caller passes a .catch, so the upload silently did
       // nothing at all. The index keeps same-named files distinct, which is the
       // job the id was actually doing.
-      id: `${file.name}-${file.size}-${file.lastModified}-${i}`,
+      id: `${batch}:${file.name}:${file.size}:${file.lastModified}:${i}`,
       name: file.name,
       // Show where it is going. A folder pick with three report.doc in it is
       // otherwise three identical rows in the tray.
@@ -540,13 +551,16 @@ export function FileProvider({ children }) {
       error: null,
     }))
     setUploads((prev) => [...prev, ...jobs])
+    // Hand each row its own controller before the pool starts, so a click on a
+    // queued row's X is honoured even if that file has not begun yet.
+    jobs.forEach((job) => uploadControllers.current.set(job.id, new AbortController()))
 
     // Job identity is the index, not the name. Two files with the same basename in
     // one pick — a folder upload of a/report.doc and b/report.doc, or two
     // picks while the first is still running — matched on name, so one success
     // marked both rows done: a failed upload was shown as Complete, and the
     // cleanup timer then removed the error row along with it.
-    const jobIdAt = (index) => `${uploadable[index]?.name}-${uploadable[index]?.size}-${uploadable[index]?.lastModified}-${index}`
+    const jobIdAt = (index) => `${batch}:${uploadable[index]?.name}:${uploadable[index]?.size}:${uploadable[index]?.lastModified}:${index}`
 
     // Sample buffers for the rate, kept in a ref because they are written on
     // every progress event and never rendered directly.
@@ -557,6 +571,9 @@ export function FileProvider({ children }) {
     const { results, failures } = await uploadFilesWithConcurrency(uploadable, {
       concurrency,
       parentIdFor: (file) => dirId.get(dirOf(file)) ?? baseParentId,
+      // Each row's own controller, so its X cancels that file and leaves the
+      // rest of the batch running.
+      signalFor: (index) => uploadControllers.current.get(jobIdAt(index))?.signal,
       onUpdate: ({ index, progress, loaded, confirmed, status, message }) => {
         const id = jobIdAt(index)
         const job = jobs.find((j) => j.id === id)
@@ -572,7 +589,10 @@ export function FileProvider({ children }) {
             j.id === id
               ? {
                   ...j,
-                  progress,
+                  // A cancel reports progress 0 from the pool, but the row had
+                  // already drawn a bar; hold it where the user stopped instead
+                  // of snapping back to empty.
+                  progress: status === 'cancelled' ? j.progress : progress,
                   loaded: loaded ?? j.loaded,
                   // Cleared on completion rather than frozen: a finished upload
                   // reporting its final speed reads as still running.
@@ -605,6 +625,10 @@ export function FileProvider({ children }) {
 
     await reloadUsage()
 
+    // The pool has finished, so nothing in this batch can be cancelled any more;
+    // drop its controllers rather than keeping them alive with the tray rows.
+    jobs.forEach((job) => uploadControllers.current.delete(job.id))
+
     // Finished rows stay. They used to be swept away four seconds later, which
     // meant the tray emptied itself exactly when someone uploading a folder of
     // forty files was trying to check they had all arrived — the last few
@@ -614,6 +638,27 @@ export function FileProvider({ children }) {
   }, [view, reloadUsage])
 
   const clearUploads = useCallback(() => setUploads([]), [])
+
+  /**
+   * Stop one row's upload without touching the rest of the batch.
+   *
+   * Aborting the row's controller ends the in-flight request; the tus loop sees
+   * the signal and reclaims its partial as well, so a cancelled large file does
+   * not sit in temporary storage until the sweeper clears it. The row is marked
+   * cancelled immediately rather than waiting for the abort to unwind, so the
+   * click has a visible effect even when the request takes a moment to die.
+   */
+  const cancelUpload = useCallback((id) => {
+    const controller = uploadControllers.current.get(id)
+    if (controller) controller.abort()
+    setUploads((prev) =>
+      prev.map((job) =>
+        job.id === id && (job.status === 'pending' || job.status === 'uploading')
+          ? { ...job, status: 'cancelled', error: 'Cancelled', bytesPerSec: null, etaSec: null }
+          : job
+      )
+    )
+  }, [])
 
   const removeItems = useCallback(async (ids) => {
     const list = Array.from(ids || [])
@@ -804,6 +849,7 @@ export function FileProvider({ children }) {
     toggleSort,
     uploads,
     clearUploads,
+    cancelUpload,
     searchQuery,
     setSearchQuery,
     openFolder,

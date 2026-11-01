@@ -174,10 +174,11 @@ export const fileApi = {
   // Reports the byte count alongside the percentage. The percentage alone was
   // enough to draw the bar and not enough to answer "is this stuck?", which is
   // the question an upload panel invites.
-  upload: (formData, onProgress) =>
+  upload: (formData, onProgress, signal) =>
     api.post('/files/upload', formData, {
       timeout: TRANSFER_TIMEOUT,
       headers: { 'Content-Type': 'multipart/form-data' },
+      signal,
       onUploadProgress: (e) => {
         if (onProgress && e.total) onProgress({ pct: Math.round((e.loaded * 100) / e.total), loaded: e.loaded })
       },
@@ -260,7 +261,7 @@ export const fileApi = {
       timeout: TRANSFER_TIMEOUT,
       headers: { 'Tus-Resumable': '1.0.0' },
     }),
-  tusPatch: (uploadId, offset, blob, onProgress) =>
+  tusPatch: (uploadId, offset, blob, onProgress, signal) =>
     api.patch(`/files/tus/${uploadId}`, blob, {
       timeout: TRANSFER_TIMEOUT,
       headers: {
@@ -268,6 +269,7 @@ export const fileApi = {
         'Upload-Offset': String(offset),
         'Content-Type': 'application/offset+octet-stream',
       },
+      signal,
       // A Blob has to reach the network as bytes. Axios' default transform
       // would try to JSON-encode anything that is not a plain object.
       transformRequest: [(data) => data],

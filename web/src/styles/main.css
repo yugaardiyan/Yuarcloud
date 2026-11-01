@@ -2276,6 +2276,7 @@ input.input[type='number'] {
 
 .upload-row-icon.done { color: var(--accent-success); }
 .upload-row-icon.error { color: var(--accent-danger); }
+.upload-row-icon.cancelled { color: var(--text-tertiary); }
 .upload-row-icon.uploading,
 .upload-row-icon.pending { color: var(--accent-primary); }
 
@@ -2320,6 +2321,7 @@ input.input[type='number'] {
 
 .upload-bar-fill.done { background: var(--accent-success); }
 .upload-bar-fill.error { background: var(--accent-danger); }
+.upload-bar-fill.cancelled { background: var(--text-tertiary); }
 
 .upload-row-status {
   font-size: 11px;
@@ -2353,6 +2355,30 @@ input.input[type='number'] {
 .upload-row-detail {
   color: var(--text-tertiary);
   opacity: 0.75;
+}
+
+/* The per-row cancel. Quiet until hovered: it sits beside the progress it
+ * stops, so it must be easy to find without competing with the bar. */
+.upload-row-cancel {
+  flex-shrink: 0;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.upload-row-cancel:hover {
+  color: var(--accent-danger);
+  background: var(--bg-hover);
 }
 
 /* --- Toasts ------------------------------------------------------------- */

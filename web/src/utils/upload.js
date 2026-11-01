@@ -362,7 +362,7 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
           // the bytes counted here. Those are still only in the socket buffer;
           // the tracker measures a tus upload from what the server has taken.
           onProgress?.(Math.min(99, Math.round((overall * 100) / file.size)), overall, start)
-        })
+        }, signal)
         const next = Number(headerValue(response.headers, 'upload-offset'))
         if (!Number.isFinite(next) || next <= start) {
           throw new Error('the server did not advance the upload offset')
@@ -457,9 +457,13 @@ export async function uploadFileChunked(file, options = {}) {
     if (destination) form.append('parent_id', destination)
 
     try {
-      const response = await fileApi.upload(form, ({ pct, loaded }) => onProgress?.(pct, loaded))
+      const response = await fileApi.upload(form, ({ pct, loaded }) => onProgress?.(pct, loaded), signal)
       return response.data
     } catch (error) {
+      // A cancel is not a failure. The caller sees the aborted signal and marks
+      // the row cancelled; reporting it through onError first would paint it red
+      // for the instant before the abort unwinds.
+      if (signal?.aborted) throw error
       // The chunked path already turns its failures into a sentence. The simple
       // path rethrew the raw axios error, so the tray showed
       // "timeout of 30000ms exceeded" or "Network Error" while a human message
@@ -472,6 +476,7 @@ export async function uploadFileChunked(file, options = {}) {
   }
 
   return uploadFileTus(file, { destination, chunkSize, onProgress, signal }).catch((error) => {
+    if (signal?.aborted) throw error
     const message = apiError(error, `Failed to upload ${file.name}`)
     onError?.(message)
     throw new Error(message)
@@ -495,6 +500,10 @@ export async function uploadFileChunked(file, options = {}) {
  * @param {object} options
  * @param {number} [options.concurrency]  files to run at once; clamped to 1..10
  * @param {(update:{file:File,index:number,progress:number,loaded:number,status:string})=>void} [options.onUpdate]
+ * @param {AbortSignal} [options.signal]  stops the whole batch from starting more
+ * @param {(index:number)=>AbortSignal|undefined} [options.signalFor]  per-file
+ *        signal, so one row in the tray can be cancelled without touching the
+ *        rest of the batch
  */
 export async function uploadFilesWithConcurrency(files, options = {}) {
   const {
@@ -504,6 +513,7 @@ export async function uploadFilesWithConcurrency(files, options = {}) {
     concurrency = DEFAULT_CONCURRENT_UPLOADS,
     onUpdate,
     signal,
+    signalFor,
   } = options
   const results = []
   const failures = []
@@ -522,6 +532,16 @@ export async function uploadFilesWithConcurrency(files, options = {}) {
       const index = nextIndex
       nextIndex += 1
       const file = files[index]
+      // A batch runs several files at once, so a cancel has to reach the one row
+      // it belongs to. signalFor hands out that row's controller; the whole
+      // batch still shares `signal`, which stops the pool from starting more.
+      const fileSignal = typeof signalFor === 'function' ? signalFor(index) : signal
+
+      // Cancelled while this file was still queued: never start it.
+      if (fileSignal?.aborted) {
+        onUpdate?.({ file, index, progress: 0, status: 'cancelled', message: 'Cancelled' })
+        continue
+      }
 
       onUpdate?.({ file, index, progress: 0, status: 'uploading' })
 
@@ -530,7 +550,7 @@ export async function uploadFilesWithConcurrency(files, options = {}) {
           parentId,
           parentIdFor,
           chunkSize,
-          signal,
+          signal: fileSignal,
           onProgress: (progress, loaded, confirmed) =>
             onUpdate?.({ file, index, progress, loaded, confirmed, status: 'uploading' }),
           onError: (message) => onUpdate?.({ file, index, progress: 0, status: 'error', message }),
@@ -541,6 +561,13 @@ export async function uploadFilesWithConcurrency(files, options = {}) {
         results.push({ file, index, record })
         onUpdate?.({ file, index, progress: 100, loaded: file.size, status: 'done' })
       } catch (error) {
+        // A cancelled file is not a failure: it must not raise an error toast or
+        // be counted in the "N failed" receipt. The row is marked cancelled so
+        // the tray still shows what the user chose to stop.
+        if (fileSignal?.aborted) {
+          onUpdate?.({ file, index, progress: 0, status: 'cancelled', message: 'Cancelled' })
+          continue
+        }
         failures.push({ file, index, error })
         // The chunked path reports its own failures through onError; the simple
         // path did not, so its row stayed on "uploading" with a frozen progress

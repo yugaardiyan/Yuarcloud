@@ -1,4 +1,4 @@
-import { X, CheckCircle, AlertCircle, FolderUp, FileUp } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, XCircle, FolderUp, FileUp } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useFiles } from '../context/FileContext'
 import { formatBytes } from '../utils/helpers'
@@ -6,7 +6,7 @@ import { formatRate, formatEta } from '../utils/uploadSpeed'
 
 /** Floating panel showing in-flight uploads with per-file progress. */
 export default function UploadTray() {
-  const { uploads, clearUploads } = useFiles()
+  const { uploads, clearUploads, cancelUpload } = useFiles()
 
   // The tray and the toasts share the same bottom-right corner, so a toast
   // that fires while the tray is open would paint over it. Measuring the tray
@@ -89,6 +89,7 @@ export default function UploadTray() {
             <div className={`upload-row-icon ${job.status}`}>
               {job.status === 'done' && <CheckCircle size={15} />}
               {job.status === 'error' && <AlertCircle size={15} />}
+              {job.status === 'cancelled' && <XCircle size={15} />}
               {/* The row already shows a progress bar and a percentage, so the
                   status icon stays static rather than spinning. */}
               {job.status === 'uploading' && <FolderUp size={15} />}
@@ -124,8 +125,23 @@ export default function UploadTray() {
                 )}
                 {job.status === 'done' && 'Upload completed'}
                 {job.status === 'error' && (job.error || 'Failed')}
+                {job.status === 'cancelled' && 'Cancelled'}
               </div>
             </div>
+
+            {/* One X per row. The header's X dismisses the whole panel; this one
+                stops just this file and leaves the rest of the batch running. */}
+            {(job.status === 'uploading' || job.status === 'pending') && (
+              <button
+                type="button"
+                className="upload-row-cancel"
+                onClick={() => cancelUpload(job.id)}
+                aria-label={`Cancel ${job.name}`}
+                title="Cancel upload"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         ))}
       </div>
