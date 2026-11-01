@@ -4822,7 +4822,7 @@ input.input[type='number'] {
   max-width: 60ch;
   font-size: 16px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
