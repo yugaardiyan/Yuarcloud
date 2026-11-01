@@ -92,8 +92,12 @@ export default function UploadTray() {
               {job.status === 'cancelled' && <XCircle size={15} />}
               {/* The row already shows a progress bar and a percentage, so the
                   status icon stays static rather than spinning. */}
-              {job.status === 'uploading' && <FolderUp size={15} />}
-              {job.status === 'pending' && <FileUp size={15} />}
+              {/* The glyph says what was picked — a folder or a file — not what
+                  the row is doing. It used to swap from a folder to a file as
+                  the upload moved from queued to running, which made a single
+                  file look like it changed type. */}
+              {(job.status === 'uploading' || job.status === 'pending') &&
+                (job.isFolder ? <FolderUp size={15} /> : <FileUp size={15} />)}
             </div>
 
             <div className="upload-row-main">

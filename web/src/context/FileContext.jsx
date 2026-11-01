@@ -464,6 +464,13 @@ export function FileProvider({ children }) {
     const dirPaths = [...new Set(list.map(dirOf).filter(Boolean))]
       .sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))
 
+    // A folder pick arrives through an <input webkitdirectory>, so every file
+    // carries a webkitRelativePath; a plain file pick carries none. The tray
+    // uses this to draw a folder or a file glyph, so "Upload folder" and
+    // "Upload files" are told apart at a glance instead of both looking like
+    // whatever status the row happens to be in.
+    const fromFolder = list.some((file) => file.webkitRelativePath)
+
     // `destination` overrides the current folder, for the views that are not
     // hands the answer over. Silently falling back to the root would file the
     // upload somewhere the user never chose and never saw.
@@ -538,6 +545,8 @@ export function FileProvider({ children }) {
       // Show where it is going. A folder pick with three report.doc in it is
       // otherwise three identical rows in the tray.
       label: file.webkitRelativePath || file.name,
+      // Folder pick vs file pick, for the tray's leading glyph.
+      isFolder: fromFolder,
       size: file.size,
       progress: 0,
       // Bytes actually sent, and what that works out to as a rate. Both are
