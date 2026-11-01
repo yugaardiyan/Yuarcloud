@@ -4832,6 +4832,12 @@ input.input[type='number'] {
 
 .preview-audio {
   flex: 1;
+  /* A nowrap title has a huge min-content width, and a flex item defaults to
+     min-width:auto — so a long track name used to stretch this column past the
+     viewport. The body clipped it, the disc drifted off centre and the
+     transport ran past the right edge. `min-width: 0` lets the column stay the
+     width it is given and the title ellipsise inside it instead. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4851,7 +4857,9 @@ input.input[type='number'] {
 }
 
 .preview-audio-name {
-  max-width: 60ch;
+  /* min() so the 60ch reading width still applies on a wide window, while a
+     phone caps it at the column instead of letting it spill past both edges. */
+  max-width: min(60ch, 100%);
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
@@ -4863,6 +4871,28 @@ input.input[type='number'] {
 
 .preview-audio-el {
   width: min(560px, 100%);
+  /* The native transport has an intrinsic minimum width; without this it could
+     still poke out of a narrow column. */
+  max-width: 100%;
+}
+
+/* The viewer is edge to edge on a phone, so the desktop spacing leaves the disc
+   crowding the transport. Tighter padding, a smaller disc and a smaller title
+   keep the whole player inside the screen. */
+@media (max-width: 560px) {
+  .preview-audio {
+    gap: 16px;
+    padding: 24px 16px;
+  }
+
+  .preview-audio-disc {
+    width: 112px;
+    height: 112px;
+  }
+
+  .preview-audio-name {
+    font-size: 14px;
+  }
 }
 
 /* --- Text --------------------------------------------------------------- */
