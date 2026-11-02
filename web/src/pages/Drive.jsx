@@ -6,6 +6,7 @@ import ConfirmModal from '../components/ConfirmModal'
 import PreviewModal from '../components/PreviewModal'
 import { previewGroupOf } from '../utils/fileType'
 import { hasInternalDrag } from '../utils/dragItems'
+import { filesFromDataTransfer } from '../utils/dropFiles'
 import { keyboardIsOwned, isTypingTarget } from '../utils/keyboardOwner'
 import { fireAndForget } from '../utils/fireAndForget'
 import { formatBytes } from '../utils/helpers'
@@ -317,14 +318,17 @@ function Drive() {
     }
   }
 
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     // An in-app move that landed on bare space has nowhere to go.
     if (hasInternalDrag(e.dataTransfer)) return
     if (!acceptsDrop) return
     e.preventDefault()
     e.stopPropagation()
     clearDropHighlight()
-    const dropped = Array.from(e.dataTransfer.files || [])
+    // A dropped folder arrives as a directory entry, not a file. Expanding it
+    // here is what makes "drag a folder in" actually upload its contents
+    // instead of a single zero-byte item named after the folder.
+    const dropped = await filesFromDataTransfer(e.dataTransfer)
     if (dropped.length) fireAndForget(files.uploadFiles(dropped))
   }
 

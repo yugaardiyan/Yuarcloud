@@ -20,6 +20,17 @@ import { fileApi, apiError } from './api'
  */
 export const MAX_CHUNK_BYTES = 100 * 1024 * 1024 // 100 MB (Cloudflare hard limit)
 
+/**
+ * Chunk size used when the server's own limit cannot be read.
+ *
+ * The 100 MB ceiling above is what Cloudflare accepts in one request, not a
+ * sensible default. A failed probe used to resolve to it, so one blip turned
+ * every following chunk into a request the server (on a smaller max_chunk_size)
+ * or the tunnel would reject. Falling back to a size the server ships with
+ * keeps the upload moving; a probe that succeeds is unaffected.
+ */
+export const FALLBACK_CHUNK_BYTES = 8 * 1024 * 1024 // 8 MB
+
 /** Files at or below this go through the simple upload path. */
 export const SIMPLE_UPLOAD_LIMIT = 16 * 1024 * 1024 // 16 MB
 
@@ -95,13 +106,14 @@ export async function resolveChunkSize(explicit) {
   try {
     serverMax = (await resolveUploadLimits()).maxChunkSize
   } catch {
-    // Fall back to the client default. The server would reject it, but the user
-    // gets a real error naming the size rather than a silent zero, and the
-    // failed probe is not cached.
+    // Fall back to a conservative chunk rather than the Cloudflare ceiling:
+    // the server may enforce a smaller max_chunk_size, and a request that
+    // overruns it is rejected outright. The failed probe is not cached, so the
+    // next upload asks again and returns to the server's real value.
     serverMax = 0
   }
 
-  if (!(serverMax > 0)) return MAX_CHUNK_BYTES
+  if (!(serverMax > 0)) return FALLBACK_CHUNK_BYTES
   return Math.min(serverMax, MAX_CHUNK_BYTES)
 }
 
@@ -194,6 +206,41 @@ const TUS_STORAGE_PREFIX = 'yuarcloud:tus:'
 
 /** PATCH retries before a dropped connection becomes a failure. */
 const TUS_CHUNK_ATTEMPTS = 6
+
+/**
+ * How long a single PATCH should aim to take.
+ *
+ * Each chunk is one request, and Cloudflare cuts off a request whose body keeps
+ * arriving for much more than a hundred seconds. Sizing the next chunk from the
+ * speed just measured keeps a chunk inside that window on a slow uplink,
+ * instead of betting on the admin's configured maximum.
+ */
+const CHUNK_TARGET_MS = 30_000
+
+/** Floor for an adapted chunk; below this the request overhead dominates. */
+const MIN_CHUNK_BYTES = 1 * 1024 * 1024
+
+/**
+ * Size of the first chunk, before any speed has been measured.
+ *
+ * Starting at the ceiling would hand a slow link a request that can outlive the
+ * proxy's window before there is any evidence to size it properly. Starting
+ * modest keeps the first request safe; every chunk after it is sized from the
+ * speed the last one actually achieved.
+ */
+const START_CHUNK_BYTES = 8 * 1024 * 1024
+
+/**
+ * How long a PATCH may make no progress before it is abandoned and retried.
+ *
+ * Uploads run with the client timeout disabled — a large file is not a hung
+ * request — so a connection the proxy quietly drops, or a half-open socket a
+ * tunnel never closes, would otherwise wait forever and leave the row frozen at
+ * whatever percentage it had reached. Resetting this timer on every progress
+ * event turns that silence into an ordinary retry, which the loop already knows
+ * how to resume from the offset the server reports.
+ */
+const PATCH_IDLE_TIMEOUT_MS = 90_000
 
 /**
  * Identifies "the same file going to the same place" across reloads.
@@ -291,7 +338,10 @@ async function waitForTusCompletion(uploadId, fileSize, signal, onProgress) {
  * continues from the server's offset instead of starting from zero.
  */
 async function uploadFileTus(file, { destination, chunkSize, onProgress, signal }) {
-  const resolvedChunkSize = await resolveChunkSize(chunkSize)
+  // The ceiling for one request: the server's limit, capped at what Cloudflare
+  // accepts. A copy is kept so adaptation can shrink below it but never above.
+  const chunkCeiling = await resolveChunkSize(chunkSize)
+  let activeChunkSize = Math.min(chunkCeiling, START_CHUNK_BYTES)
   const fingerprint = tusFingerprint(file, destination)
 
   let uploadId = null
@@ -345,7 +395,7 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
       if (signal?.aborted) throw new Error('upload cancelled')
 
       const start = offset
-      const end = Math.min(start + resolvedChunkSize, file.size)
+      const end = Math.min(start + activeChunkSize, file.size)
       // The third argument makes the Blob itself carry tus' media type. The
       // request header says the same thing, but axios' Node adapter overwrites
       // Content-Type with blob.type for any Blob it sends, so a slice left with
@@ -354,15 +404,30 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
       // wall. Both sources now agree.
       const blob = file.slice(start, end, 'application/offset+octet-stream')
 
+      const sentAt = Date.now()
+      // One controller per attempt: the idle watchdog and a user cancel both
+      // have to be able to end this request, and axios accepts a single signal.
+      const attemptController = new AbortController()
+      const forwardAbort = () => attemptController.abort()
+      if (signal) {
+        if (signal.aborted) attemptController.abort()
+        else signal.addEventListener('abort', forwardAbort, { once: true })
+      }
+      let idleTimer = setTimeout(() => attemptController.abort(), PATCH_IDLE_TIMEOUT_MS)
+
       try {
         const response = await fileApi.tusPatch(uploadId, start, blob, (loaded) => {
+          // Any movement proves the link is alive; only silence trips the
+          // watchdog and hands this attempt to the retry path below.
+          clearTimeout(idleTimer)
+          idleTimer = setTimeout(() => attemptController.abort(), PATCH_IDLE_TIMEOUT_MS)
           const capped = Math.min(Math.max(Number(loaded) || 0, 0), blob.size)
           const overall = Math.min(file.size, start + capped)
           // The third argument is the last offset the server acknowledged, not
           // the bytes counted here. Those are still only in the socket buffer;
           // the tracker measures a tus upload from what the server has taken.
           onProgress?.(Math.min(99, Math.round((overall * 100) / file.size)), overall, start)
-        }, signal)
+        }, attemptController.signal)
         const next = Number(headerValue(response.headers, 'upload-offset'))
         if (!Number.isFinite(next) || next <= start) {
           throw new Error('the server did not advance the upload offset')
@@ -373,6 +438,16 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
         // reported speed and remaining time are based on bytes that actually
         // arrived rather than on how fast the browser could hand them over.
         onProgress?.(Math.min(99, Math.round((offset * 100) / file.size)), offset, offset)
+
+        // Size the next chunk from how long this one took, so a slow uplink
+        // gets chunks that finish inside the proxy's window instead of a fixed
+        // size that only fits a fast connection.
+        const elapsed = Date.now() - sentAt
+        const sent = end - start
+        if (elapsed > 0 && sent > 0) {
+          const desired = Math.round((sent / elapsed) * CHUNK_TARGET_MS)
+          activeChunkSize = Math.min(chunkCeiling, Math.max(MIN_CHUNK_BYTES, desired))
+        }
       } catch (error) {
         if (signal?.aborted) throw new Error('upload cancelled')
 
@@ -394,6 +469,9 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
         } catch {
           // Keep the last known offset and retry the PATCH.
         }
+      } finally {
+        clearTimeout(idleTimer)
+        signal?.removeEventListener('abort', forwardAbort)
       }
     }
 

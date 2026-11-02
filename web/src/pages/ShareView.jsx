@@ -7,6 +7,7 @@ import { formatBytes, formatDate } from '../utils/helpers'
 import { FileIcon, iconClassFor } from '../components/FileIcon'
 import PreviewModal from '../components/PreviewModal'
 import { canPreview } from '../utils/fileType'
+import { filesFromDataTransfer } from '../utils/dropFiles'
 import Logo from '../components/Logo'
 import ToastHost from '../components/ToastHost'
 import toast from 'react-hot-toast'
@@ -597,11 +598,12 @@ export default function ShareView() {
     }
   }
 
-  const onDrop = (e) => {
+  const onDrop = async (e) => {
     e.preventDefault()
     setDragOver(false)
     if (!canUpload) return
-    handleUploadFiles(e.dataTransfer.files)
+    const picked = await filesFromDataTransfer(e.dataTransfer)
+    handleUploadFiles(picked)
   }
 
   // ---------------------------------------------------------------- states
