@@ -229,6 +229,16 @@ export function FileProvider({ children }) {
     await Promise.all([load(), refreshUser()])
   }, [load, refreshUser])
 
+  // A finished upload must refresh whatever folder is on screen *now*, not the
+  // one it started in. uploadFiles outlives the render that launched it, so the
+  // reloadUsage it closed over still points at the old view; calling it snapped
+  // the listing back to the source folder while the address bar stayed on the
+  // new one. The ref always holds the newest callback.
+  const reloadUsageRef = useRef(reloadUsage)
+  useEffect(() => {
+    reloadUsageRef.current = reloadUsage
+  }, [reloadUsage])
+
   // The URL is the source of truth. Every scope switch and folder change navigates,
   // and this effect turns whatever route is on screen into the load it calls for.
   // That is what makes a refresh land back where the user was — the trash, the
@@ -632,7 +642,7 @@ export function FileProvider({ children }) {
       toast.error(apiError(failure.error, `Failed to upload ${failure.file.name}`))
     }
 
-    await reloadUsage()
+    await reloadUsageRef.current()
 
     // The pool has finished, so nothing in this batch can be cancelled any more;
     // drop its controllers rather than keeping them alive with the tray rows.
@@ -644,7 +654,7 @@ export function FileProvider({ children }) {
     // landed with nobody left to see them land. Drive keeps them: the panel is
     // the receipt, and the dismiss button is how it is closed.
     return { results, failures }
-  }, [view, reloadUsage])
+  }, [view])
 
   const clearUploads = useCallback(() => setUploads([]), [])
 

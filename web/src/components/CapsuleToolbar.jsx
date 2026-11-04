@@ -346,11 +346,11 @@ export default function CapsuleToolbar() {
             hidden (you can't create inside the trash) and the button
             itself becomes a single "Empty trash" action.
 
-            marked, not a place you can put something, so "upload" here had
-            no destination to mean: the upload quietly landed in My Cloud's
-            root, which is a guess wearing a control's clothes. Trash set
-            the precedent in this very slot — a view that is not a location
-            does not offer to create inside itself.
+            Search is a view, not a place you can put something: it has no
+            folder id or path of its own, so createFolder/uploadFiles would
+            fall back to My Cloud's root — a guess wearing a control's
+            clothes. Trash set the precedent in this very slot: a view that
+            is not a location does not offer to create inside itself.
 
             The button stays put either way and only goes inert when there
             is nothing to empty — hiding it made the right end of the pill
@@ -421,6 +421,20 @@ export default function CapsuleToolbar() {
             aria-label="Empty trash"
           >
             <TrashGlyph />
+          </button>
+        ) : view.scope !== 'drive' ? (
+          // Search results are a view, not a location: there is no folder to
+          // create inside, and createFolder/uploadFiles would fall back to the
+          // storage root — silently filing the item in My Cloud from a screen
+          // that was showing something else. The slot stays put and goes inert,
+          // the same precedent the trash sets two branches up.
+          <button
+            className="capsule-btn capsule-btn-primary"
+            disabled
+            title="No create action in search results"
+            aria-label="No create action in search results"
+          >
+            <NewFolderGlyph />
           </button>
         ) : (
           <div className={`capsule-dropdown ${searchOpen ? 'capsule-collapsed' : ''}`} ref={createRef}>
