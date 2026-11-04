@@ -133,6 +133,11 @@ func TestScopedQueryExcludesSiblingFolders(t *testing.T) {
 	mk(other, "team-archive/theirs.txt")
 	mk(other, "teammates")
 	mk(other, "teammates/also-theirs.txt")
+	// SQLite's LIKE folds ASCII case, so the old `path LIKE 'team/%'` clause
+	// also matched these. A home "team" must never see "Team/*": the two are
+	// distinct directories on the case-sensitive volume ZimaOS runs on.
+	mk(other, "Team")
+	mk(other, "Team/theirs.txt")
 
 	sc := scope.New("team")
 	var got []model.File

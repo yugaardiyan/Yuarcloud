@@ -98,18 +98,32 @@ func (s Scope) Contains(abs string) bool {
 // folder and its contents are both rows, and callers that need the home use
 // ScopeClause, which adds the equality arm.
 //
-// The trailing separator is the whole point of this function. `Home + "%"`
-// also matches every sibling whose name merely starts with the home's: a user
-// homed at "team" would match "team-archive", and since SQLite's LIKE ignores
-// ASCII case, "users/Bob" would match "users/bobby" as well. That is a
-// cross-tenant read on the app's primary security boundary, which is why
-// Contains and Rel both insist on Home + "/" and this must too.
-// An unrestricted scope yields "" because there is nothing to filter on.
+// Kept for callers that genuinely need a LIKE pattern. ScopeClause no longer
+// uses it: SQLite's LIKE folds ASCII case, so `LIKE 'users/Bob/%'` matches
+// `users/bobby/...` — a cross-tenant read on the app's primary security
+// boundary. The trailing separator below is necessary but not sufficient.
 func (s Scope) ScopePattern() string {
 	if s.Unrestricted() {
 		return ""
 	}
 	return Escape(s.Home) + "/%"
+}
+
+// ScopeRange returns the half-open, case-sensitive bounds of everything
+// strictly *below* the home. A BINARY string comparison (the SQLite default)
+// keeps case-variant siblings apart, which LIKE cannot do: home "team" must
+// not match "Team/x", and both directories can exist on a case-sensitive
+// volume.
+//
+// The upper bound is Home + "0" rather than Home + "\xff": '/' is the byte
+// immediately before '0', so every path with the prefix Home+"/" sorts into
+// [Home+"/", Home+"0"), and nothing else does. An unrestricted scope yields
+// empty bounds because there is nothing to filter on.
+func (s Scope) ScopeRange() (string, string) {
+	if s.Unrestricted() {
+		return "", ""
+	}
+	return s.Home + "/", s.Home + "0"
 }
 
 // ScopeClause returns a WHERE fragment and its arguments that match the home
@@ -120,7 +134,8 @@ func (s Scope) ScopeClause() (string, []interface{}) {
 	if s.Unrestricted() {
 		return "", nil
 	}
-	return `(path = ? OR path LIKE ? ESCAPE '\')`, []interface{}{s.Home, s.ScopePattern()}
+	lower, upper := s.ScopeRange()
+	return `(path = ? OR (path >= ? AND path < ?))`, []interface{}{s.Home, lower, upper}
 }
 
 // Escape neutralises the LIKE metacharacters that can appear in a folder name,

@@ -127,7 +127,7 @@ func (h *FileHandler) InitChunkedUpload(c *gin.Context) {
 	if req.TotalSize < (1 << 62) {
 		required = req.TotalSize * 2
 	}
-	if _, free, err := h.storage.GetDiskUsage(context.Background(), ""); err == nil && free > 0 && required > free {
+	if _, free, err := h.storage.GetDiskUsage(context.Background(), ""); err == nil && required > free {
 		c.JSON(http.StatusInsufficientStorage, gin.H{
 			"error":    fmt.Sprintf("not enough free disk space: this upload needs %d bytes free for chunks and assembly", required),
 			"disk":     true,
@@ -236,6 +236,28 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 
 	if max := h.maxChunkSize(); max > 0 && fileHeader.Size > max {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "chunk too large"})
+		return
+	}
+
+	// Every chunk except the last has exactly the declared chunk_size. Nothing
+	// enforced that before: a session declaring a 1 KB file could send
+	// max_chunk_size worth of bytes per chunk, filling the volume while the
+	// quota check saw only 1 KB. Assembly rejects the size mismatch at the end,
+	// but the disk is occupied until cleanup.
+	offset := int64(chunkIndex) * session.ChunkSize
+	if offset >= session.TotalSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "chunk index is out of range"})
+		return
+	}
+	expected := session.ChunkSize
+	if remaining := session.TotalSize - offset; remaining < expected {
+		expected = remaining
+	}
+	if fileHeader.Size != expected {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":    fmt.Sprintf("chunk %d must be %d bytes", chunkIndex, expected),
+			"expected": expected,
+		})
 		return
 	}
 

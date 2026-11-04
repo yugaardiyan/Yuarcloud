@@ -355,6 +355,12 @@ func (h *FileHandler) RestoreFromTrash(c *gin.Context) {
 		return
 	}
 
+	// Same reasoning as rename: a row-free file already at the destination would
+	// be destroyed by the rename below, not reported.
+	if h.rejectPathOnDisk(c, restoreRoot) {
+		return
+	}
+
 	if err := h.storage.Mkdir(context.Background(), parentDir(restoreRoot)); err != nil {
 		c.Error(err) //nolint:errcheck
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare restore"})
@@ -447,6 +453,22 @@ func (h *FileHandler) DeletePermanently(c *gin.Context) {
 	var file model.File
 	if err := h.db.First(&file, "id = ? AND is_trashed = ?", fileID, true).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "trashed item not found"})
+		return
+	}
+
+	// A trashed row's own path now lives under .yuarcloud-trash/, which is
+	// outside every home, so the scope cannot be applied to it directly. Check
+	// where it came from instead, exactly as RestoreFromTrash does. Without
+	// this, any authenticated user who learned a trashed UUID could destroy
+	// another account's data: the query above is deliberately unscoped so a
+	// peer's row in a shared home remains deletable.
+	sc := reqScope(c)
+	original := cleanPath(file.OriginalPath)
+	if original == "" {
+		original = file.Name
+	}
+	if !sc.Contains(original) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this item no longer belongs in your folder"})
 		return
 	}
 

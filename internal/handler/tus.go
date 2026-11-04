@@ -150,7 +150,7 @@ func (h *FileHandler) TusCreate(c *gin.Context) {
 
 	// A tus upload grows one data file in place and is then renamed, so unlike
 	// the chunked path it needs one copy of the size, not two.
-	if _, free, err := h.storage.GetDiskUsage(context.Background(), ""); err == nil && free > 0 && totalSize > free {
+	if _, free, err := h.storage.GetDiskUsage(context.Background(), ""); err == nil && totalSize > free {
 		c.Header("Tus-Resumable", tusVersion)
 		c.JSON(http.StatusInsufficientStorage, gin.H{
 			"error":    fmt.Sprintf("not enough free disk space: this upload needs %d bytes free", totalSize),
@@ -372,7 +372,21 @@ func (h *FileHandler) TusStatus(c *gin.Context) {
 	// reconciliation reset to uploading. This endpoint is what the client polls
 	// at that point, so it is the place to finish the job rather than leaving
 	// the row in a state no request would ever move past.
-	if h.completeStuckTus(upload) {
+	//
+	// The lock is the same one PATCH and DELETE hold. Recovery used to claim and
+	// finalise without it, so a cancel that had already re-read the row could
+	// delete it while this path renamed the bytes and charged the quota —
+	// leaving a file no row describes.
+	unlock := h.tusLock(upload.ID.String())
+	if err := h.db.First(upload, "id = ? AND user_id = ?", upload.ID, userID).Error; err != nil {
+		unlock()
+		c.Header("Tus-Resumable", tusVersion)
+		c.JSON(http.StatusNotFound, gin.H{"error": "upload session not found"})
+		return
+	}
+	completed := h.completeStuckTus(upload)
+	unlock()
+	if completed {
 		if err := h.db.First(upload, "id = ?", upload.ID).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read upload state"})
 			return
@@ -413,6 +427,21 @@ func (h *FileHandler) TusDelete(c *gin.Context) {
 
 	unlock := h.tusLock(upload.ID.String())
 	defer unlock()
+
+	// Re-read under the lock: a final PATCH may have claimed the upload between
+	// loadTusUpload and here. Deleting the row during finalization used to
+	// answer 204 while the goroutine went on to create the file and charge the
+	// quota, so "cancelled" left both the bytes and the charge behind.
+	if err := h.db.First(upload, "id = ? AND user_id = ?", upload.ID, userID).Error; err != nil {
+		c.Header("Tus-Resumable", tusVersion)
+		c.JSON(http.StatusNotFound, gin.H{"error": "upload session not found"})
+		return
+	}
+	if upload.Status == "finalizing" {
+		c.Header("Tus-Resumable", tusVersion)
+		c.JSON(http.StatusConflict, gin.H{"error": "upload is being finalised; try again shortly"})
+		return
+	}
 
 	_ = h.storage.TusRemove(upload.ID.String())
 	h.db.Delete(&model.TusUpload{}, "id = ?", upload.ID)
@@ -468,9 +497,26 @@ func (h *FileHandler) sweepExpiredTus() {
 
 	var expired []model.TusUpload
 	h.db.Where("status IN ? AND expires_at < ?", []string{"uploading", "failed"}, now).Find(&expired)
-	for _, upload := range expired {
-		_ = h.storage.TusRemove(upload.ID.String())
-		h.db.Delete(&model.TusUpload{}, "id = ?", upload.ID)
+	for _, candidate := range expired {
+		// The list above was read before this loop, and PATCH extends
+		// ExpiresAt only after its append finishes. Sweeping on the stale copy
+		// deleted a session that had just accepted data: the PATCH answered 204
+		// with an advanced offset, then the next HEAD was 404. Taking the same
+		// per-upload lock PATCH holds, and re-reading under it, turns that into
+		// a no-op when the upload is still alive.
+		unlock := h.tusLock(candidate.ID.String())
+		var fresh model.TusUpload
+		if err := h.db.First(&fresh, "id = ?", candidate.ID).Error; err != nil {
+			unlock()
+			continue
+		}
+		if !fresh.ExpiresAt.Before(now) || (fresh.Status != "uploading" && fresh.Status != "failed") {
+			unlock()
+			continue
+		}
+		_ = h.storage.TusRemove(fresh.ID.String())
+		h.db.Delete(&model.TusUpload{}, "id = ?", fresh.ID)
+		unlock()
 	}
 
 	// Completed rows are a short-lived lookup for the client. The file they
@@ -544,6 +590,15 @@ func (h *FileHandler) claimTus(upload *model.TusUpload) bool {
 
 // finalizeTusClaimed assumes the caller holds the uploading → finalizing claim.
 func (h *FileHandler) finalizeTusClaimed(upload *model.TusUpload) (*model.File, error) {
+	// Two sessions can be created for the same filename before either finishes;
+	// each has its own id, so claimTus does not serialize them. The destination
+	// check and the rename were therefore a race: both saw "free", both renamed,
+	// and the last one silently replaced the first one's bytes while both rows
+	// claimed to describe their own upload. Serializing on the target path makes
+	// the loser see the winner's file and fail honestly.
+	unlock := h.tusLock("path:" + upload.TargetPath)
+	defer unlock()
+
 	fail := func(err error) (*model.File, error) {
 		h.markTusFailed(upload, err.Error())
 		_ = h.storage.TusRemove(upload.ID.String())

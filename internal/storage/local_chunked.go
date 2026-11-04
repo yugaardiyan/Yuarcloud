@@ -64,21 +64,31 @@ func (ls *LocalStorage) WriteChunk(ctx context.Context, uploadID string, chunkIn
 	}
 
 	chunkPath := filepath.Join(chunkDir, fmt.Sprintf("chunk_%05d", chunkIndex))
-	file, err := os.Create(chunkPath)
+
+	// Write beside the destination and rename into place. os.Create here was a
+	// truncate-in-place: a retry of the same index (dropped response, slow
+	// original still streaming) could empty a chunk that AssembleChunks was
+	// reading, or interleave two writers into one corrupt file. A unique temp
+	// name plus an atomic rename means assembly only ever sees a complete chunk,
+	// and the last writer wins whole rather than byte-by-byte.
+	tmp, err := os.CreateTemp(chunkDir, fmt.Sprintf(".chunk_%05d-*", chunkIndex))
 	if err != nil {
 		return false, err
 	}
+	tmpPath := tmp.Name()
+	discard := func() {
+		tmp.Close()        //nolint:errcheck
+		os.Remove(tmpPath) //nolint:errcheck
+	}
 
-	written, err := io.Copy(file, reader)
+	written, err := io.Copy(tmp, reader)
 	if err != nil {
-		file.Close()         //nolint:errcheck
-		os.Remove(chunkPath) //nolint:errcheck
+		discard()
 		return false, err
 	}
 
 	if written != size {
-		file.Close()         //nolint:errcheck
-		os.Remove(chunkPath) //nolint:errcheck
+		discard()
 		return false, ErrSizeMismatch
 	}
 
@@ -91,8 +101,12 @@ func (ls *LocalStorage) WriteChunk(ctx context.Context, uploadID string, chunkIn
 	// difference between streaming at link speed and waiting on the platter for
 	// every request. The assembled file is fsynced before it is renamed into
 	// place, which is where durability actually matters.
-	if err := file.Close(); err != nil {
-		os.Remove(chunkPath) //nolint:errcheck
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck
+		return false, err
+	}
+	if err := os.Rename(tmpPath, chunkPath); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck
 		return false, err
 	}
 

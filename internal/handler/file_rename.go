@@ -85,6 +85,16 @@ func (h *FileHandler) RenameFile(c *gin.Context) {
 		return
 	}
 
+	// The row check above only knows what the database has adopted. A file that
+	// already sits on the volume without a row — a library item not yet
+	// browsed, an external sync, a leftover from a failed write — would be
+	// silently replaced by os.Rename. Every other write path already checks the
+	// disk; rename was the one place where "the name is free" only meant "no row
+	// claims it".
+	if h.rejectPathOnDisk(c, newPath) {
+		return
+	}
+
 	if err := h.storage.Rename(context.Background(), oldPath, newPath); err != nil {
 		c.Error(err) //nolint:errcheck
 		writeWriteError(c, err, "rename")
@@ -460,7 +470,13 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 		}
 		return nil
 	}); err != nil {
-		h.storage.Remove(context.Background(), newPath)
+		// Keep bytes a concurrent winner already registered; removing them would
+		// break the row that succeeded. Same guard as the plain upload.
+		var rows int64
+		h.db.Model(&model.File{}).Where("path = ?", newPath).Count(&rows)
+		if rows == 0 {
+			h.storage.Remove(context.Background(), newPath)
+		}
 		c.Error(err) //nolint:errcheck
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create file records"})
 		return

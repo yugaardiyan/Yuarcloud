@@ -375,7 +375,14 @@ func (h *ShareHandler) DownloadSharedFile(c *gin.Context) {
 		return
 	}
 	if len(roots) > 1 && p == "" {
-		h.shareService.IncrementViewCount(ctx, shareLink.ID)
+		// The cap is enforced in this UPDATE, not in the earlier read. Ignoring
+		// its error let every concurrent request that passed ValidateShare stream
+		// the bundle: the losers matched no row, were told the limit was spent,
+		// and were served anyway.
+		if err := h.shareService.IncrementViewCount(ctx, shareLink.ID); err != nil {
+			h.writeShareAccessError(c, err)
+			return
+		}
 		h.streamBundleZip(c, roots)
 		return
 	}
@@ -388,7 +395,14 @@ func (h *ShareHandler) DownloadSharedFile(c *gin.Context) {
 		return
 	}
 
-	h.shareService.IncrementViewCount(ctx, shareLink.ID)
+	// The cap is enforced in this UPDATE, not in the earlier read. Ignoring its
+	// error let every concurrent request that passed ValidateShare stream the
+	// file: the losers matched no row, were told the limit was spent, and were
+	// served anyway.
+	if err := h.shareService.IncrementViewCount(ctx, shareLink.ID); err != nil {
+		h.writeShareAccessError(c, err)
+		return
+	}
 
 	if file.IsDir {
 		h.streamFolderZip(c, *file)

@@ -433,7 +433,15 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	}
 
 	if err := h.db.Create(file).Error; err != nil {
-		h.storage.Remove(context.Background(), targetPath)
+		// Only remove bytes with no row behind them. A concurrent upload of the
+		// same name can win the unique path index after ours failed; removing
+		// the path unconditionally deleted the winner's file, leaving a row that
+		// 404s on download.
+		var rows int64
+		h.db.Model(&model.File{}).Where("path = ?", targetPath).Count(&rows)
+		if rows == 0 {
+			h.storage.Remove(context.Background(), targetPath)
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create file record"})
 		return
 	}
