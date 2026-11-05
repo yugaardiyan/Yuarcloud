@@ -457,14 +457,10 @@ export default function ContextMenuProvider({ children }) {
       label: 'Open',
       disabled: isMulti && targetItems.some((f) => !f.is_dir),
     })
-    // Mobile layout or touch screen only: see `mobile` above. Desktop already
-    // has "Select" in the blank-space context menu, and right-clicking there
-    // is natural.
-    if (mobile) {
-      items.push({ id: 'select', label: 'Select' })
-      items.push({ id: 'select-all', label: 'Select all' })
-    }
     items.push({ id: 'download', label: 'Download' })
+    // Share is meaningful for a batch too: one generated link opens a list of
+    // everything that was marked, the way a shared folder would.
+    items.push({ id: 'share', label: 'Share' })
     items.push({ type: 'divider' })
     // Copy/Cut — always active, shown in both modes.
     items.push({ id: 'copy', label: 'Copy' })
@@ -477,15 +473,19 @@ export default function ContextMenuProvider({ children }) {
     // offers it in select mode: that menu always targets its own item, not the
     // batch.
     if (!isMulti) {
-      items.push({ type: 'divider' })
       items.push({ id: 'rename', label: 'Rename' })
+    }
+    // Mobile layout or touch screen only: see `mobile` above. Desktop already
+    // has "Select" in the blank-space context menu, and right-clicking there
+    // is natural. These are mode switches rather than actions on the file, so
+    // they get a group of their own.
+    if (mobile) {
       items.push({ type: 'divider' })
-      items.push({ id: 'share', label: 'Share' })
-    } else {
-      // Share is meaningful for a batch: one generated link opens a list of
-      // everything that was marked, the way a shared folder would.
-      items.push({ type: 'divider' })
-      items.push({ id: 'share', label: 'Share' })
+      items.push({ id: 'select', label: 'Select' })
+      // With a single item it would do exactly what "Select" already does.
+      if (rawItems.length > 1) {
+        items.push({ id: 'select-all', label: 'Select all' })
+      }
     }
     items.push({ type: 'divider' })
     items.push({ id: 'trash', label: 'Move to trash', danger: true })
