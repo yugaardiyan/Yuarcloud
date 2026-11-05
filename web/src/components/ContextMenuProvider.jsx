@@ -247,6 +247,15 @@ export default function ContextMenuProvider({ children }) {
         selectMany(ids)
         break
 
+      case 'select-all':
+        // Same mode as "Select", but the whole listing starts marked. Without
+        // entering the mode, a tap on a tile afterwards would replace the set
+        // instead of toggling one entry out of it — not what "select all" then
+        // "adjust" looks like on a phone.
+        if (!selectMode) toggleSelectMode()
+        selectAll()
+        break
+
       case 'download':
         // Single item downloads itself; multiple items go out as one zip.
         if (targetItems.length > 1) downloadSelectedAsZip(ids)
@@ -451,7 +460,10 @@ export default function ContextMenuProvider({ children }) {
     // Mobile layout or touch screen only: see `mobile` above. Desktop already
     // has "Select" in the blank-space context menu, and right-clicking there
     // is natural.
-    if (mobile) items.push({ id: 'select', label: 'Select' })
+    if (mobile) {
+      items.push({ id: 'select', label: 'Select' })
+      items.push({ id: 'select-all', label: 'Select all' })
+    }
     items.push({ id: 'download', label: 'Download' })
     items.push({ type: 'divider' })
     // Copy/Cut — always active, shown in both modes.
