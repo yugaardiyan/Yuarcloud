@@ -226,9 +226,11 @@ const MIN_CHUNK_BYTES = 1 * 1024 * 1024
  * Starting at the ceiling would hand a slow link a request that can outlive the
  * proxy's window before there is any evidence to size it properly. Starting
  * modest keeps the first request safe; every chunk after it is sized from the
- * speed the last one actually achieved.
+ * speed the last one actually achieved. 4 MB stays inside Cloudflare's
+ * ~100-second request window down to about 0.3 Mbps, which covers a phone on a
+ * weak mobile signal; 8 MB did not.
  */
-const START_CHUNK_BYTES = 8 * 1024 * 1024
+const START_CHUNK_BYTES = 4 * 1024 * 1024
 
 /**
  * How long a PATCH may make no progress before it is abandoned and retried.
@@ -459,6 +461,14 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
         attempt += 1
         if (attempt > TUS_CHUNK_ATTEMPTS) throw error
         await sleep(500 * 2 ** (attempt - 1))
+
+        // A chunk that failed is evidence the size was too much for this link
+        // — typically a request that outlived the proxy's window. Resending the
+        // same bytes the same way just times out again, so halve it first. The
+        // floor keeps request overhead from dominating on a good link.
+        if (activeChunkSize > MIN_CHUNK_BYTES) {
+          activeChunkSize = Math.max(MIN_CHUNK_BYTES, Math.floor(activeChunkSize / 2))
+        }
 
         try {
           const head = await fileApi.tusHead(uploadId)

@@ -23,6 +23,13 @@ const API_TIMEOUT = 30000
 // operation even though its response body is small.
 const TRANSFER_TIMEOUT = 0
 
+// tus' bookkeeping calls are small JSON requests, not transfers, so they keep
+// a deadline. Leaving them at the transfer timeout (none) meant a connection
+// the tunnel quietly dropped could wedge the tray at 0% or 99% forever: the
+// completion poll only checks its one-hour budget between polls, and it never
+// gets there while a single request has not returned.
+const TUS_CONTROL_TIMEOUT = 30000
+
 const api = axios.create({
   baseURL: '/api',
   timeout: API_TIMEOUT,
@@ -255,7 +262,7 @@ export const fileApi = {
   // body is sent through untouched and the protocol headers say where it goes.
   tusCreate: ({ size, metadata }) =>
     api.post('/files/tus', null, {
-      timeout: TRANSFER_TIMEOUT,
+      timeout: TUS_CONTROL_TIMEOUT,
       headers: {
         'Tus-Resumable': '1.0.0',
         'Upload-Length': String(size),
@@ -264,7 +271,7 @@ export const fileApi = {
     }),
   tusHead: (uploadId) =>
     api.head(`/files/tus/${uploadId}`, {
-      timeout: TRANSFER_TIMEOUT,
+      timeout: TUS_CONTROL_TIMEOUT,
       headers: { 'Tus-Resumable': '1.0.0' },
     }),
   tusPatch: (uploadId, offset, blob, onProgress, signal) =>
@@ -283,8 +290,8 @@ export const fileApi = {
         if (onProgress) onProgress(event.loaded || 0)
       },
     }),
-  tusStatus: (uploadId) => api.get(`/files/tus/${uploadId}/status`, { timeout: TRANSFER_TIMEOUT }),
-  tusDelete: (uploadId) => api.delete(`/files/tus/${uploadId}`, { timeout: TRANSFER_TIMEOUT }),
+  tusStatus: (uploadId) => api.get(`/files/tus/${uploadId}/status`, { timeout: TUS_CONTROL_TIMEOUT }),
+  tusDelete: (uploadId) => api.delete(`/files/tus/${uploadId}`, { timeout: TUS_CONTROL_TIMEOUT }),
 }
 
 // ---------------------------------------------------------------------------

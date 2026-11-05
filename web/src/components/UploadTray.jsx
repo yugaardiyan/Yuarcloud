@@ -1,6 +1,7 @@
 import { X, CheckCircle, AlertCircle, XCircle, FolderUp, FileUp } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useFiles } from '../context/FileContext'
+import { useWakeLock } from '../hooks/useWakeLock'
 import { formatBytes } from '../utils/helpers'
 import { formatRate, formatEta } from '../utils/uploadSpeed'
 
@@ -35,6 +36,12 @@ export default function UploadTray() {
       document.documentElement.style.removeProperty('--upload-tray-h')
     }
   }, [uploads.length])
+
+  // A phone that dims its screen suspends the tab and freezes the upload; hold
+  // the screen on for as long as any row is still moving. Must run before the
+  // empty-state return, because hooks cannot be called conditionally.
+  const uploading = uploads.some((u) => u.status === 'uploading' || u.status === 'pending')
+  useWakeLock(uploading)
 
   if (!uploads.length) return null
 
