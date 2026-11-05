@@ -8,6 +8,7 @@ import ConfirmModal from './ConfirmModal'
 import { claimKeyboard, keyboardIsOwned, isTypingTarget } from '../utils/keyboardOwner'
 import { fireAndForget } from '../utils/fireAndForget'
 import { stemLength } from '../utils/fileType'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 
 
 const ContextMenuContext = createContext(null)
@@ -25,8 +26,15 @@ export default function ContextMenuProvider({ children }) {
     rawItems, view, selected, clipboard,
     downloadItem, downloadSelectedAsZip, renameItem, removeItems, restoreItems,
     cutItems, copyToClipboard, pasteInto,
-    createFolder, uploadFiles, selectAll, toggleSelectMode, selectMode, exitSelectMode, clearSelection,
+    createFolder, uploadFiles, selectAll, selectMany, toggleSelectMode, selectMode, exitSelectMode, clearSelection,
   } = files
+
+  // The mobile layout and touch screens have no reliable right-click on blank
+  // space, so the page-level menu that carries "Select" is hard to reach there
+  // — and often there is no blank space at all, only tiles. The per-item ⋯
+  // menu is the reliable entry point, so it gains the same action in both
+  // cases.
+  const mobile = useMediaQuery('(hover: none), (max-width: 560px)')
 
   // `kind` is 'file' (right-clicked an item) or 'empty' (right-clicked
   // blank space). An empty menu carries no ids and offers file-level
@@ -230,6 +238,15 @@ export default function ContextMenuProvider({ children }) {
         else window.dispatchEvent(new CustomEvent('yuar:preview', { detail: { id: first.id } }))
         break
 
+      case 'select':
+        // Mark the item the ⋯ belongs to and switch to pick-one-at-a-time
+        // mode. The trigger already clears any previous selection, so this
+        // starts a fresh batch. `selectMany` keeps the anchor right for a
+        // subsequent shift-click on a desktop with a touch screen.
+        if (!selectMode) toggleSelectMode()
+        selectMany(ids)
+        break
+
       case 'download':
         // Single item downloads itself; multiple items go out as one zip.
         if (targetItems.length > 1) downloadSelectedAsZip(ids)
@@ -431,6 +448,10 @@ export default function ContextMenuProvider({ children }) {
       label: 'Open',
       disabled: isMulti && targetItems.some((f) => !f.is_dir),
     })
+    // Mobile layout or touch screen only: see `mobile` above. Desktop already
+    // has "Select" in the blank-space context menu, and right-clicking there
+    // is natural.
+    if (mobile) items.push({ id: 'select', label: 'Select' })
     items.push({ id: 'download', label: 'Download' })
     items.push({ type: 'divider' })
     // Copy/Cut — always active, shown in both modes.
