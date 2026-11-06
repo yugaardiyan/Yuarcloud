@@ -185,6 +185,11 @@ export default function ContextMenuProvider({ children }) {
           folderInputRef.current?.click()
           break
         case 'select-all':
+          // Tapping this from blank space has to enter select mode as well as
+          // mark the rows. Without the mode switch a tap on a tile afterwards
+          // replaces the set instead of toggling one entry out of it, which is
+          // not what "select all, then adjust" looks like on a phone.
+          if (!selectMode) toggleSelectMode()
           selectAll()
           break
         case 'select':
@@ -437,11 +442,21 @@ export default function ContextMenuProvider({ children }) {
 
   const emptyMenuItems = buildEmptyMenuItems()
 
+  // Trash has no Open/Download/Share/Copy/Cut/Rename, but the mobile mode
+  // switches are just as useful there: several rows can be restored or deleted
+  // together. "Select all" is omitted when there is only one row to mark.
   const trashMenuItems = [
-    { id: 'info', label: 'Get info' },
-    { type: 'divider' },
     { id: 'restore', label: 'Restore' },
     { id: 'delete-permanent', label: 'Delete forever', danger: true },
+    ...(mobile
+      ? [
+          { type: 'divider' },
+          { id: 'select', label: 'Select' },
+          ...(rawItems.length > 1 ? [{ id: 'select-all', label: 'Select all' }] : []),
+        ]
+      : []),
+    { type: 'divider' },
+    { id: 'info', label: 'Get info' },
   ]
 
   // Build file menu dynamically based on selection state and select mode.
