@@ -11,7 +11,7 @@ function Header() {
       <div className="header-inner">
         <button className="brand" onClick={() => navigate('/cloud')} aria-label="Yuarcloud home">
           <span className="brand-mark">
-            <Logo size={34} />
+            <Logo size={30} />
           </span>
           <span className="brand-name">
             <span className="brand-name-lead">Yuar</span>

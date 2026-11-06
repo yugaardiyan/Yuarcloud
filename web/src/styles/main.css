@@ -21,8 +21,8 @@
      They live here so that changing the header height or the card's top margin
      moves the menus with it, instead of leaving them pinned to a number that
      no longer describes the layout. Both are read by .capsule-menu below. */
-  --app-header-h: 63.5px;
-  --drive-shell-top: 7px;
+  --app-header-h: 60.25px;
+  --drive-shell-top: 6.75px;
 
   /* One width for every popup menu, so the account menu and the create menu
      are the same box rather than two sizes that happen to sit side by side.
@@ -40,7 +40,7 @@
      between them came out tighter than every gap inside the row — visible as
      the Account button sitting closer to its neighbour than the nav buttons sit
      to each other. Declared once so they cannot drift apart again. */
-  --capsule-gap: 5px;
+  --capsule-gap: 4px;
 
   /* Colors - Clean, modern palette */
   --bg-primary: #ffffff;
@@ -1799,10 +1799,10 @@ input.input[type='number'] {
    Margins only — the status bar and everything in it keep their size and
    position, being a non-shrinking sibling that follows this box.
 
-   7px, not 12: the header is 56px tall but its pills are only 46, leaving 5px
-   of dead air beneath them. A 12px margin measures as 12 to the DOM and 17 to
-   the eye. 7px here is what makes the gap you actually see equal the card's
-   12px side gutters. */
+   6.75px, not 12: the header is 60.25px tall but its pills are only 43,
+   leaving about 5.25px of dead air beneath them. A 12px margin measures as 12
+   to the DOM and roughly 17 to the eye. 6.75px here is what makes the gap you
+   actually see equal the card's 12px side gutters. */
 .drive-shell {
   flex: 1;
   min-height: 0;
@@ -3689,7 +3689,7 @@ input.input[type='number'] {
   display: flex;
   align-items: center;
   gap: 3px;
-  height: 46px;
+  height: 43px;
   padding: 5px 6px 5px 5px;
   margin-right: 6px;
   background: var(--bg-primary);
@@ -3713,12 +3713,19 @@ input.input[type='number'] {
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+/* The mark box is the sizer. Logo carries a fixed size prop, so without this
+   the image would stay 30px on the phones where the box shrinks below it. */
+.brand-mark .logo {
+  width: 100%;
+  height: 100%;
 }
 
 /* Two-tone wordmark: "Yuar" in ink, "cloud" in the brand blue. */
@@ -3726,7 +3733,7 @@ input.input[type='number'] {
   display: flex;
   align-items: baseline;
   font-weight: 700;
-  font-size: 17px;
+  font-size: 15.5px;
   letter-spacing: -0.3px;
   /* The "Y" glyph carries built-in left side bearing, which reads as extra
      space at these gaps. Pull the word in to compensate. */
@@ -3760,7 +3767,7 @@ input.input[type='number'] {
   /* Separates the nav row from Account and Create, which a divider used to do.
      Shares --capsule-gap with .capsule-row so the whole pill spaces evenly. */
   gap: var(--capsule-gap);
-  height: 46px;
+  height: 43px;
   padding: 4px;
   border-radius: var(--radius-full);
   background: var(--bg-primary);
@@ -3813,8 +3820,8 @@ input.input[type='number'] {
 }
 
 .capsule-btn {
-  width: 36px;
-  height: 36px;
+  width: 33px;
+  height: 33px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -3937,8 +3944,8 @@ input.input[type='number'] {
 }
 
 .capsule-avatar {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-full);
   background: var(--accent-primary-light);
   color: var(--accent-primary);
@@ -4173,37 +4180,70 @@ input.input[type='number'] {
 
 /* --- Responsive --------------------------------------------------------- */
 /*
- * On narrow screens the pill keeps its exact 46px height and its
- * buttons keep their 36px size, so it never changes shape. Instead
- * the nav row scrolls sideways — Account and Create stay pinned
- * outside the scroller, exactly as on desktop. Only the wordmark
- * tightens, because the full header needs ~439px and most phones
- * are 375-430px wide.
+ * On narrow screens the whole header scales down instead of scrolling: the
+ * wordmark, the logo, and every button in the pill shrink together with the
+ * viewport, so all six actions stay visible on a phone. The old behaviour let
+ * the nav row scroll sideways, which hid the trailing actions behind a swipe
+ * and was easy to miss.
+ *
+ * The sizes are fluid rather than stepped so nothing jumps between the common
+ * phone widths. Each clamps between a phone-sized floor and the desktop value,
+ * which the 560px boundary reaches.
  */
 @media (max-width: 560px) {
+  /* The header height follows the same fluid mark, so the pill keeps the same
+     breathing room above it and above the card at every phone width. Left at
+     the desktop height, the shrinking pill would leave progressively more
+     dead air as the viewport narrows. */
+  :root {
+    --brand-mark: clamp(26px, 7.5vw, 30px);
+    --app-header-h: calc(var(--brand-mark) + 29.25px);
+  }
+
   .header-inner { padding: 0 10px; gap: 6px; }
 
-  /* The wordmark keeps its desktop size and spacing — only the
-     gap to the capsule tightens. The padding above already keeps
-     the pill symmetric, so it is not repeated here. */
-  .brand { gap: 2px; margin-right: 4px; }
+  /* The gap shrinks with the rest, so the pill stays symmetric. */
+  .capsule,
+  .capsule-row { --capsule-gap: 3px; }
 
-  /* Let the pill shrink to the available width; the nav row inside
-     it scrolls while the pinned actions keep their size. */
-  .capsule { flex-shrink: 1; min-width: 0; }
-  .capsule-row {
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
+  /* Logo and wordmark scale together; the padding stays, so the pill stays
+     symmetric around the mark. */
+  .brand {
+    gap: 2px;
+    margin-right: 4px;
+    height: calc(var(--brand-mark) + 12px);
   }
-  .capsule-row::-webkit-scrollbar { display: none; }
+  .brand-mark {
+    width: var(--brand-mark);
+    height: var(--brand-mark);
+  }
+  .brand-name { font-size: clamp(13px, 3.8vw, 15.5px); }
+
+  /* The pill keeps its shape as it shrinks: its height is derived from the
+     same fluid button, so the padding stays even at every width. The row no
+     longer scrolls — it is sized to its content, and the fluid button keeps
+     that content inside the available width. */
+  .capsule {
+    --cap-btn: clamp(28px, 8.2vw, 33px);
+    flex-shrink: 1;
+    min-width: 0;
+    padding: 3px;
+    height: calc(var(--cap-btn) + 8px);
+  }
+  .capsule-row { flex: 0 0 auto; min-width: 0; }
+
+  .capsule-btn {
+    width: var(--cap-btn);
+    height: var(--cap-btn);
+  }
+  .capsule-avatar {
+    width: clamp(21px, 6vw, 24px);
+    height: clamp(21px, 6vw, 24px);
+  }
 }
 
 /* Small phones (iPhone SE and similar at 375px). The wordmark keeps
-   its size; only the spacing tightens. The pill stays the same height
-   and shape. */
+   its fluid size; only the edge spacing tightens. */
 @media (max-width: 400px) {
   .header-inner { padding: 0 8px; gap: 4px; }
   .brand { gap: 2px; margin-right: 2px; }
