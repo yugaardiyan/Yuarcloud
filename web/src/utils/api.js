@@ -335,6 +335,45 @@ export const shareApi = {
         if (onProgress && e.total) onProgress(Math.round((e.loaded * 100) / e.total))
       },
     }),
+
+  // Chunked upload into a write-enabled shared folder. The visitor has no
+  // account, so the ceiling comes from a public endpoint scoped to the link
+  // instead of /files/upload-limits.
+  uploadLimits: (token, password) =>
+    api.get(`/shares/${token}/upload-limits`, {
+      timeout: TUS_CONTROL_TIMEOUT,
+      params: { password },
+    }),
+  uploadInit: (token, password, body) =>
+    api.post(`/shares/${token}/upload/init`, body, {
+      timeout: TUS_CONTROL_TIMEOUT,
+      params: { password },
+    }),
+  uploadChunk: (token, password, uploadId, chunkIndex, form, onProgress, signal) =>
+    api.post(`/shares/${token}/upload/chunk/${uploadId}/${chunkIndex}`, form, {
+      timeout: TRANSFER_TIMEOUT,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { password },
+      signal,
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded * 100) / e.total))
+      },
+    }),
+  uploadComplete: (token, password, uploadId) =>
+    api.post(`/shares/${token}/upload/complete/${uploadId}`, null, {
+      timeout: TRANSFER_TIMEOUT,
+      params: { password },
+    }),
+  uploadStatus: (token, password, uploadId) =>
+    api.get(`/shares/${token}/upload/status/${uploadId}`, {
+      timeout: TUS_CONTROL_TIMEOUT,
+      params: { password },
+    }),
+  uploadCancel: (token, password, uploadId) =>
+    api.delete(`/shares/${token}/upload/${uploadId}`, {
+      timeout: TUS_CONTROL_TIMEOUT,
+      params: { password },
+    }),
 }
 
 // ---------------------------------------------------------------------------

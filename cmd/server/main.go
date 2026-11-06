@@ -128,6 +128,9 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService, db)
 	fileHandler := handler.NewFileHandler(db, store, authService)
 	shareHandler := handler.NewShareHandler(db, shareService, store)
+	// The public chunked upload runs through the same engine as the signed-in
+	// one; see share_upload_chunked.go.
+	shareHandler.SetFileHandler(fileHandler)
 	adminHandler := handler.NewAdminHandler(db, adminService, authService, shareService, store)
 
 	// Downscaled previews. If the cache directory cannot be created the feature
@@ -220,7 +223,12 @@ func main() {
 		return path == "/api/files/upload" ||
 			strings.HasPrefix(path, "/api/files/upload/chunked") ||
 			path == "/api/files/tus" ||
-			strings.HasPrefix(path, "/api/files/tus/")
+			strings.HasPrefix(path, "/api/files/tus/") ||
+			// A visitor uploading into a write share takes the same chunked
+			// path, one request per chunk. Counting those against the bucket
+			// stops a large file part-way through exactly as it did for the
+			// signed-in uploader.
+			(strings.HasPrefix(path, "/api/shares/") && strings.Contains(path, "/upload"))
 	}
 	if cfg.RateLimit.Enabled {
 		router.Use(middleware.RateLimitMiddleware(
@@ -379,6 +387,19 @@ func main() {
 			publicShares.POST("/:token/upload",
 				middleware.BodyLimitFunc(fileBodyLimit),
 				shareHandler.ShareUpload)
+			// Chunked upload into a write-enabled folder. Same engine and same
+			// limits as the signed-in path; the single POST above remains for
+			// small files and older clients.
+			publicShares.GET("/:token/upload-limits", shareHandler.ShareUploadLimits)
+			publicShares.POST("/:token/upload/init", shareHandler.InitShareUpload)
+			publicShares.POST("/:token/upload/chunk/:uploadId/:chunkIndex",
+				middleware.BodyLimitFunc(chunkBodyLimit),
+				shareHandler.UploadShareChunk)
+			publicShares.POST("/:token/upload/complete/:uploadId", shareHandler.CompleteShareUpload)
+			publicShares.GET("/:token/upload/status/:uploadId", shareHandler.GetShareUploadStatus)
+			// The DELETE tree is shared with the authenticated "/shares/:id",
+			// so this wildcard has to use the same name. See shareToken.
+			publicShares.DELETE("/:id/upload/:uploadId", shareHandler.CancelShareUpload)
 		}
 
 		// Admin routes

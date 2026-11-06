@@ -26,6 +26,9 @@ type ShareHandler struct {
 	// thumbs renders downscaled previews; nil disables the optimisation. See
 	// FileHandler.SetThumbService.
 	thumbs *ThumbService
+	// files is the authenticated upload engine, reused by the public chunked
+	// upload so the two paths cannot drift. See SetFileHandler.
+	files *FileHandler
 }
 
 func NewShareHandler(db *gorm.DB, shareService *share.ShareService, store storage.StorageBackend) *ShareHandler {

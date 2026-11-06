@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { shareApi, apiError } from '../utils/api'
+import { uploadToShare } from '../utils/shareUpload'
+import { useWakeLock } from '../hooks/useWakeLock'
 import { withViewTransition } from '../utils/viewTransition'
 import { Download, Lock, AlertCircle, CheckCircle, Copy, FolderOpen, Upload, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatBytes, formatDate } from '../utils/helpers'
@@ -173,6 +175,10 @@ export default function ShareView() {
   const [submitting, setSubmitting] = useState(false)
   // uploads: [{ id, name, progress, status: 'uploading'|'done'|'error', error? }]
   const [uploads, setUploads] = useState([])
+  // A phone that dims its screen suspends the tab and freezes the upload, the
+  // same way it does in the signed-in tray. A visitor uploading 80 MB from a
+  // link is no different, so the share page holds a wake lock too.
+  useWakeLock(uploads.some((u) => u.status === 'uploading'))
   const [dragOver, setDragOver] = useState(false)
   // File shown in the viewer. The share root and any row inside a browsed
   // folder both land here; the URL is built from .path, not from a boolean.
@@ -574,9 +580,14 @@ export default function ShareView() {
     setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)))
 
   const handleUploadFiles = async (picked) => {
-    if (!picked || !picked.length) return
+    // Snapshot the list: the change handler clears the input immediately after
+    // this returns, and a FileList read again after an await can already be
+    // empty. One file happened to survive because it was read before the first
+    // await; the rest of a multi-file pick could disappear.
+    const list = Array.from(picked || [])
+    if (!list.length) return
     // Queue each file as a row so the visitor sees per-file progress.
-    const items = Array.from(picked).map((f) => ({
+    const items = list.map((f) => ({
       id: `${f.name}-${f.size}-${Math.random().toString(36).slice(2, 8)}`,
       name: f.name,
       progress: 0,
@@ -584,13 +595,17 @@ export default function ShareView() {
     }))
     setUploads((prev) => [...prev, ...items])
 
-    for (let i = 0; i < picked.length; i++) {
-      const file = picked[i]
+    // The share folder, as opposed to the picked file the loop below shadows.
+    const folderId = file?.id ?? null
+
+    for (let i = 0; i < list.length; i++) {
+      const pickedFile = list[i]
       const meta = items[i]
-      const form = new FormData()
-      form.append('file', file)
       try {
-        await shareApi.upload(token, form, password, (pct) => updateUpload(meta.id, { progress: pct }))
+        await uploadToShare(token, password, pickedFile, {
+          parentId: folderId,
+          onProgress: (pct) => updateUpload(meta.id, { progress: pct }),
+        })
         updateUpload(meta.id, { progress: 100, status: 'done' })
       } catch (err) {
         updateUpload(meta.id, { status: 'error', error: apiError(err, 'Upload failed') })
