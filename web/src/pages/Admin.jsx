@@ -329,6 +329,11 @@ function Admin() {
         />
       )}
         </div>
+        <footer className="settings-footer">
+          <span>Yuarcloud</span>
+          <span className="settings-footer-dot" aria-hidden="true">·</span>
+          <span>{__APP_VERSION__}</span>
+        </footer>
       </div>
     </div>
   )

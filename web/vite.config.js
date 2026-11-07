@@ -2,12 +2,22 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+// The release tag, so the Settings footer can name the image someone is
+// running. The publish workflow passes the pushed tag through the Dockerfile;
+// anything else (a plain `npm run build`, a local dev server) is a dev build.
+const appVersion = process.env.APP_VERSION || 'dev'
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
     },
+  },
+  // Replaced as a literal at build time. Declared here rather than imported
+  // from a module so nothing ships a copy of package.json to the browser.
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
   build: {
     outDir: 'dist',

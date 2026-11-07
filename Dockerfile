@@ -1,6 +1,12 @@
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 
+# The release tag, baked into the frontend so the Settings footer can name the
+# image someone is running. The publish workflow passes the pushed tag; a plain
+# `docker build` leaves it as "dev".
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci

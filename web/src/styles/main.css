@@ -1827,6 +1827,39 @@ input.input[type='number'] {
  */
 .settings-page .drive-shell {
   margin-bottom: var(--drive-shell-gap);
+  /* The card ends in a version footer, so its scroll area and the footer split
+     the height. Without this the scroll area would take all of it and push the
+     footer past the rounded bottom. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Same reason as the note further down: the generic `.drive-shell >
+   .app-content` rule sizes the scroll area to the whole card. Here it has to
+   leave the footer its row. */
+.settings-page .drive-shell > .app-content {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Settles the page rather than asking for attention: one quiet line naming the
+   build, pinned to the card's bottom edge while the tab content scrolls above
+   it. */
+.settings-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.settings-footer-dot {
+  opacity: 0.6;
 }
 
 /*
