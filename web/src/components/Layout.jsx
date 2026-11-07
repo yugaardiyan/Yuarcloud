@@ -21,12 +21,11 @@ import ContextMenuProvider from './ContextMenuProvider'
 const CARDED_ROUTES = ['/cloud', '/trash', '/search', '/admin']
 
 /*
- * Pages that render the status bar. Tracked separately from CARDED_ROUTES
- * because admin has the card but not the bar, and the upload tray anchors
- * itself just above the bar — assuming one everywhere leaves it floating 40px
- * off the bottom of a viewport that has nothing down there.
+ * Pages that render the status bar. Admin used to be the exception — card but
+ * no bar — but its footer now carries the running version in that same slot,
+ * so the upload tray and the toasts need the extra clearance there too.
  */
-const STATUS_BAR_ROUTES = ['/cloud', '/trash', '/search']
+const STATUS_BAR_ROUTES = ['/cloud', '/trash', '/search', '/admin']
 
 function Layout() {
   // The header lines up with the card's edges on every carded page. Marking the

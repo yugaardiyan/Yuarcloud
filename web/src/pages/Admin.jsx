@@ -329,11 +329,14 @@ function Admin() {
         />
       )}
         </div>
-        <footer className="settings-footer">
-          <span>Yuarcloud</span>
-          <span className="settings-footer-dot" aria-hidden="true">·</span>
-          <span>{__APP_VERSION__}</span>
-        </footer>
+      </div>
+      {/* Same slot as the drive's status bar: below the card, on the page
+          grey, with the card's 12px gutters. No navigation to spread across
+          it, so the build name and version sit centred as one line. */}
+      <div className="status-bar settings-status-bar">
+        <span>Yuarcloud</span>
+        <span aria-hidden="true">·</span>
+        <span>{__APP_VERSION__}</span>
       </div>
     </div>
   )

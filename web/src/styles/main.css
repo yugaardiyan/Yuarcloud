@@ -482,13 +482,10 @@ input.input[type='number'] {
 
   /* Space below the drive card, which is what the upload tray sits above.
 
-     Two pages carry a card and differ in what is under it. The drive has a
-     status bar plus the card's own 2px margin; the settings page has no status
-     bar and gives its card a 12px bottom margin instead (see
-     `.settings-page .drive-shell`), so the tray has to clear 12px there and
-     the bar plus 2px here. Using one figure for both put the tray 2px past the
-     card's bottom edge on admin, overhanging the rounded corner it was meant
-     to sit inside.
+     Every carded page now ends in a status bar plus the card's own 2px
+     margin, so the tray has to clear both. Using a bare 12px put it past the
+     card's bottom edge, overhanging the rounded corner it was meant to sit
+     inside.
 
      The status bar height is separate so the bar can size itself from it, with
      a fallback so it can never collapse to nothing. */
@@ -1819,50 +1816,6 @@ input.input[type='number'] {
 }
 
 /*
- * The 2px bottom margin is sized for the drive, where a 38px status bar sits
- * below the card and supplies the visual weight. The settings page has no status
- * bar, so the same 2px left the card hugging the bottom of the window while its
- * sides sat 12px in — the card looked pinned down rather than framed. Give it the
- * same gap as its sides.
- */
-.settings-page .drive-shell {
-  margin-bottom: var(--drive-shell-gap);
-  /* The card ends in a version footer, so its scroll area and the footer split
-     the height. Without this the scroll area would take all of it and push the
-     footer past the rounded bottom. */
-  display: flex;
-  flex-direction: column;
-}
-
-/* Same reason as the note further down: the generic `.drive-shell >
-   .app-content` rule sizes the scroll area to the whole card. Here it has to
-   leave the footer its row. */
-.settings-page .drive-shell > .app-content {
-  height: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-/* Settles the page rather than asking for attention: one quiet line naming the
-   build, pinned to the card's bottom edge while the tab content scrolls above
-   it. */
-.settings-footer {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 8px 16px;
-  border-top: 1px solid var(--border-color);
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-}
-
-.settings-footer-dot {
-  opacity: 0.6;
-}
-
-/*
  * Users and Share Links tabs: bring their lists closer to the tab hairline.
  * The other tabs (Statistics card, Chunked form, Audit) keep their own
  * spacing — only these two lists are affected.
@@ -2085,6 +2038,13 @@ input.input[type='number'] {
   background: var(--bg-secondary);
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+/* Settings has no navigation to spread across the bar, so the build name and
+   version read as one centred line in the same slot. */
+.settings-status-bar {
+  justify-content: center;
+  gap: 5px;
 }
 
 /* Left half: Back / Forward, then where you are. `min-width: 0` so a long path
