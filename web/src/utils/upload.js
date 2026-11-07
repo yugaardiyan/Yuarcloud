@@ -210,12 +210,17 @@ const TUS_CHUNK_ATTEMPTS = 6
 /**
  * How long a single PATCH should aim to take.
  *
- * Each chunk is one request, and Cloudflare cuts off a request whose body keeps
- * arriving for much more than a hundred seconds. Sizing the next chunk from the
- * speed just measured keeps a chunk inside that window on a slow uplink,
- * instead of betting on the admin's configured maximum.
+ * Two proxy limits sit in front of the origin and both answer 524: a 125s read
+ * timeout and a 30s write timeout, and the write one cannot be raised. Sizing
+ * each chunk from the speed just measured used to aim at 30s, which put every
+ * adapted chunk on that exact boundary: any dip in the uplink — congestion, a
+ * busy tunnel, a phone sharing the connection — stretched the request past it
+ * and the chunk failed. 12s leaves room for a chunk to run two and a half times
+ * slower than the last one before it reaches the limit. On a fast link the
+ * server's own maximum caps the chunk long before the target matters, so this
+ * only changes the size on the slow connections that were failing.
  */
-const CHUNK_TARGET_MS = 30_000
+const CHUNK_TARGET_MS = 12_000
 
 /** Floor for an adapted chunk; below this the request overhead dominates. */
 const MIN_CHUNK_BYTES = 1 * 1024 * 1024
@@ -226,11 +231,11 @@ const MIN_CHUNK_BYTES = 1 * 1024 * 1024
  * Starting at the ceiling would hand a slow link a request that can outlive the
  * proxy's window before there is any evidence to size it properly. Starting
  * modest keeps the first request safe; every chunk after it is sized from the
- * speed the last one actually achieved. 4 MB stays inside Cloudflare's
- * ~100-second request window down to about 0.3 Mbps, which covers a phone on a
- * weak mobile signal; 8 MB did not.
+ * speed the last one actually achieved. 2 MB stays inside the 30s write window
+ * down to about 0.5 Mbps, which covers a phone on a weak mobile signal; the old
+ * 4 MB needed better than 1 Mbps for the first request alone.
  */
-const START_CHUNK_BYTES = 4 * 1024 * 1024
+const START_CHUNK_BYTES = 2 * 1024 * 1024
 
 /**
  * How long a PATCH may make no progress before it is abandoned and retried.
@@ -344,6 +349,12 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
   // accepts. A copy is kept so adaptation can shrink below it but never above.
   const chunkCeiling = await resolveChunkSize(chunkSize)
   let activeChunkSize = Math.min(chunkCeiling, START_CHUNK_BYTES)
+  // The most a chunk may grow to. It starts at the ceiling and only ever drops:
+  // a size that has just failed is evidence this link cannot carry it, and
+  // letting the next speed sample grow straight back to it is what made a slow
+  // upload oscillate — fail, halve, succeed, grow, fail — instead of settling
+  // on a size the link can hold.
+  let growthCeiling = chunkCeiling
   const fingerprint = tusFingerprint(file, destination)
 
   let uploadId = null
@@ -443,12 +454,13 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
 
         // Size the next chunk from how long this one took, so a slow uplink
         // gets chunks that finish inside the proxy's window instead of a fixed
-        // size that only fits a fast connection.
+        // size that only fits a fast connection. Growth stops at the best size
+        // this link has actually carried, not at the theoretical ceiling.
         const elapsed = Date.now() - sentAt
         const sent = end - start
         if (elapsed > 0 && sent > 0) {
           const desired = Math.round((sent / elapsed) * CHUNK_TARGET_MS)
-          activeChunkSize = Math.min(chunkCeiling, Math.max(MIN_CHUNK_BYTES, desired))
+          activeChunkSize = Math.min(growthCeiling, Math.max(MIN_CHUNK_BYTES, desired))
         }
       } catch (error) {
         if (signal?.aborted) throw new Error('upload cancelled')
@@ -469,6 +481,9 @@ async function uploadFileTus(file, { destination, chunkSize, onProgress, signal 
         if (activeChunkSize > MIN_CHUNK_BYTES) {
           activeChunkSize = Math.max(MIN_CHUNK_BYTES, Math.floor(activeChunkSize / 2))
         }
+        // Remember the drop so the next speed sample cannot climb back over the
+        // size that just failed.
+        growthCeiling = Math.min(growthCeiling, activeChunkSize)
 
         try {
           const head = await fileApi.tusHead(uploadId)
