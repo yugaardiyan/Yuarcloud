@@ -1,11 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { readFileSync } from 'node:fs'
 
-// The release tag, so the Settings footer can name the image someone is
-// running. The publish workflow passes the pushed tag through the Dockerfile;
-// anything else (a plain `npm run build`, a local dev server) is a dev build.
-const appVersion = process.env.APP_VERSION || 'dev'
+// The version the Settings footer names. package.json is the single source of
+// truth, so a plain `npm run build` on a laptop shows the same number as the
+// published image. The publish workflow may still override it with the pushed
+// tag through the Dockerfile's APP_VERSION build arg.
+const pkgVersion = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+).version
+const appVersion = process.env.APP_VERSION || `v${pkgVersion}`
 
 export default defineConfig({
   plugins: [react()],

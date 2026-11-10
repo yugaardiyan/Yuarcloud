@@ -1126,10 +1126,9 @@ input.input[type='number'] {
   background: var(--bg-selected-hover);
 }
 
-/* Each card and row carries its own way into the file context menu. On a
-   desktop it waits for the row/card hover and fades in beside that animation;
-   on a touch screen it stays visible, with no disc or padding painted behind
-   the dots. The 28px box remains so the target is still easy to hit. */
+/* Each card and row carries its own way into the file context menu. The dots
+   stay on screen on every device — desktop included — with no disc or padding
+   painted behind them; the 28px box keeps the target easy to hit. */
 .file-menu-btn {
   display: inline-flex;
   align-items: center;
@@ -1143,20 +1142,7 @@ input.input[type='number'] {
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-1px) scale(0.92);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease,
-    color var(--transition-fast);
-}
-
-.file-item:hover .file-menu-btn,
-.file-item:focus-within .file-menu-btn {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
+  transition: color var(--transition-fast);
 }
 
 .file-menu-btn:hover {
@@ -1183,15 +1169,9 @@ input.input[type='number'] {
   flex: 0 0 28px;
 }
 
-/* Touch has no hover to reveal the trigger. Keep it on screen, and undo the
-   sticky :hover tint a tap would otherwise leave behind. */
+/* A tap leaves :hover latched on touch screens, so undo the tint the base
+   hover paints (and the row/card wash below). */
 @media (hover: none) {
-  .file-menu-btn {
-    opacity: 1;
-    pointer-events: auto;
-    transform: none;
-  }
-
   .file-menu-btn:hover {
     color: var(--text-tertiary);
   }
@@ -1710,8 +1690,8 @@ input.input[type='number'] {
 
 .file-card .file-icon svg,
 .file-card .file-icon > svg {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
 }
 
 /* Two short lines: the name first, its date beneath. The name is cut by
@@ -1974,8 +1954,8 @@ input.input[type='number'] {
 }
 
 .file-icon-sm svg {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
 }
 
 /* The name takes whatever the row has left, so Size and Modified always end at
@@ -3628,21 +3608,13 @@ input.input[type='number'] {
 
   .file-card .file-icon svg,
   .file-card .file-icon > svg {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
   }
 
   .file-card .file-menu-btn {
     flex-basis: 24px;
     width: 24px;
-  }
-
-  /* Phone layout, regardless of what the browser reports for hover. The dots
-     stay visible and carry no painted box even if a stylus is connected. */
-  .file-menu-btn {
-    opacity: 1;
-    pointer-events: auto;
-    transform: none;
   }
 
   /* Size goes first on a phone. Modified stays because "when did I last touch
@@ -3810,6 +3782,18 @@ input.input[type='number'] {
     opacity var(--transition-fast),
     transform var(--transition-normal),
     visibility 0s linear var(--transition-normal);
+}
+
+/* The far-right slot is sometimes a bare button — Download while items are
+   marked, Empty trash, a Settings action — rather than a .capsule-dropdown, so
+   it never received .capsule-collapsed. Its filled circle shares the search
+   overlay's rounded right edge, and the antialiasing of the two coincident
+   edges showed as a thin blue crescent beside the magnifier. Hide every
+   direct button child with the rest of the controls while the field is open. */
+.capsule[data-open] > .capsule-btn {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .capsule-btn {

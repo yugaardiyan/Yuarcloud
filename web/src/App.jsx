@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { CloudOff, RefreshCw } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -28,15 +29,46 @@ function LegacyShareRedirect() {
   return <Navigate to={`/yc/${token}`} replace />
 }
 
+/**
+ * Shown when the session could not be verified for a reason other than a
+ * rejected credential: a dropped connection or a 5xx during the startup
+ * /auth/me. The tokens are still in storage, so this offers a retry instead of
+ * pretending the visitor is signed out. Sign out is the escape hatch if the
+ * server stays unreachable.
+ */
+function AuthRetry({ onRetry, onSignOut }) {
+  return (
+    <div className="empty-state">
+      <CloudOff className="empty-state-icon" size={64} />
+      <h3 className="empty-state-title">Could not verify your session</h3>
+      <p className="empty-state-text">
+        The server did not respond. Your session is still saved — check your
+        connection and try again.
+      </p>
+      <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+        <button className="btn btn-primary" onClick={onRetry}>
+          <RefreshCw size={16} /> Try again
+        </button>
+        <button className="btn btn-secondary" onClick={onSignOut}>Sign out</button>
+      </div>
+    </div>
+  )
+}
+
 function RequireAuth({ children, adminOnly = false }) {
-  const { user, loading, initialized, isAdmin } = useAuth()
+  const { user, loading, initialized, isAdmin, authError, retryAuth, logout } = useAuth()
 
   // Nothing is drawn while the session resolves. This used to be a splash with
   // the logo and "Loading Yuarcloud…", which flashed for a few frames on every
   // start and said nothing the browser had not already shown. The app's own
   // background is up by then, and the shell enters as soon as it is known.
   if (loading || !initialized) return null
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    // A session that could not be verified is not a signed-out one: offer a
+    // retry (with an escape) rather than silently bouncing to the login form.
+    if (authError) return <AuthRetry onRetry={retryAuth} onSignOut={logout} />
+    return <Navigate to="/login" replace />
+  }
   if (adminOnly && !isAdmin) return <Navigate to="/cloud" replace />
 
   return children

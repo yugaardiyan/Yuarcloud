@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 // Tus upload storage.
@@ -41,10 +40,7 @@ var (
 
 // tusLock serialises work on one upload. The returned function unlocks it.
 func (ls *LocalStorage) tusLock(uploadID string) func() {
-	value, _ := ls.tusLocks.LoadOrStore(uploadID, &sync.Mutex{})
-	mutex := value.(*sync.Mutex)
-	mutex.Lock()
-	return mutex.Unlock
+	return ls.tusLocks.Lock(uploadID)
 }
 
 func (ls *LocalStorage) tusDataPath(uploadID string) string {

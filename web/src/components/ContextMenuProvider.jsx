@@ -368,7 +368,11 @@ export default function ContextMenuProvider({ children }) {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [selected, clipboard.action, copyToClipboard, cutItems, pasteInto, view, files])
+    // `files` is intentionally not a dependency: the handler reads the
+    // selection, the clipboard and the current view, never the listing, and
+    // depending on it re-registered the document listener on every folder
+    // load for no reason.
+  }, [selected, clipboard.action, copyToClipboard, cutItems, pasteInto, view])
 
   // Drive raises this event for the F2 shortcut so the rename dialog lives in
   // one place instead of being duplicated per view.

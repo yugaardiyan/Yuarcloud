@@ -555,5 +555,8 @@ func (h *FileHandler) availableName(sc scope.Scope, dir, name string) (string, e
 		}
 	}
 
-	return name, nil
+	// Every candidate up to 999 is taken. Returning `name` here handed the
+	// caller a name that is already occupied, so the copy would overwrite the
+	// existing file instead of failing — worse than the error it replaces.
+	return "", fmt.Errorf("no available name for %q in %q", name, dir)
 }

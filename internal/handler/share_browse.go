@@ -180,6 +180,27 @@ func (h *ShareHandler) ListSharedFolder(c *gin.Context) {
 		return
 	}
 
+	// LIKE folds ASCII case, so the prefix above can also match a sibling folder
+	// whose name differs only by case (`Docs/` vs `docs/`). The SQL narrows the
+	// scan; this exact, case-sensitive check is what makes the listing contain
+	// the shared folder's own children and nothing else. The nested LIKE has the
+	// same hazard for subfolders, so the direct-child test doubles as the fix.
+	prefix := ""
+	if folder.Path != "" {
+		prefix = folder.Path + "/"
+	}
+	direct := make([]model.File, 0, len(children))
+	for _, child := range children {
+		if !strings.HasPrefix(child.Path, prefix) {
+			continue
+		}
+		if strings.Contains(strings.TrimPrefix(child.Path, prefix), "/") {
+			continue
+		}
+		direct = append(direct, child)
+	}
+	children = direct
+
 	items := make([]model.FileResponse, 0, len(children))
 	for i := range children {
 		items = append(items, fileResponseOf(&children[i]))

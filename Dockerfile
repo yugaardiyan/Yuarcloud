@@ -1,10 +1,11 @@
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 
-# The release tag, baked into the frontend so the Settings footer can name the
-# image someone is running. The publish workflow passes the pushed tag; a plain
-# `docker build` leaves it as "dev".
-ARG APP_VERSION=dev
+# The release version, baked into the frontend so the Settings footer can name
+# the image someone is running. The publish workflow passes the pushed tag; a
+# plain `docker build` leaves it empty, and Vite then falls back to the version
+# in web/package.json, so no build ever shows "dev".
+ARG APP_VERSION=
 ENV APP_VERSION=$APP_VERSION
 
 WORKDIR /app/web

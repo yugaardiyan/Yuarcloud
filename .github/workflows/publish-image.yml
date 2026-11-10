@@ -78,4 +78,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || '' }}

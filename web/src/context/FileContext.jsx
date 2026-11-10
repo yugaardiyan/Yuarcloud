@@ -646,7 +646,13 @@ export function FileProvider({ children }) {
 
     // The pool has finished, so nothing in this batch can be cancelled any more;
     // drop its controllers rather than keeping them alive with the tray rows.
-    jobs.forEach((job) => uploadControllers.current.delete(job.id))
+    // The rate history leaves on the same trip: it is only read while a row is
+    // 'uploading', and a finished or failed row shows no speed, so keeping it
+    // left the tracker holding one dead buffer per file ever uploaded.
+    jobs.forEach((job) => {
+      uploadControllers.current.delete(job.id)
+      speed.forget(job.id)
+    })
 
     // Finished rows stay. They used to be swept away four seconds later, which
     // meant the tray emptied itself exactly when someone uploading a folder of

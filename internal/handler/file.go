@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/yuarcloud/yuarcloud/internal/auth"
+	"github.com/yuarcloud/yuarcloud/internal/keyedlock"
 	"github.com/yuarcloud/yuarcloud/internal/middleware"
 	"github.com/yuarcloud/yuarcloud/internal/model"
 	"github.com/yuarcloud/yuarcloud/internal/storage"
@@ -27,7 +27,7 @@ type FileHandler struct {
 	// layer also locks the file itself; this lock additionally covers the
 	// database status transition, which has to happen in the same critical
 	// section as the offset check or two PATCHes can both pass it.
-	tusLocks sync.Map
+	tusLocks keyedlock.Locker
 	// thumbs renders downscaled previews. Nil disables the optimisation and
 	// every preview streams the original, which is how the tests run unless
 	// they opt in.

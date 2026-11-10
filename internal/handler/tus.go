@@ -739,10 +739,7 @@ func (h *FileHandler) tusTTL() time.Duration {
 }
 
 func (h *FileHandler) tusLock(id string) func() {
-	value, _ := h.tusLocks.LoadOrStore(id, make(chan struct{}, 1))
-	channel := value.(chan struct{})
-	channel <- struct{}{}
-	return func() { <-channel }
+	return h.tusLocks.Lock(id)
 }
 
 // pathTakenAnywhere is the unscoped form used during finalisation, where there

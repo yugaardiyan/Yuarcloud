@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -115,7 +116,12 @@ func (s *ThumbService) render(ctx context.Context, file *model.File, width int) 
 		return nil, "", err
 	}
 	defer reader.Close() //nolint:errcheck
-	return s.renderer.Render(reader, file.MimeType, width)
+	// file.Size is only a hint: an adopted or migrated row can understate the
+	// bytes actually on disk, and Render buffers the whole source in memory.
+	// Cap the read at the same limit ServeThumb trusts, plus one byte, so an
+	// over-limit source is bounded and fails the decode instead of being read
+	// into memory in full.
+	return s.renderer.Render(io.LimitReader(reader, maxThumbSourceBytes+1), file.MimeType, width)
 }
 
 // cachePath keys a preview on the file, the requested width, and the source's

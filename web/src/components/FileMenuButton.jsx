@@ -4,9 +4,8 @@ import { useContextMenu } from './ContextMenuProvider'
 import { useFiles } from '../context/FileContext'
 
 /*
- * One way into the file context menu. On a touch screen it stays visible
- * beside the file; on desktop the surrounding card/row reveals it as part of
- * its hover animation, so the resting layout stays quiet.
+ * One way into the file context menu. The dots stay visible beside the file on
+ * every device, desktop included, so the menu is always one click away.
  *
  * This button always targets its own item, even when several are marked in
  * select mode — like Drive's per-row "⋮". Acting on the whole selection is

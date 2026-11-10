@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/yuarcloud/yuarcloud/internal/config"
+	"github.com/yuarcloud/yuarcloud/internal/keyedlock"
 )
 
 // InternalPrefix marks every name the server owns: the trash, the chunk
@@ -40,7 +41,7 @@ type LocalStorage struct {
 	// The handler already holds a per-request lock, but the background sweeper
 	// can remove a session while a PATCH is writing to it, and neither side
 	// sees the other's gin context.
-	tusLocks sync.Map
+	tusLocks keyedlock.Locker
 }
 
 // isInternal reports whether a single directory entry belongs to the server.

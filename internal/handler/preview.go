@@ -202,7 +202,16 @@ func serveInline(c *gin.Context, store storage.StorageBackend, file *model.File,
 	c.Header("Accept-Ranges", "bytes")
 	c.Header("X-Content-Type-Options", "nosniff")
 
+	// The size on the row can be stale — an adopted file, an old migration, a
+	// copy that predates the size fix. Declaring that number as Content-Length
+	// makes the server abort the moment the body runs longer ("wrote more than
+	// the declared Content-Length"), which the browser sees as a truncated or
+	// empty preview. The bytes on disk are the authority, exactly as in the
+	// download path.
 	size := file.Size
+	if info, statErr := store.Stat(context.Background(), file.Path); statErr == nil && !info.IsDir {
+		size = info.Size
+	}
 
 	// A Range header means the player only wants a slice. Honour it and reply
 	// 206; a range we cannot parse falls through to the full body, and one that

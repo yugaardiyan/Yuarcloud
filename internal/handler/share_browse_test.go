@@ -168,6 +168,39 @@ func TestListSharedFolderNavigatesIntoSubfolder(t *testing.T) {
 	}
 }
 
+// TestListSharedFolderIgnoresCaseVariantSiblings pins the case-sensitive
+// post-filter added because SQLite's LIKE folds ASCII case: a plain `Shared/%`
+// match also returns rows under `shared/`. Two folders can differ only by case,
+// and the public listing must not cross between them.
+func TestListSharedFolderIgnoresCaseVariantSiblings(t *testing.T) {
+	router, db, owner, _ := shareBrowseHarness(t)
+
+	shadow := model.File{
+		ID: uuid.New(), UserID: owner.ID, Name: "shared", Path: "shared",
+		IsDir: true, MimeType: "inode/directory",
+	}
+	if err := db.Create(&shadow).Error; err != nil {
+		t.Fatalf("seed shadow root: %v", err)
+	}
+	extra := []model.File{
+		{ID: uuid.New(), UserID: owner.ID, ParentID: &shadow.ID, Name: "leak.txt", Path: "shared/leak.txt", Size: 1, MimeType: "text/plain"},
+		{ID: uuid.New(), UserID: owner.ID, ParentID: &shadow.ID, Name: "Sub", Path: "shared/Sub", IsDir: true, MimeType: "inode/directory"},
+	}
+	for i := range extra {
+		if err := db.Create(&extra[i]).Error; err != nil {
+			t.Fatalf("seed shadow entry: %v", err)
+		}
+	}
+
+	code, items := getChildren(t, router, "")
+	if code != http.StatusOK {
+		t.Fatalf("root listing: %d", code)
+	}
+	if got := names(items); len(got) != 2 || got[0] != "Sub" || got[1] != "a.txt" {
+		t.Fatalf("root listing = %v, want [Sub a.txt] (case-variant sibling leaked)", got)
+	}
+}
+
 func TestListSharedFolderRejectsEscapeAndFilePaths(t *testing.T) {
 	router, _, _, _ := shareBrowseHarness(t)
 

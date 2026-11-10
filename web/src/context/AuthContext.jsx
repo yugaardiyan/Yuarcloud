@@ -7,12 +7,18 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
+  // Set when the startup session probe fails for a reason that is not a
+  // rejected credential — a dropped connection or a 5xx. Distinct from "no
+  // session": the tokens are still on disk and the app should offer a retry
+  // rather than send the visitor to the login form.
+  const [authError, setAuthError] = useState(false)
 
   const fetchUser = useCallback(async () => {
     // A visitor on a public share link has no token and no reason to probe
     // /api/auth/me — skip the request to avoid a pointless error toast.
     if (!localStorage.getItem('access_token')) {
       setUser(null)
+      setAuthError(false)
       setLoading(false)
       setInitialized(true)
       return
@@ -20,6 +26,7 @@ export function AuthProvider({ children }) {
     try {
       const response = await authApi.me()
       setUser(response.data.user)
+      setAuthError(false)
     } catch (error) {
       // Only a rejected credential ends the session. A timeout, a dropped
       // connection or a 5xx on this one call used to delete both tokens and
@@ -28,8 +35,16 @@ export function AuthProvider({ children }) {
       if (status === 401 || status === 403) {
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
+        setUser(null)
+        setAuthError(false)
+      } else {
+        // The token is intact but unverified. Clearing `user` alone still sent
+        // the visitor to /login on a transient blip; this flag lets
+        // RequireAuth offer a retry instead of ending a session the server
+        // never rejected.
+        setUser(null)
+        setAuthError(true)
       }
-      setUser(null)
     } finally {
       setLoading(false)
       setInitialized(true)
@@ -103,10 +118,16 @@ export function AuthProvider({ children }) {
     user,
     loading,
     initialized,
+    authError,
     login,
     logout,
     updateUser,
     refreshUser,
+    // Re-runs the session probe. Deliberately just `fetchUser`: it must not
+    // clear authError first, or RequireAuth would fall back to its `!user`
+    // branch and bounce the visitor to /login while the retry was in flight.
+    // A successful probe clears the flag; a repeated failure leaves it set.
+    retryAuth: fetchUser,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
   }

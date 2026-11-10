@@ -241,6 +241,12 @@ function FileList({ onOpen, onDownload, onFile }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
+                // The row owns its own activation. Without stopping here the
+                // same key also reaches the document-level list shortcut and
+                // Drive's global handler, so one press activated the item two
+                // or three times — and while marking, those extra paths opened
+                // the item the row handler had only selected.
+                e.stopPropagation()
                 if (selectMode) select(item.id, { additive: true }); else activate(item)
               }
             }}
