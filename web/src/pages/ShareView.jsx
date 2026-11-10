@@ -436,6 +436,28 @@ export default function ShareView() {
     [token, password]
   )
 
+  // Re-reads the folder on screen without touching the trail, the loading
+  // state or the paint counter. Called after an upload so the new row appears
+  // at once instead of only after the visitor reloads the page.
+  //
+  // It yields to navigation: if a folder fetch started after this one (the
+  // sequence moved on) or the visitor is now looking at a different folder,
+  // the result is dropped rather than overwriting what they moved to.
+  const refreshContents = useCallback(async () => {
+    const path = paintedPath.current
+    if (!path) return
+    const seq = contentsSeq.current
+    try {
+      const response = await shareApi.children(token, password, path)
+      if (contentsSeq.current !== seq) return
+      if (paintedPath.current !== path) return
+      setContents(response.data.items || [])
+    } catch {
+      // Best effort. A failed refresh must not turn a successful upload into
+      // an error row; the tray already reports the upload's own outcome.
+    }
+  }, [token, password])
+
   // The shared root is the first folder every visitor sees. Running this on
   // the file id (not on every render) keeps a password change, which produces
   // a new file object, from re-fetching contents twice. The token guard is what
@@ -607,6 +629,14 @@ export default function ShareView() {
           onProgress: (pct) => updateUpload(meta.id, { progress: pct }),
         })
         updateUpload(meta.id, { progress: 100, status: 'done' })
+        // Uploads land in the shared root (the box says which folder), so a
+        // visitor looking at that folder is the one who gains a row. Re-read
+        // it now so the file appears without a page reload; anywhere deeper
+        // the fetch would be a no-op. Awaited because the loop is sequential
+        // and this keeps concurrent refreshes from racing each other.
+        if (paintedPath.current === rootPathRef.current) {
+          await refreshContents()
+        }
       } catch (err) {
         updateUpload(meta.id, { status: 'error', error: apiError(err, 'Upload failed') })
       }
