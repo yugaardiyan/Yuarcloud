@@ -473,17 +473,6 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 
-	reader, err := h.storage.Read(context.Background(), file.Path)
-	if err != nil {
-		if err == storage.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "file not found in storage"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read file"})
-		return
-	}
-	defer reader.Close()
-
 	// The size recorded on the row can be stale — an adopted file, an old
 	// migration, a copy that predates the size fix. Declaring that number as
 	// Content-Length makes the server abort the moment the body runs longer
@@ -495,9 +484,53 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 		size = info.Size
 	}
 
+	mime := file.MimeType
+	if mime == "" {
+		mime = "application/octet-stream"
+	}
+
 	c.Header("Content-Disposition", contentDisposition("attachment", file.Name))
-	c.Header("Content-Type", file.MimeType)
-	c.DataFromReader(http.StatusOK, size, file.MimeType, reader, nil)
+	c.Header("Content-Type", mime)
+	// Advertise range support so a browser can resume an interrupted download
+	// and a download manager can fetch pieces. The preview route has always
+	// answered Range; the download route did not, which is why a dropped
+	// connection meant starting a multi-gigabyte file over.
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("X-Content-Type-Options", "nosniff")
+
+	if rangeHeader := c.GetHeader("Range"); rangeHeader != "" && size > 0 {
+		start, end, status := parseRange(rangeHeader, size)
+
+		if status == rangeUnsatisfiable {
+			c.Header("Content-Range", fmt.Sprintf("bytes */%d", size))
+			c.Status(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+
+		if status == rangeOK {
+			reader, err := h.storage.ReadRange(context.Background(), file.Path, start, end-start+1)
+			if err != nil {
+				writeStorageError(c, err)
+				return
+			}
+			defer reader.Close() //nolint:errcheck
+
+			c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
+			c.DataFromReader(http.StatusPartialContent, end-start+1, mime, reader, nil)
+			return
+		}
+		// rangeMalformed: ignored, per RFC 9110 §14.2. Fall through to the
+		// full body.
+	}
+
+	reader, err := h.storage.Read(context.Background(), file.Path)
+	if err != nil {
+		writeStorageError(c, err)
+		return
+	}
+	defer reader.Close()
+
+	c.DataFromReader(http.StatusOK, size, mime, reader, nil)
 }
 
 func (h *FileHandler) DeleteFile(c *gin.Context) {

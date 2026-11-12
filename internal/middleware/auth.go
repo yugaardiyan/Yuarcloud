@@ -96,6 +96,59 @@ func AuthPreviewMiddleware(authService *auth.AuthService) gin.HandlerFunc {
 	}
 }
 
+// AuthDownloadMiddleware guards the file download routes.
+//
+// It is the same idea as AuthPreviewMiddleware: a browser following a download
+// URL cannot send a header, so the URL carries a dedicated, five-minute token
+// instead of the session credential. The token is refused by ValidateToken and
+// by every route that is not a download, and here it is additionally bound to
+// the item named in the path (nil on the batch route, where the token carries
+// the id set itself).
+//
+// A normal Authorization header is checked first, so the existing API clients
+// and tests keep working unchanged.
+func AuthDownloadMiddleware(authService *auth.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if header := c.GetHeader("Authorization"); header != "" {
+			tokenString, err := authService.ExtractTokenFromHeader(header)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+				return
+			}
+			claims, err := authService.ValidateToken(tokenString)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+				return
+			}
+			setClaims(c, claims)
+			c.Next()
+			return
+		}
+
+		// No id in the path is the batch route: the set of items is a claim.
+		var expected *uuid.UUID
+		if raw := c.Param("id"); raw != "" {
+			fileID, err := uuid.Parse(raw)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})
+				return
+			}
+			expected = &fileID
+		}
+
+		claims, err := authService.ValidateDownloadToken(c.Query("token"), expected)
+		if err != nil {
+			// Same response as a missing token: naming the reason would tell
+			// someone holding only a leaked URL that the file exists.
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "download token required"})
+			return
+		}
+
+		setClaims(c, claims)
+		c.Next()
+	}
+}
+
 func setClaims(c *gin.Context, claims *auth.Claims) {
 	c.Set(UserContextKey, claims)
 	c.Set(UserIDContextKey, claims.UserID)

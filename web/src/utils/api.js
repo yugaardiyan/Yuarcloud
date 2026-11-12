@@ -195,9 +195,18 @@ export const fileApi = {
   move: (id, data) => api.post(`/files/${id}/move`, data),
   copy: (id, data) => api.post(`/files/${id}/copy`, data),
 
-  downloadUrl: (id) => `/api/files/${id}/download`,
-  downloadZipUrl: (id) => `/api/files/${id}/download-zip`,
-  batchZipUrl: () => '/api/files/download-zip',
+  // Hands the browser a URL it can stream to disk. Minting the token is an
+  // ordinary authenticated call, so it refreshes with everything else; the
+  // token itself lives five minutes and only unlocks that one download.
+  downloadToken: (id) => api.post(`/files/${id}/download-token`),
+  batchDownloadToken: (ids) => api.post('/files/download-token', { ids }),
+
+  downloadUrl: (id, token) =>
+    `/api/files/${id}/download` + (token ? `?token=${encodeURIComponent(token)}` : ''),
+  downloadZipUrl: (id, token) =>
+    `/api/files/${id}/download-zip` + (token ? `?token=${encodeURIComponent(token)}` : ''),
+  batchZipUrl: (token) =>
+    '/api/files/download-zip' + (token ? `?token=${encodeURIComponent(token)}` : ''),
 
   // Asks for the short-lived token the viewer puts in a media URL. The session
   // access token never leaves a header — this one lives five minutes, is

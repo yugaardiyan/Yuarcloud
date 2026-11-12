@@ -86,7 +86,7 @@ func drawText(dst *image.RGBA, x, y int, text string) {
 		cx := x + i*16
 		for dy := 0; dy < 20; dy++ {
 			for dx := 0; dx < 12; dx++ {
-				if (dx == 0 || dx == 11 || dy == 0 || dy == 19) {
+				if dx == 0 || dx == 11 || dy == 0 || dy == 19 {
 					dst.SetRGBA(cx+dx, y+dy, color.RGBA{0x1a, 0x1a, 0x2e, 0xff})
 				}
 			}

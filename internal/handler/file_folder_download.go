@@ -79,41 +79,73 @@ func (h *FileHandler) DownloadFilesZip(c *gin.Context) {
 	// Same as DownloadFolder: the zip is written while it streams.
 	liftTransferDeadlines(c)
 
-	userID, _ := middleware.GetUserID(c)
-	sc := reqScope(c)
-
 	var body downloadZipBody
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ids are required"})
 		return
 	}
 
-	// Resolve every id through the scoped query so an id from another home is
-	// simply absent rather than an error.
-	var files []model.File
-	ids := make([]uuid.UUID, 0, len(body.IDs))
-	seen := make(map[uuid.UUID]struct{}, len(body.IDs))
-	for _, id := range body.IDs {
+	files, ok := h.resolveZipItems(c, body.IDs)
+	if !ok {
+		return
+	}
+	h.streamZip(c, files)
+}
+
+// DownloadFilesZipToken is the same archive, selected by the download token
+// instead of a JSON body. A browser cannot POST when it follows a link, so the
+// id set rides in the token minted by IssueBatchDownloadToken.
+func (h *FileHandler) DownloadFilesZipToken(c *gin.Context) {
+	liftTransferDeadlines(c)
+
+	claims, ok := middleware.GetClaims(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization required"})
+		return
+	}
+
+	files, ok := h.resolveZipItems(c, claims.FileIDs)
+	if !ok {
+		return
+	}
+	h.streamZip(c, files)
+}
+
+// resolveZipItems dedupes the requested ids and returns the rows the caller is
+// allowed to download. It writes the error response itself and reports false.
+//
+// Resolving through the scoped query is what makes an id from another home
+// simply absent rather than an error.
+func (h *FileHandler) resolveZipItems(c *gin.Context, requested []uuid.UUID) ([]model.File, bool) {
+	ids := make([]uuid.UUID, 0, len(requested))
+	seen := make(map[uuid.UUID]struct{}, len(requested))
+	for _, id := range requested {
 		if _, ok := seen[id]; ok {
 			continue
 		}
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
-	idsIn := make([]uuid.UUID, len(ids))
-	copy(idsIn, ids)
-	if len(idsIn) == 0 {
+	if len(ids) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ids are required"})
-		return
+		return nil, false
 	}
-	if err := scoped(sc, h.db).Where("id IN ? AND is_trashed = ?", idsIn, false).Find(&files).Error; err != nil {
+
+	var files []model.File
+	if err := scoped(reqScope(c), h.db).Where("id IN ? AND is_trashed = ?", ids, false).Find(&files).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load files"})
-		return
+		return nil, false
 	}
 	if len(files) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no downloadable items found"})
-		return
+		return nil, false
 	}
+	return files, true
+}
+
+// streamZip writes the archive for an already-resolved item set.
+func (h *FileHandler) streamZip(c *gin.Context, files []model.File) {
+	userID, _ := middleware.GetUserID(c)
 
 	name := "selection"
 	if len(files) == 1 {

@@ -23,15 +23,22 @@ var (
 // good for everything — the purpose decides where a token may be spent, which
 // is the only thing keeping a preview token from authorising an API call.
 const (
-	PurposeAccess  = "access"
-	PurposeRefresh = "refresh"
-	PurposePreview = "preview"
+	PurposeAccess   = "access"
+	PurposeRefresh  = "refresh"
+	PurposePreview  = "preview"
+	PurposeDownload = "download"
 )
 
 // PreviewTokenTTL is deliberately short. A preview token ends up in a URL,
 // which means access logs and browser history, so its usefulness after leaking
 // is kept to the length of one viewing session.
 const PreviewTokenTTL = 5 * time.Minute
+
+// DownloadTokenTTL matches the preview one. A download token only has to
+// survive the gap between minting it and the browser issuing the request, so
+// five minutes is generous; the token is checked once at the start of the
+// response and the bytes stream for as long as the transfer takes.
+const DownloadTokenTTL = 5 * time.Minute
 
 type Claims struct {
 	UserID   uuid.UUID `json:"user_id"`
@@ -40,8 +47,13 @@ type Claims struct {
 	// Purpose scopes the token. Empty means a token issued before this field
 	// existed, which predates preview tokens and is treated as an access token.
 	Purpose string `json:"purpose,omitempty"`
-	// FileID is set on preview tokens only, and pins them to a single file.
+	// FileID is set on preview tokens (one file) and on download tokens for a
+	// single file or folder, and pins them to that item.
 	FileID uuid.UUID `json:"file_id,omitempty"`
+	// FileIDs is set on a batch download token: the exact set the archive may
+	// contain. It is not a permission to read anything else — every id is
+	// re-scoped against the caller's home when the zip is built.
+	FileIDs []uuid.UUID `json:"file_ids,omitempty"`
 	// TokenVersion mirrors the user row. Checked on every request that resolves a
 	// user, so bumping the row revokes everything already issued.
 	TokenVersion int `json:"tv,omitempty"`
@@ -221,6 +233,67 @@ func (s *AuthService) GeneratePreviewToken(userID uuid.UUID, username, role stri
 		return "", err
 	}
 	return signed, nil
+}
+
+// GenerateDownloadToken mints the short-lived token a download URL carries.
+//
+// A browser downloading a file is handed a plain URL, and a link cannot send an
+// Authorization header. Putting the session token there would put a credential
+// valid for every endpoint into access logs and history; this one is good for
+// five minutes, only for the download reset routes, and only for the item (or
+// the exact batch) it was minted for.
+//
+// tokenVersion is copied from the caller's access token so a password change
+// takes effect on a token that was already handed out: ScopeMiddleware compares
+// it against the row on every request.
+func (s *AuthService) GenerateDownloadToken(userID uuid.UUID, username, role string, tokenVersion int, fileID uuid.UUID, fileIDs []uuid.UUID) (string, error) {
+	now := time.Now()
+	claims := &Claims{
+		UserID:       userID,
+		Username:     username,
+		Role:         role,
+		Purpose:      PurposeDownload,
+		FileID:       fileID,
+		FileIDs:      fileIDs,
+		TokenVersion: tokenVersion,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(DownloadTokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			Issuer:    s.issuer,
+			Subject:   userID.String(),
+			ID:        uuid.New().String(),
+		},
+	}
+
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.jwtSecret)
+	if err != nil {
+		return "", err
+	}
+	return signed, nil
+}
+
+// ValidateDownloadToken accepts only a download token, and only for the item
+// the route names. fileID is nil for the batch route, where the set lives in
+// the token itself.
+//
+// The binding is what keeps a leaked single-file URL from being edited to read
+// the rest of the tree; the purpose check is what keeps a download token from
+// being replayed against the API.
+func (s *AuthService) ValidateDownloadToken(tokenString string, fileID *uuid.UUID) (*Claims, error) {
+	claims, err := s.parse(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	if claims.Purpose != PurposeDownload {
+		return nil, ErrWrongTokenPurpose
+	}
+	if fileID != nil && (claims.FileID == uuid.Nil || claims.FileID != *fileID) {
+		return nil, ErrWrongTokenPurpose
+	}
+
+	return claims, nil
 }
 
 func (s *AuthService) parse(tokenString string) (*Claims, error) {

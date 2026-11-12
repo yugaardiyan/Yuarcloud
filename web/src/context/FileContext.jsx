@@ -806,20 +806,23 @@ export function FileProvider({ children }) {
   // ---------------------------------------------------------------- download
 
   const downloadItem = useCallback(async (item) => {
-    // Both branches fetch with the auth header. A folder used to be handed
-    // straight to an <a href>, which the browser requests without one, so the
-    // server answered 401 and no zip ever arrived.
-    const href = item.is_dir ? fileApi.downloadZipUrl(item.id) : fileApi.downloadUrl(item.id)
+    // The browser fetches this one itself, from a URL carrying a short-lived
+    // download token. That is what lets a large file stream straight to disk
+    // with progress and resume; the old fetch-then-blob path had to buffer the
+    // whole response and could not be retried mid-way.
+    //
+    // Minting the token goes through the shared axios instance, so an expired
+    // access token is refreshed by the interceptor instead of failing the
+    // download outright — the gap the old raw fetch left open.
     const filename = item.is_dir ? `${item.name}.zip` : item.name
     try {
-      const response = await fetch(href, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const blob = await response.blob()
-      triggerDownload(URL.createObjectURL(blob), filename, true)
-    } catch {
-      toast.error(`Failed to download ${filename}`)
+      const { data } = await fileApi.downloadToken(item.id)
+      const href = item.is_dir
+        ? fileApi.downloadZipUrl(item.id, data.token)
+        : fileApi.downloadUrl(item.id, data.token)
+      triggerDownload(href, filename)
+    } catch (error) {
+      toast.error(apiError(error, `Failed to download ${filename}`))
     }
   }, [])
 
@@ -829,20 +832,11 @@ export function FileProvider({ children }) {
     const ids = idsOverride ? Array.from(idsOverride) : Array.from(selected)
     if (ids.length < 2) return
     try {
-      const response = await fetch(fileApi.batchZipUrl(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({ ids }),
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const blob = await response.blob()
-      triggerDownload(URL.createObjectURL(blob), 'selection.zip', true)
+      const { data } = await fileApi.batchDownloadToken(ids)
+      triggerDownload(fileApi.batchZipUrl(data.token), 'selection.zip')
       toast.success(`Downloading ${ids.length} items as zip`)
-    } catch {
-      toast.error('Failed to download selection as zip')
+    } catch (error) {
+      toast.error(apiError(error, 'Failed to download selection as zip'))
     }
   }, [selected])
 

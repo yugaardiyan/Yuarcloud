@@ -271,6 +271,21 @@ func main() {
 			preview.GET("/:id/preview", fileHandler.PreviewFile)
 		}
 
+		// Downloads live outside the protected group for the same reason, and
+		// with the same confinement: the browser gets a plain URL carrying a
+		// dedicated download token, not the session credential. The middleware
+		// still accepts an Authorization header, so API clients are unchanged.
+		downloads := api.Group("/files", middleware.AuthDownloadMiddleware(authService))
+		downloads.Use(middleware.ScopeMiddleware(db))
+		downloads.Use(middleware.PasswordRotationRequiredMiddleware(db, map[string]bool{}))
+		{
+			downloads.GET("/:id/download", fileHandler.DownloadFile)
+			downloads.GET("/:id/download-zip", fileHandler.DownloadFolder)
+			// Batch archive: the ids are claims in the token, so the route
+			// needs no body and can be followed as a link.
+			downloads.GET("/download-zip", fileHandler.DownloadFilesZipToken)
+		}
+
 		// tus discovery is unauthenticated on purpose: a client asks what the
 		// server supports before it has a session, and the answer contains no
 		// user data. The upload itself still requires the bearer token.
@@ -316,14 +331,17 @@ func main() {
 				files.POST("/upload",
 					middleware.BodyLimitFunc(fileBodyLimit),
 					fileHandler.UploadFile)
-				files.GET("/:id/download", fileHandler.DownloadFile)
 				// Batch: download any number of files/folders as one zip. Takes a
 				// JSON body of ids — a comma-separated path param would hit the
-				// single-id routes above first.
+				// single-id routes above first. The GET form, with a download
+				// token, is registered on the download group above.
 				files.POST("/download-zip", fileHandler.DownloadFilesZip)
 				files.GET("/upload-limits", fileHandler.UploadLimits)
 				files.POST("/:id/preview-token", fileHandler.IssuePreviewToken)
-				files.GET("/:id/download-zip", fileHandler.DownloadFolder)
+				// Mint the short-lived credential the browser puts in a
+				// download URL. The route it unlocks is on the download group.
+				files.POST("/:id/download-token", fileHandler.IssueDownloadToken)
+				files.POST("/download-token", fileHandler.IssueBatchDownloadToken)
 				files.DELETE("/:id", fileHandler.DeleteFile)
 				files.PATCH("/:id/rename", fileHandler.RenameFile)
 				files.POST("/:id/move", fileHandler.MoveFile)
