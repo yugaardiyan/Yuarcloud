@@ -36,9 +36,9 @@ function Login() {
 
   return (
     <div className="login-page">
-      {/* Card and message travel together, so the pair stays centred. */}
+      {/* Form and message travel together, so the pair stays centred. */}
       <div className="login-panel">
-        <div className="card login-card">
+        <div className="login-card">
           <div className="login-brand">
             <span className="login-brand-mark">
               <Logo size={40} />
@@ -97,8 +97,6 @@ function Login() {
               </div>
             </div>
 
-            {/* The capsule sits on the card's foot; the card's own bottom
-                radius is tuned to hug it, so both curves read as one shape. */}
             <button type="submit" className="login-btn" disabled={loading || incomplete}>
               {loading ? 'Signing in…' : 'Login'}
             </button>

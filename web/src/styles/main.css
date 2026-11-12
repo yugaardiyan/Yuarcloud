@@ -2916,8 +2916,9 @@ input.input[type='number'] {
 }
 
 /* --- Login --------------------------------------------------------------- */
-/* Compact sign-in card: mark + two-tone wordmark, two fields, one capsule
-   action. Deliberately label-free — the placeholders carry the meaning. */
+/* Sign-in shell: mark + two-tone wordmark, two fields, one capsule action,
+   enclosed by a rounded outline on the page background. Deliberately
+   label-free — the placeholders carry the meaning. */
 
 .login-page {
   min-height: 100vh;
@@ -2937,21 +2938,33 @@ input.input[type='number'] {
   max-width: 356px;
 }
 
-/* Uniform 20px on all four sides: the top edge to the logo now matches the
-   bottom edge to the Login button, so the card reads as evenly padded. */
+/* Just the content column, ringed by a rounded outline. No background and no
+   shadow — the border alone draws the shape, so the form reads as one clean
+   panel floating on the page. Padding keeps the ring off the content. The ring
+   uses the brand blue of the "cloud" wordmark rather than the neutral border
+   grey, so the panel reads as Yuarcloud at a glance. */
 .login-card {
   width: 100%;
   padding: 20px;
+  /* Top padding is pulled in to 10px so it matches the brand's 6px top margin
+     plus the 16px gap below it (see .login-brand): the mark and wordmark end
+     up dead centre between the outline's top edge and the first field. */
+  padding-top: 10px;
+  border: 1px solid var(--logo-blue, #038dff);
   border-radius: 26px;
-  box-shadow: var(--shadow-md);
 }
 
+/* The mark and wordmark occupy the strip above the form. Top spacing is the
+   card's 10px padding + this 6px margin = 16px, which equals the 16px below,
+   so the brand is vertically centred between the outline's top edge and the
+   top of the first field. */
 .login-brand {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
-  margin-bottom: 22px;
+  margin-top: 6px;
+  margin-bottom: 16px;
 }
 
 .login-brand-mark {
@@ -3317,8 +3330,8 @@ input.input[type='number'] {
 }
 
 
-/* Lives under the card, not inside it. The fixed height reserves its line even
-   when empty, so the card above never moves when an error shows. */
+/* Lives under the form, not inside it. The fixed height reserves its line even
+   when empty, so the form above never moves when an error shows. */
 .login-notice {
   display: flex;
   align-items: center;

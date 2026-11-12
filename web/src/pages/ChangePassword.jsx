@@ -67,7 +67,7 @@ function ChangePassword() {
   return (
     <div className="login-page">
       <div className="login-panel">
-        <div className="card login-card">
+        <div className="login-card">
           <div className="login-brand">
             <span className="login-brand-mark">
               <Logo size={40} />
